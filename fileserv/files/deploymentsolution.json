@@ -1,0 +1,27 @@
+{
+    "id": "temp_hum_logger",
+    "roles": {
+    "temperature_logging": {
+    "role_config": {
+    "interface": "temperature_sensor",
+    "parameters": {
+    "unit": "celcius",
+    "measurement_interval": 60,
+    "log_server": "http://localhost:5000"
+    }
+    }
+    },
+  
+    "humidity_logging": {
+    "required": false,
+    "role_config": {
+    "interface": "humidity_sensor",
+    "parameters": {
+    "measurement_interval": 60,
+    "log_server": "http://localhost:5000"
+    }
+    }
+    }
+    }
+   }
+   

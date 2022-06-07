@@ -1,0 +1,38 @@
+{
+	"roles":
+		{
+			"role":
+				[
+					{
+						
+						"name": "role1",
+                        "platform": "esp32",
+						"interfaces":
+							{
+								"interface":
+									[
+										{ "id": "1001", "type": "networking" },
+										{ "id": "1002", "type": "temperature" }
+									]
+							}
+					
+					},
+
+					{
+						
+						"name": "role2",
+                        "platform": "test",
+						"interfaces":
+							{
+								"interface":
+									[
+										{ "id": "1001", "type": "networking" },
+										{ "id": "1002", "type": "temperature" }
+									]
+							}
+					
+					}
+					
+				]
+		}
+}
