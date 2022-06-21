@@ -1,0 +1,7 @@
+{ 
+    "id": "networking",                           
+    "architecture": "aarch64", 
+    "platform": "linux", 
+    "interfaces": ["networking"],  
+    "peripherals": [] 
+} 

@@ -1,0 +1,6 @@
+{ 
+    "architecture": "aarch64", 
+    "platform": "linux", 
+    "repository": "http://localhost:8080", 
+    "peripherals": ["dht22", "logitech_123"] 
+}
