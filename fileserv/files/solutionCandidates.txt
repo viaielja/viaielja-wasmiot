@@ -1,1 +1,1 @@
-"dht22_logger" : humidity_sensor,temperature_sensor"dht22_logger" : humidity_sensor,temperature_sensor"dht22_logger" : humidity_sensor,temperature_sensor
+undefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefinedundefined : undefined

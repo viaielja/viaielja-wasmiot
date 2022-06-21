@@ -1,8 +1,9 @@
+const { Console } = require('console');
 var http = require('http'),
     fileSystem = require('fs'),
     path = require('path');
 const { findSourceMap } = require('module');
-var CANDIDATEPACKAGE = [];
+var REQUIREDPACKAGES = [];
 var DEVICEMANIFEST;
 var DEVICEDESCRIPTION;
 
@@ -99,7 +100,6 @@ http.createServer(function (request, response) {
 
 const getDirectories = srcPath => fileSystem.readdirSync(srcPath).filter(file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
 
-
 //searches the server for modules that satisfy device description and manifest
 function startSearch() {
     DEVICEDESCRIPTION = getDeviceDescription();
@@ -126,19 +126,52 @@ function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
     //checkPlatform(deviceDescription, module);
     checkPeripherals(deviceDescription, module);
     checkInterfaces(deviceManifest, module);
-    var deps = getModuleDependencies(module);
+    handleSuperDependencies(deviceDescription, module);
     //checkSuperdependencies(module);
     //TODO: check for superdependencies in module's metadata
 }
 
-//returns the json from a module based on the name
-function getModuleJSON(modulename) {
-    let startpath = path.join(__dirname, 'modules');
-    var truepath = path.join(startpath, modulename, 'modulemetadata.json');
-    //TODO: move to separate function for general use
-    return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
-        if (err) return console.log(err + " couldn't read the file!");
-        manifest = JSON.parse(data);
+
+//adds superdependencies to the list of modules
+function handleSuperDependencies(deviceDescription, module){
+checkModuleList(module); //TODO: check that the dependency is not on the list already
+checkArchitecture(deviceDescription, module)
+
+console.log("current candidates!");
+console.log(REQUIREDPACKAGES);
+//TODO:check if module is suitable for platf/arch/peripherals
+}
+
+startSearch();
+
+//returns true if dependency is already found in the modulelist for candidates
+function checkModuleList(modulemetadata){
+    
+    console.log('SUPERDEPENDENCIES');
+    if (Object.keys(getModuleDependencies(modulemetadata) === undefined )){console.log('NO dependencies'); return false};
+var dependencies = Object.keys(getModuleDependencies(modulemetadata)); //grab list of names inside object "dependencies"
+var modulelist = REQUIREDPACKAGES;
+
+
+    for (var i in dependencies){
+        console.log(i);
+    if (!modulelist.includes(dependencies[i]) && !REQUIREDPACKAGES.includes(dependencies[i])){
+        console.log('--- module was not found in REQUIREDPACKAGES --- ');
+        REQUIREDPACKAGES.push(dependencies[i]);
+        addToCandidateList(dependencies[i]);
+        return false;
+    }
+
+    }
+    console.log('--- CURRENT REQUIRED MODULES --- ');
+    return true;
+
+}
+
+function addToCandidateList(module){
+    fileSystem.appendFile('./files/solutionCandidates.txt', JSON.stringify(module.id) + ' : ' + getModuleInterfaces(module), function (err) {
+        if (err) throw err;
+        console.log('Candidate module has been saved');
     });
 }
 
@@ -156,8 +189,18 @@ function checkArchitecture(deviceDescription, module) {
         return true;
     }
     return false;
-
 }
+
+//returns the json from a module based on the name
+function getModuleJSON(modulename) {
+    let startpath = path.join(__dirname, 'modules');
+    var truepath = path.join(startpath, modulename, 'modulemetadata.json');
+    return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
+        if (err) return console.log(err + " couldn't read the file!");
+        manifest = JSON.parse(data);
+    });
+}
+
 
 //checks whether peripherals in device description and  module metadata match
 function checkPeripherals(deviceDescription, module) {
@@ -166,8 +209,6 @@ function checkPeripherals(deviceDescription, module) {
         return true;
     }
     else { console.log("module peripherals do not match"); return false; }
-
-
 }
 
 function checkInterfaces(deviceManifest, module) {
@@ -253,12 +294,12 @@ function getManifest() {
 //returns an object containing dependencies of a module (superdependencies)
 function getModuleDependencies(moduleMetadata) {
     var dependencies = moduleMetadata.dependencies;
-    if (dependencies === "") {
+    if (dependencies === undefined) {
         console.log("--- no dependencies found ---")
         return undefined;
     }
-    console.log(" --- dependecies of module --- ")
-    console.log(dependencies);
+    console.log(" --- dependencies of module --- ");
+    console.log(Object.keys(dependencies));
     return dependencies;
 }
 
