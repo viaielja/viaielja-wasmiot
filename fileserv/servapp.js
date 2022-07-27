@@ -1,7 +1,8 @@
 const { Console } = require('console');
 var http = require('http'),
     fileSystem = require('fs'),
-    path = require('path');
+    path = require('path'),
+    dependencytree = require('dependency-tree');
 const { findSourceMap } = require('module');
 var REQUIREDPACKAGES = [];
 var DEVICEMANIFEST;
@@ -16,7 +17,7 @@ http.createServer(function (request, response) {
         request.on('data', chunk => {
             data += chunk;
         });
-        //TODO: move handling after saving to local file in case of problems
+       
         request.on('end', () => {
             if (Object.keys(JSON.parse(data)).includes('architecture')) {
                 console.log(' --- this is a device description --- ');
@@ -30,7 +31,7 @@ http.createServer(function (request, response) {
             else fileSystem.writeFile('./files/manifest.json', data, function (err) {
                 if (err) return console.log(err);
                 console.log('data written to file manifest.json');
-                response.end(startSearch()); //todo: pass to checkModule
+                response.end(startSearch()); 
             });
             response.end();
         });
@@ -39,7 +40,7 @@ http.createServer(function (request, response) {
     if (request.method === "GET" && request.url === "/") {
         console.log("received GET");
         var filePath = path.join(__dirname, 'files/simple.wasm'); //hardcoded filepath to served file
-        //TODO: serve different files based on request
+        
         var stat = fileSystem.statSync(filePath);
 
         response.writeHead(200, {
@@ -106,10 +107,10 @@ function startSearch() {
     DEVICEMANIFEST = getManifest();
     var modules = getDirectories("./modules"); //fetch name of the directories of every module
     checkModules(DEVICEMANIFEST, DEVICEDESCRIPTION, modules);
+    saveRequiredModules();
 }
 
 function checkModules(deviceManifest, deviceDescription, modules) {
-    //go through all of the modules the server has
     for (var i in modules) {
         checkIndividualModule(deviceManifest, deviceDescription, modules[i]);
     }
@@ -126,23 +127,80 @@ function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
     //checkPlatform(deviceDescription, module);
     checkPeripherals(deviceDescription, module);
     checkInterfaces(deviceManifest, module);
+    addToCandidateList(module);
+
+    //create a dependency tree
     handleSuperDependencies(deviceDescription, module);
-    //checkSuperdependencies(module);
-    //TODO: check for superdependencies in module's metadata
+  
 }
 
 
 //adds superdependencies to the list of modules
 function handleSuperDependencies(deviceDescription, module){
-checkModuleList(module); //TODO: check that the dependency is not on the list already
-checkArchitecture(deviceDescription, module)
+    dependencies = getModuleDependencies(module);
+    dependencyList = Object.keys(dependencies);
+    var modulelist = REQUIREDPACKAGES;
+    
+  
+    
+if ((Object.keys(dependencies) === undefined) && checkArchitecture(deviceDescription, module) ){
+    addToCandidateList(module);
+}
+else{
+    for (var i in dependencyList){
+        console.log("SEARCHING FOR A DEPENDENCIES IN MODULE: " + dependencyList[i]);
+        var moduleMetadata =  JSON.parse(getModuleJSON(dependencyList[i]));
+    if (!REQUIREDPACKAGES.includes(dependencyList[i])){
+        console.log('--- module was not found in REQUIREDPACKAGES --- ');
+        addToCandidateList(module);
 
-console.log("current candidates!");
+       // getModuleJSON(dependencies[i]);
+        
+    }
+
+}
+
+console.log("--- CURRENTLY REQUIRED PACKAGES --- ");
 console.log(REQUIREDPACKAGES);
 //TODO:check if module is suitable for platf/arch/peripherals
 }
+}
 
-startSearch();
+
+//returns an object containing dependencies of a module (superdependencies)
+function getModuleDependencies(moduleMetadata) {
+    var dependencies = moduleMetadata.dependencies;
+    if (dependencies === undefined) {
+        console.log("--- no dependencies found ---")
+        return undefined;
+    }
+    console.log(" --- dependencies of module --- ");
+    console.log(Object.keys(dependencies));
+    return dependencies;
+}
+
+
+
+
+async function getPackageDependencyTree({ name, reference, dependencies }) {
+    return {
+      name,
+      reference,
+      dependencies: await Promise.all(
+        dependencies.map(async volatileDependency => {
+          let pinnedDependency = await getPinnedReference(volatileDependency);
+          let subDependencies = await getModuleDependencies(pinnedDependency);
+  
+          return await getPackageDependencyTree(
+            Object.assign({}, pinnedDependency, { dependencies: subDependencies })
+          );
+        })
+      ),
+    };
+  }
+
+
+
 
 //returns true if dependency is already found in the modulelist for candidates
 function checkModuleList(modulemetadata){
@@ -168,20 +226,28 @@ var modulelist = REQUIREDPACKAGES;
 
 }
 
-function addToCandidateList(module){
-    fileSystem.appendFile('./files/solutionCandidates.txt', JSON.stringify(module.id) + ' : ' + getModuleInterfaces(module), function (err) {
+function saveRequiredModules(){
+    text = JSON.stringify(REQUIREDPACKAGES);
+    fileSystem.appendFile('./files/solutionCandidates.txt', text, function (err) {
         if (err) throw err;
-        console.log('Candidate module has been saved');
+        console.log('Candidate modules have been saved');
     });
+}
+
+
+
+function addToCandidateList(module){
+    text = module.id + ' : ' + getModuleInterfaces(module);
+    REQUIREDPACKAGES.push(text);
+
 }
 
 //checks Architecture and platform supported by module
 function checkArchitecture(deviceDescription, module) {
-    //TODO: check that device architecture and module architecture match
-    console.log(' ----- devicedescription -----');
-    console.log(deviceDescription);
-    console.log(' ----- modulemetadata -----');
-    console.log(module);
+    //console.log(' ----- devicedescription -----');
+    //console.log(deviceDescription);
+    //console.log(' ----- modulemetadata -----');
+    //console.log(module);
     if (deviceDescription.architecture === module.architecture
         && deviceDescription.platform
         === module.platform) {
@@ -196,7 +262,7 @@ function getModuleJSON(modulename) {
     let startpath = path.join(__dirname, 'modules');
     var truepath = path.join(startpath, modulename, 'modulemetadata.json');
     return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
-        if (err) return console.log(err + " couldn't read the file!");
+        if (err) return console.log(err + "NO SUCH MODULE");
         manifest = JSON.parse(data);
     });
 }
@@ -283,7 +349,6 @@ function checkCandidate(deviceDescription, moduleMetadata) {
 
 //reads the manifest sent by client
 function getManifest() {
-    //TODO: change to accept path of manifest
     return fileSystem.readFileSync('./files/manifest.json', 'UTF-8', function (err, data) {
         if (err) return console.log(err + " couldn't read the file!");
 
@@ -291,17 +356,6 @@ function getManifest() {
     });
 }
 
-//returns an object containing dependencies of a module (superdependencies)
-function getModuleDependencies(moduleMetadata) {
-    var dependencies = moduleMetadata.dependencies;
-    if (dependencies === undefined) {
-        console.log("--- no dependencies found ---")
-        return undefined;
-    }
-    console.log(" --- dependencies of module --- ");
-    console.log(Object.keys(dependencies));
-    return dependencies;
-}
 
 
 //console.log(isSubset(["dht22" , "logitech_123"], ["dht22", "logitech_123", "networking"] ));
@@ -342,7 +396,6 @@ function digestManifest(manifest, moduleMetadata) {
         //save candidate name with interfaces for later
         if (matchInterfaces(moduleInterfaces, interfaces)) {
 
-            //TODO: check superdependencies
             console.log("found requested interfaces in module")
             fileSystem.appendFile('./files/solutionCandidates.txt', JSON.stringify(moduleMetadata.id) + ' : ' + moduleInterfaces, function (err) {
                 if (err) throw err;
@@ -407,7 +460,7 @@ function matchRoles(clientManifest, modulemetadata) {
 function getRoles(manifest) {
     console.log('---- searching for roles ----')
     roles = [];
-    //TODO: change to .every
+    //TODO: .ever would work better here
     for (var i in manifest.roles) {
         roles.push(manifest.roles[i]);
         console.log(roles[i]);
@@ -416,7 +469,7 @@ function getRoles(manifest) {
     return roles;
 }
 
-
+//
 function getModulemetadata(dirPaths) {
     let startpath = path.join(__dirname, 'modules');
     for (var i in dirPaths) {
@@ -438,7 +491,6 @@ function getModulemetadata(dirPaths) {
     //handels device description sent by device
     function digestDeviceDescription(manifest, modulemetadata) {
         // console.log(modulemetadata);
-        //TODO: handle device description
         var deviceDescription;
         var moduleMetadata;
         deviceDescription = fileSystem.readFile('./files/devicedescription.json', 'UTF-8', function (err, data) {
@@ -455,7 +507,7 @@ function getModulemetadata(dirPaths) {
 
 }
 
-//compares two individual objects for their contents to assert equality
+//compares two individual objects for their contents to assert equality (deep equality)
 function deepEqual(object1, object2) {
     const keys1 = Object.keys(object1);
     const keys2 = Object.keys(object2);
@@ -476,7 +528,7 @@ function deepEqual(object1, object2) {
     return true;
 }
 
-
+//returns true if input is an object
 function isObject(object) {
     return object != null && typeof object === 'object';
 }
@@ -531,10 +583,14 @@ function getKeys(obj, val) {
     return objects;
 }
 
+function createDepList(depTree){
+///
 
-//Looks for matching key: value pairs between stored solutions and manifest
+}
+
+
+/*//Looks for matching key: value pairs between stored solutions and manifest
 function lookUpKey(key, value) {
-    //TODO: Look up keys in a local file to find suitable packages for solution
     for (var candidate in modulemetadata) {
         if (modulemetadata.hasOwnProperty(key)) {
 
@@ -544,7 +600,7 @@ function lookUpKey(key, value) {
 }
 
    //checks if architecture and peripherals of the module are suitable for the device
-/*function checkArchitectureAndPeripherals(deviceDescription, modulemetadata){
+function checkArchitectureAndPeripherals(deviceDescription, modulemetadata){
     console.log('devicedescription -----');
     console.log(deviceDescription);
     console.log('modulemetadata -----');
