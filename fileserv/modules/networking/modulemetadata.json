@@ -3,5 +3,10 @@
     "architecture": "aarch64", 
     "platform": "linux", 
     "interfaces": ["networking"],  
-    "peripherals": [] 
-} 
+    "peripherals": [] ,
+    "dependencies": [{
+       "supplement": { 
+          "version": "1.0.0" 
+            }}
+        ]
+}

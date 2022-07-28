@@ -7,6 +7,9 @@
   },
   "author": "",
   "license": "ISC",
-  "devDependencies": {},
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "deptrace": "^0.2.4",
+    "semver": "^7.3.7"
+  }
 }

@@ -1,0 +1,9 @@
+{ 
+    "id": "supplement",                           
+    "architecture": "aarch64", 
+    "platform": "linux", 
+    "interfaces": ["networking"],  
+    "peripherals": [] ,
+    "dependencies": [{}
+         ]
+}

@@ -110,6 +110,7 @@ function startSearch() {
     saveRequiredModules();
 }
 
+//loops through every module in list of local modules
 function checkModules(deviceManifest, deviceDescription, modules) {
     for (var i in modules) {
         checkIndividualModule(deviceManifest, deviceDescription, modules[i]);

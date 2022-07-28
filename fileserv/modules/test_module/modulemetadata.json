@@ -4,12 +4,9 @@
     "platform": "linux", 
     "interfaces": ["humidity_sensor", "temperature_sensor"],  
     "dependencies": { 
-        "networking": { 
+        "dht22_logger": { 
             "version": "1.0.0" 
-            },
-            "networking_API": { 
-                "version": "1.0.0" 
-                }
+            }
         },
     "peripherals": ["dht22"] 
 } 
