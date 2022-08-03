@@ -78,7 +78,7 @@ function start(node, tree){
                 //console.log("no deps");
                 return {};} 
             // const reqPath = path.resolve(parent, req.value)
-            console.log(h);
+            checkTreeForMatches(h,req);
             h.dependencies.push(start(
                 JSON.parse(getModuleByName(
                     Object.keys(req)[0])), tree))
@@ -93,9 +93,10 @@ function start(node, tree){
  return h
 }
 
-start(modules[1], {})
 
 
+console.log(JSON.stringify(start(modules[0], {}), null, 2))
+//start(modules[0]);
 
 //returns module by its name from local module library
 function getModuleByName(modulename){
@@ -116,9 +117,55 @@ function getModuleByName(modulename){
     
     return getModuleJSON(modulename);
     
+}
+
+//checks a tree for if a package has already been required before
+function checkTreeForMatches(tree, dependency){
+//TODO: add code
+console.log(JSON.stringify(tree, null, 2));
+//console.log(Object.keys(dependency)[0]);
+
+//console.log(getKeys(tree, Object.keys(dependency)[0]));
+
+if (tree.ID.includes(Object.keys(dependency)[0])){console.log("AAAAAAAAAAAAA");
+};
+
+
+
+}
+
+function searchTree(element, matchingTitle){
+    var stack = [], node, ii;
+    stack.push(root);
+    
+    while (stack.length > 0) {
+        node = stack.pop();
+        if (node.title == 'randomNode_1') {
+            // Found it!
+            return node;
+        } else if (node.children && node.children.length) {
+            for (ii = 0; ii < node.children.length; ii += 1) {
+                stack.push(node.children[ii]);
+            }
+        }
     }
+    
+    // Didn't find it. Return null.
+    return null;
+}
 
 
 
-
-
+//return an array of keys that match on a certain value
+function getKeys(obj, val) {
+    var objects = [];
+    for (var i in obj) {
+        if (!obj.hasOwnProperty(i)) continue;
+        if (typeof obj[i] == 'object') {
+            objects = objects.concat(getKeys(obj[i], val));
+        } else if (obj[i] == val) {
+            objects.push(i);
+        }
+    }
+    return objects;
+}

@@ -4,9 +4,6 @@
     "platform": "linux", 
     "interfaces": ["networking"],  
     "peripherals": [] ,
-    "dependencies": [{
-       "supplement": { 
-          "version": "1.0.0" 
-            }}
+    "dependencies": [{}
         ]
 }
