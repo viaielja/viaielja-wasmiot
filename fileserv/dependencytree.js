@@ -4,6 +4,7 @@ const util = require('util');
 
 
 const semver = require('semver');
+const { version } = require('os');
 
 
 
@@ -16,14 +17,20 @@ var modules =
     "architecture": "aarch64", 
     "platform": "linux", 
     "interfaces": ["humidity_sensor", "temperature_sensor"],  
-        "dependencies": [{ 
-            "networking": { 
+    "dependencies": [{ 
+        "networking": { 
+            "version": "1.0.0" 
+            }},
+            {"supplement": { 
                 "version": "1.0.0" 
-                }},
-                {"supplement": { 
+                  }
+                },
+            {"test_module": { 
                     "version": "1.0.0" 
+                      }
                     }
-                    }],
+            
+            ],
     "peripherals": ["dht22"] 
 },
 { 
@@ -63,40 +70,68 @@ function startTree(node, tree){
 //WARNING: Will loop if there are loops in required modules!!
 //TODO: add backtracing to not get stuck in loops with required modules
 function start(node, tree){
+
     let reqs = []
     let h = {
         dependencies: [],
         ID: node.id,
         version: node.version //TODO: add semver later
     }
+
     reqs = node.dependencies;
  
     if(node.dependencies){
      
         node.dependencies.forEach((req) => {
             if(Object.keys(req)[0] == undefined){
-                //console.log("no deps");
                 return {};} 
-            // const reqPath = path.resolve(parent, req.value)
-            checkTreeForMatches(h,req);
+                if(tree.includes(Object.keys(req)[0])){console.log("ALREADY IN :  " + Object.keys(req)[0]);
+                return h;
+            };
+
+
+                var dependencyWithVersion = 
+                {
+                   name: Object.keys(req)[0],
+                   version: getValues(req, "version")[0]
+                }
+       
+               tree.push(dependencyWithVersion);
+               tree.push(h.ID);
+               
             h.dependencies.push(start(
                 JSON.parse(getModuleByName(
-                    Object.keys(req)[0])), tree))
+Object.keys(req)[0])), tree))
          })
-         //l(h)
-     return h
+
+     return h;
  }
  h = {
-         ID: node.id,
+         ID: node.id
      }
      //l(h)
  return h
 }
 
+//return an array of values that match on a certain key
+function getValues(obj, key) {
+    var objects = [];
+    for (var i in obj) {
+        if (!obj.hasOwnProperty(i)) continue;
+        if (typeof obj[i] == 'object') {
+            objects = objects.concat(getValues(obj[i], key));
+        } else if (i == key) {
+            objects.push(obj[i]);
+        }
+    }
+    return objects;
+}
+
+testModule = JSON.parse(getModuleByName("dht22_logger"));
 
 
-console.log(JSON.stringify(start(modules[0], {}), null, 2))
-//start(modules[0]);
+
+console.log(start(testModule,[]));
 
 //returns module by its name from local module library
 function getModuleByName(modulename){
@@ -122,35 +157,36 @@ function getModuleByName(modulename){
 //checks a tree for if a package has already been required before
 function checkTreeForMatches(tree, dependency){
 //TODO: add code
+
+console.log(dependency);
 console.log(JSON.stringify(tree, null, 2));
 //console.log(Object.keys(dependency)[0]);
-
+//console.log(tree);
+//searchTree(tree, Object.keys(dependency)[0]);
 //console.log(getKeys(tree, Object.keys(dependency)[0]));
 
-if (tree.ID.includes(Object.keys(dependency)[0])){console.log("AAAAAAAAAAAAA");
+if (true){console.log("");
 };
 
-
-
+//TODO: SEMVER!!
 }
 
+
+
+//searches a tree recursively for an object matching the keyword
 function searchTree(element, matchingTitle){
-    var stack = [], node, ii;
-    stack.push(root);
-    
-    while (stack.length > 0) {
-        node = stack.pop();
-        if (node.title == 'randomNode_1') {
-            // Found it!
-            return node;
-        } else if (node.children && node.children.length) {
-            for (ii = 0; ii < node.children.length; ii += 1) {
-                stack.push(node.children[ii]);
-            }
-        }
+    console.log(element);
+    console.log( matchingTitle)
+    if(element.ID == matchingTitle){
+         return element;
+    }else if (element.ID != null){
+         var i;
+         var result = null;
+         for(i=0; result == null && i < element.dependencies.length; i++){
+              result = searchTree(element.dependencies[i], matchingTitle);
+         }
+         return result;
     }
-    
-    // Didn't find it. Return null.
     return null;
 }
 
