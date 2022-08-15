@@ -5,16 +5,16 @@ const util = require('util');
 
 const semver = require('semver');
 const { version } = require('os');
-
-
-
 path = require('path');
 fileSystem = require('fs');
+
+var tree = [];
 //modules for testing
 var modules = 
  [{
     "id": "dht22_logger",                           
-    "architecture": "aarch64", 
+    "architecture": "aarch64",
+    "version": "1.0.0", 
     "platform": "linux", 
     "interfaces": ["humidity_sensor", "temperature_sensor"],  
     "dependencies": [{ 
@@ -59,63 +59,143 @@ var modules =
 }
 ];
 
-function startTree(node, tree){
-    return start(node, tree)
-}
 
 
 
+//TODO: Array.prototype.group()??
+//
 
 //creates a recursive requirement tree
 //WARNING: Will loop if there are loops in required modules!!
 //TODO: add backtracing to not get stuck in loops with required modules
-function start(node, tree){
+function start(node){
 
     let reqs = []
     let h = {
         dependencies: [],
-        ID: node.id,
+        id: node.id,
         version: node.version //TODO: add semver later
     }
 
     reqs = node.dependencies;
  
-    if(node.dependencies){
+    if(!isEmpty(node.dependencies[0])){
      
         node.dependencies.forEach((req) => {
             if(Object.keys(req)[0] == undefined){
                 return {};} 
-                if(tree.includes(Object.keys(req)[0])){console.log("ALREADY IN :  " + Object.keys(req)[0]);
+                if(getValues(tree,'id').includes(Object.keys(req)[0])){
+                    var position = Object.keys(tree).indexOf(Object.keys(req)[0]);
+                    
+                    tree.push({id :h.id,version : h.version});    
+                    
                 return h;
             };
 
 
                 var dependencyWithVersion = 
                 {
-                   name: Object.keys(req)[0],
+                   id : Object.keys(req)[0],
                    version: getValues(req, "version")[0]
                 }
-       
+
                tree.push(dependencyWithVersion);
-               tree.push(h.ID);
+               tree.push({id :h.id,version : h.version});
                
             h.dependencies.push(start(
                 JSON.parse(getModuleByName(
-Object.keys(req)[0])), tree))
+            Object.keys(req)[0])), tree))
          })
-
-     return h;
+    
+    return h;
  }
+
+
  h = {
-         ID: node.id
+         id: node.id
      }
-     //l(h)
- return h
+ return h;
 }
+
+
+
+function getTree(node){
+
+    let reqs = []
+    let h = {
+        dependencies: [],
+        id: node.id,
+        version: node.version //TODO: add semver later
+    }
+
+    reqs = node.dependencies;
+ 
+    if(!isEmpty(node.dependencies[0])){
+     
+        node.dependencies.forEach((req) => {
+            if(Object.keys(req)[0] == undefined){
+                return {};} 
+                if(getValues(tree,'id').includes(Object.keys(req)[0])){
+                    var position = Object.keys(tree).indexOf(Object.keys(req)[0]);
+                    
+                    tree.push({id :h.id,version : h.version});    
+                    
+                return h;
+            };
+
+
+                var dependencyWithVersion = 
+                {
+                   id : Object.keys(req)[0],
+                   version: getValues(req, "version")[0]
+                }
+
+               tree.push(dependencyWithVersion);
+               tree.push({id :h.id,version : h.version});
+               
+            h.dependencies.push(start(
+                JSON.parse(getModuleByName(
+            Object.keys(req)[0])), tree))
+         })
+    
+    return tree;
+ }
+
+
+ h = {
+         id: node.id
+     }
+ return h;
+}
+
+
+
+
+  var groupBy = function(xs, key) {
+    return xs.reduce(function(rv, x) {
+      (rv[x[key]] = rv[x[key]] || []).push(x);
+      return rv;
+    }, {});
+  };
+  
+
+  
+  // => {3: ["one", "two"], 5: ["three"]}
+
+function makeSemver(tree){
+    semverArray = 
+    {};
+    tree.forEach((dep) => {
+        
+    })
+
+    return [];
+};
 
 //return an array of values that match on a certain key
 function getValues(obj, key) {
     var objects = [];
+
     for (var i in obj) {
         if (!obj.hasOwnProperty(i)) continue;
         if (typeof obj[i] == 'object') {
@@ -124,14 +204,25 @@ function getValues(obj, key) {
             objects.push(obj[i]);
         }
     }
+
     return objects;
 }
 
-testModule = JSON.parse(getModuleByName("dht22_logger"));
+function isEmpty(obj) {
+    for(var prop in obj) {
+      if(Object.prototype.hasOwnProperty.call(obj, prop)) {
+        return false;
+      }
+    }
+  
+    return JSON.stringify(obj) === JSON.stringify({});
+  }
 
 
 
-console.log(start(testModule,[]));
+
+
+
 
 //returns module by its name from local module library
 function getModuleByName(modulename){
@@ -154,22 +245,8 @@ function getModuleByName(modulename){
     
 }
 
-//checks a tree for if a package has already been required before
-function checkTreeForMatches(tree, dependency){
-//TODO: add code
 
-console.log(dependency);
-console.log(JSON.stringify(tree, null, 2));
-//console.log(Object.keys(dependency)[0]);
-//console.log(tree);
-//searchTree(tree, Object.keys(dependency)[0]);
-//console.log(getKeys(tree, Object.keys(dependency)[0]));
 
-if (true){console.log("");
-};
-
-//TODO: SEMVER!!
-}
 
 
 
@@ -190,7 +267,19 @@ function searchTree(element, matchingTitle){
     return null;
 }
 
-
+//return an array of values that match on a certain key
+function getValues(obj, key) {
+    var objects = [];
+    for (var i in obj) {
+        if (!obj.hasOwnProperty(i)) continue;
+        if (typeof obj[i] == 'object') {
+            objects = objects.concat(getValues(obj[i], key));
+        } else if (i == key) {
+            objects.push(obj[i]);
+        }
+    }
+    return objects;
+}
 
 //return an array of keys that match on a certain value
 function getKeys(obj, val) {
@@ -205,3 +294,7 @@ function getKeys(obj, val) {
     }
     return objects;
 }
+
+exports.start = start;
+exports.groupBy = groupBy;
+exports.getTree = getTree;

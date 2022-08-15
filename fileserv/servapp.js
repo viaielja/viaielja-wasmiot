@@ -2,7 +2,8 @@ const { Console } = require('console');
 var http = require('http'),
     fileSystem = require('fs'),
     path = require('path'),
-    dependencytree = require('dependency-tree');
+    dependencytree = require('./dependencytree.js');
+
 const { findSourceMap } = require('module');
 var REQUIREDPACKAGES = [];
 var DEVICEMANIFEST;
@@ -108,6 +109,12 @@ function startSearch() {
     var modules = getDirectories("./modules"); //fetch name of the directories of every module
     checkModules(DEVICEMANIFEST, DEVICEDESCRIPTION, modules);
     saveRequiredModules();
+    
+    
+testModule = JSON.parse(getModuleJSON("dht22_logger"));
+dependencyList = dependencytree.start(testModule);
+console.log(dependencyList);
+console.log(dependencytree.groupBy(dependencytree.getTree(testModule), 'id'))
 }
 
 //loops through every module in list of local modules
@@ -125,13 +132,14 @@ function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
     deviceDescription = JSON.parse(deviceDescription);
     deviceManifest = JSON.parse(deviceManifest);
     checkArchitecture(deviceDescription, module);
-    //checkPlatform(deviceDescription, module);
     checkPeripherals(deviceDescription, module);
     checkInterfaces(deviceManifest, module);
     addToCandidateList(module);
 
-    //create a dependency tree
-    handleSuperDependencies(deviceDescription, module);
+
+    //TODO: create a dependency tree
+
+
   
 }
 
@@ -234,6 +242,9 @@ function saveRequiredModules(){
         console.log('Candidate modules have been saved');
     });
 }
+
+
+
 
 
 
