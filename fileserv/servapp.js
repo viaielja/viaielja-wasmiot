@@ -2,7 +2,8 @@ const { Console } = require('console');
 var http = require('http'),
     fileSystem = require('fs'),
     path = require('path'),
-    dependencytree = require('./dependencytree.js');
+    dependencytree = require('./dependencytree.js'),
+    semver = require('semver');
 
 const { findSourceMap } = require('module');
 var REQUIREDPACKAGES = [];
