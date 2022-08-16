@@ -1,4 +1,4 @@
-const { Console } = require('console');
+const { Console, groupCollapsed } = require('console');
 var http = require('http'),
     fileSystem = require('fs'),
     path = require('path'),
@@ -110,12 +110,110 @@ function startSearch() {
     var modules = getDirectories("./modules"); //fetch name of the directories of every module
     checkModules(DEVICEMANIFEST, DEVICEDESCRIPTION, modules);
     saveRequiredModules();
-    
-    
+        
 testModule = JSON.parse(getModuleJSON("dht22_logger"));
 dependencyList = dependencytree.start(testModule);
 console.log(dependencyList);
-console.log(dependencytree.groupBy(dependencytree.getTree(testModule), 'id'))
+groupedList = dependencytree.groupBy(dependencytree.getTree(testModule), 'id')
+console.log(groupedList);
+//makeSemverDepList(groupedList);
+
+
+}
+
+
+
+
+
+
+
+
+
+data = {
+    networking: [
+      { id: 'networking', version: '1.0.0' },
+      { id: 'networking', version: '1.0.0' }
+    ],
+    dht22_logger: [
+      { id: 'dht22_logger', version: '1.0.0' },
+      { id: 'dht22_logger', version: '1.0.0' },
+      { id: 'dht22_logger', version: '1.0.0' },
+      { id: 'dht22_logger', version: '1.0.0' },
+      { id: 'dht22_logger', version: '1.0.0' },
+      { id: 'dht22_logger', version: '1.0.0' }
+    ],
+    supplement: [
+      { id: 'supplement', version: '1.0.0' },
+      { id: 'supplement', version: '1.0.0' }
+    ],
+    test_module: [
+      { id: 'test_module', version: '1.0.0' },
+      { id: 'test_module', version: '1.0.0' }
+    ]
+  }
+
+  function makeSemverDepList(groupedList){
+    keys = Object.keys(groupedList);
+    depList = [];
+    for(var i in keys){
+
+    keys.forEach((key, index) =>{
+        let versionList = {
+            id: keys[i],
+            versions :
+            
+            //todo add condition if version is already in
+            makeVersionList(groupedList[key])
+        }
+        depList.push(versionList)
+        });
+
+    
+    }
+return depList;
+}
+
+function makeVersionList(versions){
+    var acc = [];
+   var value = versions.forEach((variable) => {
+        //for each each object in list of the key, do this
+    acc.push(variable.version);
+    
+
+    })
+    return acc;
+}
+
+console.log(makeSemverDepList(data));
+
+function semverHelper(data, item, value){
+   return data.forEach(function(item) {
+        var existing = output.filter(function(v, i) {
+          return v.name == item.name;
+        });
+        if (existing.length) {
+          var existingIndex = output.indexOf(existing[0]);
+          output[existingIndex].value = output[existingIndex].value.concat(item.value);
+        } else {
+          if (typeof item.value == 'string')
+            item.value = [item.value];
+          output.push(item);
+        }
+      });
+      
+}
+
+
+
+//console.log(makeSemverDepList(data));
+
+
+function reducer(dependency, version) {
+if(!dependency[version]){
+    dependency.push(version);
+}
+else return null;
+
 }
 
 //loops through every module in list of local modules
@@ -135,14 +233,15 @@ function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
     checkArchitecture(deviceDescription, module);
     checkPeripherals(deviceDescription, module);
     checkInterfaces(deviceManifest, module);
+     //TODO: create a dependency tree
     addToCandidateList(module);
 
 
-    //TODO: create a dependency tree
-
+   
 
   
 }
+
 
 
 //adds superdependencies to the list of modules
@@ -257,11 +356,7 @@ function addToCandidateList(module){
 
 //checks Architecture and platform supported by module
 function checkArchitecture(deviceDescription, module) {
-    //console.log(' ----- devicedescription -----');
-    //console.log(deviceDescription);
-    //console.log(' ----- modulemetadata -----');
-    //console.log(module);
-    if (deviceDescription.architecture === module.architecture
+  if (deviceDescription.architecture === module.architecture
         && deviceDescription.platform
         === module.platform) {
         console.log("architecture and platform matches!");
@@ -323,42 +418,7 @@ function getDeviceDescription() {
     });
 }
 
-/*
-function checkModule(modulemeta) {
-    var modulematadata = modulemeta;
-    var deviceDescription = fileSystem.readFile('./files/devicedescription.json', 'UTF-8', function (err, data) {
-        if (err) return console.log(err);
 
-        console.log('---- Device description file has been read ----')
-        deviceDescription = JSON.parse(data);
-
-        checkCandidate(deviceDescription, modulemeta);
-    });
-
-
-}
-
-//check if candidate is suitable for the role on the device
-function checkCandidate(deviceDescription, moduleMetadata) {
-
-    //check if architecture and peripherals match
-    if (checkArchitectureAndPeripherals(deviceDescription, moduleMetadata)) {
-
-        console.log("--- module is suitable for device and platform --- ");
-        if (!CANDIDATEPACKAGE.includes(moduleMetadata.id)) {
-            CANDIDATEPACKAGE.push(moduleMetadata.id)
-            console.log("adding package to candidate modules");
-            console.log(CANDIDATEPACKAGE);
-
-        }
-        var manifest = getManifest();
-        console.log(manifest);
-        digestManifest(JSON.parse(manifest), moduleMetadata);
-
-    }
-
-}
-*/
 
 //reads the manifest sent by client
 function getManifest() {
@@ -602,32 +662,7 @@ function createDepList(depTree){
 }
 
 
-/*//Looks for matching key: value pairs between stored solutions and manifest
-function lookUpKey(key, value) {
-    for (var candidate in modulemetadata) {
-        if (modulemetadata.hasOwnProperty(key)) {
 
-            console.log("found " + key + " with : " + value);
-        }
-    }
-}
-
-   //checks if architecture and peripherals of the module are suitable for the device
-function checkArchitectureAndPeripherals(deviceDescription, modulemetadata){
-    console.log('devicedescription -----');
-    console.log(deviceDescription);
-    console.log('modulemetadata -----');
-    console.log(modulemetadata);
-    //checking whether module architecture and peripheral list are satisfactory
-    if(deviceDescription.architecture === modulemetadata.architecture 
-        && isSubset(deviceDescription.peripherals ,modulemetadata.peripherals)){
-            
-       console.log("architecture and platform matches!");
-        return true;
-    }
-    return false;
-}
-*/
 
 
 

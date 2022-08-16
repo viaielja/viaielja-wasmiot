@@ -70,7 +70,7 @@ var modules =
 //TODO: add backtracing to not get stuck in loops with required modules
 function start(node){
 
-    let reqs = []
+    let reqs = [];
     let h = {
         dependencies: [],
         id: node.id,
@@ -116,6 +116,8 @@ function start(node){
      }
  return h;
 }
+
+
 
 
 
