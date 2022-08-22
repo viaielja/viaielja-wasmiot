@@ -155,36 +155,44 @@ data = {
   function makeSemverDepList(groupedList){
     keys = Object.keys(groupedList);
     depList = [];
-    for(var i in keys){
+   
 
     keys.forEach((key, index) =>{
+        
+        console.log()
+        
         let versionList = {
-            id: keys[i],
+            id: key,
             versions :
             
             //todo add condition if version is already in
             makeVersionList(groupedList[key])
         }
-        depList.push(versionList)
-        });
+         return depList.push(versionList)
+        }); 
 
     
     }
-return depList;
-}
+
+
+makeSemverDepList(data);
 
 function makeVersionList(versions){
     var acc = [];
    var value = versions.forEach((variable) => {
+    if (!acc.includes(variable.version)){
         //for each each object in list of the key, do this
-    acc.push(variable.version);
-    
-
+        console.log(variable)
+    acc.push(variable.version);}
     })
+
     return acc;
 }
 
-console.log(makeSemverDepList(data));
+var foldername = "dht22_logger"
+var versionname = "1.0.0"
+var versionname2 = "1.0.2"
+
 
 function semverHelper(data, item, value){
    return data.forEach(function(item) {

@@ -5,6 +5,7 @@ const util = require('util');
 
 const semver = require('semver');
 const { version } = require('os');
+const { versions } = require('process');
 path = require('path');
 fileSystem = require('fs');
 
@@ -59,7 +60,15 @@ var modules =
 }
 ];
 
-
+function checkMatches(tree, req){
+    var matches = [];
+            for (var i in tree) {
+                if (tree[i].id == Object.keys(req)[0]){
+                    matches.push(tree[i].version)
+                }
+                }
+                return matches;
+};
 
 
 //TODO: Array.prototype.group()??
@@ -82,13 +91,15 @@ function start(node){
     if(!isEmpty(node.dependencies[0])){
      
         node.dependencies.forEach((req) => {
-            if(Object.keys(req)[0] == undefined){
-                return {};} 
-                if(getValues(tree,'id').includes(Object.keys(req)[0])){
-                    var position = Object.keys(tree).indexOf(Object.keys(req)[0]);
-                    
+            if(Object.keys(req)[0] == undefined){return {};} 
+
+                var matches = checkMatches(tree, req);
+                console.log(matches);
+                console.log(getValues(req, 'version'));
+                
+                if(getValues(tree,'id').includes(Object.keys(req)[0]) && !matches.includes(getValues(req, 'version'))  ){
+                    var position = getValues(tree,'id').indexOf(Object.keys(req)[0]);
                     tree.push({id :h.id,version : h.version});    
-                    
                 return h;
             };
 
@@ -102,10 +113,11 @@ function start(node){
                tree.push(dependencyWithVersion);
                tree.push({id :h.id,version : h.version});
                
+
             h.dependencies.push(start(
-                JSON.parse(getModuleByName(
-            Object.keys(req)[0])), tree))
-         })
+                JSON.parse(getModuleWithVersion(
+                    Object.keys(req)[0], getValues(req, "version")[0]))))
+                 })
     
     return h;
  }
@@ -117,7 +129,10 @@ function start(node){
  return h;
 }
 
-
+var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
+var testTree = start(testModule)
+console.log(testTree)
+//getTree(testModule);
 
 
 
@@ -127,7 +142,7 @@ function getTree(node){
     let h = {
         dependencies: [],
         id: node.id,
-        version: node.version //TODO: add semver later
+        version: node.version 
     }
 
     reqs = node.dependencies;
@@ -135,29 +150,43 @@ function getTree(node){
     if(!isEmpty(node.dependencies[0])){
      
         node.dependencies.forEach((req) => {
+
+            var dependencyWithVersion = 
+            {
+               id : Object.keys(req)[0],
+               version: getValues(req, "version")[0]
+            }
+
             if(Object.keys(req)[0] == undefined){
                 return {};} 
-                if(getValues(tree,'id').includes(Object.keys(req)[0])){
+                console.log(req)
+                console.log(getValues(req, "version"));
+                if(getValues(tree,'id').includes(Object.keys(req)[0]) && !getValues(tree,'version').includes(Object.keys(req)[0].version)){
+                   
+
                     var position = Object.keys(tree).indexOf(Object.keys(req)[0]);
                     
-                    tree.push({id :h.id,version : h.version});    
                     
-                return h;
+                    tree.push(dependencyWithVersion);
+                    tree.push({id :h.id,version : h.version});  
+                  
+                return tree;
             };
 
+            if(getValues(tree,'id').includes(Object.keys(req)[0]) && getValues(tree,'version').includes(Object.keys(req)[0].version)){
+                console.log("AAAAAAAAAAAAAAAA");
+            return tree;
+            
+            }
 
-                var dependencyWithVersion = 
-                {
-                   id : Object.keys(req)[0],
-                   version: getValues(req, "version")[0]
-                }
 
-               tree.push(dependencyWithVersion);
-               tree.push({id :h.id,version : h.version});
                
-            h.dependencies.push(start(
-                JSON.parse(getModuleByName(
-            Object.keys(req)[0])), tree))
+
+                tree.push(dependencyWithVersion);
+                tree.push({id :h.id,version : h.version});
+              
+            h.dependencies.push(getTree(
+                JSON.parse(getModuleWithVersion(Object.keys(req)[0], getValues(req, "version")[0])), tree))
          })
     
     return tree;
@@ -223,6 +252,28 @@ function isEmpty(obj) {
 
 
 
+
+//returns module by its name and version from local module library
+function getModuleWithVersion(modulename, version){
+
+    //returns the json from a module based on the name
+    function getModuleJSON(modulename, version) {
+        if(!modulename || !version) {return getModuleByName(modulename)};
+        let startpath = path.join(__dirname, 'modules');
+        let fixedVersion = modulename + "-" + version;
+        var truepath = path.join(startpath, modulename,fixedVersion, 'modulemetadata.json');
+        return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
+            if (err) return console.log(err + "NO SUCH MODULE");
+            manifest = JSON.parse(data);
+        });
+    }
+    //console.log("NAME OF FETCHED MODULE:   ");
+    //console.log(modulename);
+    
+    
+    return getModuleJSON(modulename, version);
+    
+}
 
 
 

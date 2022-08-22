@@ -1,0 +1,12 @@
+{
+    "id": "test_module",                           
+    "architecture": "aarch64", 
+    "version": "1.0.0", 
+    "platform": "linux", 
+    "interfaces": ["humidity_sensor", "temperature_sensor"],  
+    "dependencies": [{
+        "dht22_logger": { 
+           "version": "1.0.2" 
+             }}],
+    "peripherals": ["dht22"] 
+}

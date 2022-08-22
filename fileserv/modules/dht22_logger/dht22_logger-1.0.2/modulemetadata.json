@@ -1,0 +1,23 @@
+{
+    "id": "dht22_logger",                           
+    "architecture": "aarch64", 
+    "version": "1.0.2", 
+    "platform": "linux", 
+    "interfaces": ["humidity_sensor", "temperature_sensor"],  
+    "dependencies": [
+      { 
+        "networking": { 
+            "version": "1.1.0" 
+            }},
+            {"supplement": { 
+                "version": "1.0.0" 
+                  }
+                },
+            {"test_module": { 
+                    "version": "1.0.0" 
+                      }
+                    }
+            
+            ],
+    "peripherals": ["dht22"] 
+}
