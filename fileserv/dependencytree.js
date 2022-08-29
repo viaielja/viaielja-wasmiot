@@ -60,11 +60,13 @@ var modules =
 }
 ];
 
-function checkMatches(tree, req){
+function checkMatches(list, req){
     var matches = [];
-            for (var i in tree) {
-                if (tree[i].id == Object.keys(req)[0]){
-                    matches.push(tree[i].version)
+            for (var i in list) {
+         
+
+                if (list[i].id == Object.keys(req)){
+                    matches.push(list[i].version)
                 }
                 }
                 return matches;
@@ -130,10 +132,44 @@ function start(node){
 }
 
 var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
-var testTree = start(testModule)
-console.log(testTree)
 //getTree(testModule);
 
+var testList = [];
+makeTree(testModule);
+console.log(testList)
+groupList = groupBy(testList, "id")
+
+
+function makeTree(node){
+    var list = [];
+    console.log();
+    let reqs = node.dependencies;
+  
+
+    let h = {
+        id: node.id,
+        version: node.version //TODO: add semver later
+    }
+    testList.push(h);
+    if(!isEmpty(node.dependencies[0])){
+    for (var i in reqs){
+
+
+    if(getValues(testList, "id").includes(Object.keys(reqs[i])[0]) ){
+            let j = {
+                id: Object.keys(reqs[i])[0],
+                version: getValues(reqs[i], "version")[0]
+            }
+        testList.push(j);
+        
+        }
+
+    if(!getValues(testList, "id").includes(Object.keys(reqs[i])[0]) && !getValues(testList, "version").includes(reqs[i].version)){
+    console.log(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i])[0])));   
+        makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i])[0])))
+    }}}
+return list;
+}
 
 
 function getTree(node){
@@ -202,12 +238,12 @@ function getTree(node){
 
 
 
-  var groupBy = function(xs, key) {
-    return xs.reduce(function(rv, x) {
-      (rv[x[key]] = rv[x[key]] || []).push(x);
-      return rv;
+  function groupBy(xs, key) {
+    return xs.reduce(function (rv, x) {
+        (rv[x[key]] = rv[x[key]] || []).push(x);
+        return rv;
     }, {});
-  };
+}
   
 
   
@@ -258,7 +294,7 @@ function getModuleWithVersion(modulename, version){
 
     //returns the json from a module based on the name
     function getModuleJSON(modulename, version) {
-        if(!modulename || !version) {return getModuleByName(modulename)};
+        if(!modulename || !version) {console.log("No such version " + modulename +  version ); return getModuleByName(modulename)};
         let startpath = path.join(__dirname, 'modules');
         let fixedVersion = modulename + "-" + version;
         var truepath = path.join(startpath, modulename,fixedVersion, 'modulemetadata.json');
