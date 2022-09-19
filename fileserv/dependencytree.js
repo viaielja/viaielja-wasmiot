@@ -137,12 +137,11 @@ var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
 var testList = [];
 makeTree(testModule);
 console.log(testList)
-groupList = groupBy(testList, "id")
+//groupList = groupBy(testList, "id")
 
 
 function makeTree(node){
     var list = [];
-    console.log();
     let reqs = node.dependencies;
   
 
@@ -150,7 +149,7 @@ function makeTree(node){
         id: node.id,
         version: node.version //TODO: add semver later
     }
-    testList.push(h);
+    testList.push(!isEmpty(node.dependencies[0]));
     if(!isEmpty(node.dependencies[0])){
     for (var i in reqs){
 
@@ -160,11 +159,14 @@ function makeTree(node){
                 id: Object.keys(reqs[i])[0],
                 version: getValues(reqs[i], "version")[0]
             }
-        testList.push(j);
-        
+        return list;
         }
 
+
+
     if(!getValues(testList, "id").includes(Object.keys(reqs[i])[0]) && !getValues(testList, "version").includes(reqs[i].version)){
+
+    console.log("THIS IS THE VERSION" + getValues(testList, "version"))
     console.log(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i])[0])));   
         makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i])[0])))
     }}}

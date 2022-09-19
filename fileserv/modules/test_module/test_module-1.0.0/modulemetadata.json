@@ -6,7 +6,7 @@
     "interfaces": ["humidity_sensor", "temperature_sensor"],  
     "dependencies": [{
         "dht22_logger": { 
-           "version": "1.0.2" 
+           "version": "1.0.0" 
              }}],
     "peripherals": ["dht22"] 
 }
