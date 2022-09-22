@@ -139,7 +139,7 @@ makeTree(testModule);
 console.log(testList)
 //groupList = groupBy(testList, "id")
 
-
+//If module is present and has a version that matches
 function makeTree(node){
     var list = [];
     let reqs = node.dependencies;
@@ -149,7 +149,7 @@ function makeTree(node){
         id: node.id,
         version: node.version //TODO: add semver later
     }
-    testList.push(!isEmpty(node.dependencies[0]));
+    testList.push(h);
     if(!isEmpty(node.dependencies[0])){
     for (var i in reqs){
 
@@ -165,10 +165,9 @@ function makeTree(node){
 
 
     if(!getValues(testList, "id").includes(Object.keys(reqs[i])[0]) && !getValues(testList, "version").includes(reqs[i].version)){
-
-    console.log("THIS IS THE VERSION" + getValues(testList, "version"))
-    console.log(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i])[0])));   
-        makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i])[0])))
+    console.log(getValues(reqs[i], "version")[0])
+    console.log(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])));   
+        makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
     }}}
 return list;
 }
@@ -316,6 +315,7 @@ function getModuleWithVersion(modulename, version){
 
 
 //returns module by its name from local module library
+//@return module with matching name as json object
 function getModuleByName(modulename){
 
     //returns the json from a module based on the name
