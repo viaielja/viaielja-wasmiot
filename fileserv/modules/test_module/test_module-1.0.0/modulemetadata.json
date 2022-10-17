@@ -4,7 +4,8 @@
     "version": "1.0.0", 
     "platform": "linux", 
     "interfaces": ["humidity_sensor", "temperature_sensor"],  
-    "dependencies": [{
+    "dependencies": 
+    [{
         "dht22_logger": { 
            "version": "1.0.0" 
              }}],

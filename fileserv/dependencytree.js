@@ -56,9 +56,14 @@ var modules =
         "networking": { 
             "version": "1.0.0" 
               }
-    }]
+}]
 }
 ];
+
+
+var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
+//getTree(testModule);
+
 
 function checkMatches(list, req){
     var matches = [];
@@ -76,68 +81,10 @@ function checkMatches(list, req){
 //TODO: Array.prototype.group()??
 //
 
-//creates a recursive requirement tree
-//WARNING: Will loop if there are loops in required modules!!
-//TODO: add backtracing to not get stuck in loops with required modules
-function start(node){
-
-    let reqs = [];
-    let h = {
-        dependencies: [],
-        id: node.id,
-        version: node.version //TODO: add semver later
-    }
-
-    reqs = node.dependencies;
- 
-    if(!isEmpty(node.dependencies[0])){
-     
-        node.dependencies.forEach((req) => {
-            if(Object.keys(req)[0] == undefined){return {};} 
-
-                var matches = checkMatches(tree, req);
-                console.log(matches);
-                console.log(getValues(req, 'version'));
-                
-                if(getValues(tree,'id').includes(Object.keys(req)[0]) && !matches.includes(getValues(req, 'version'))  ){
-                    var position = getValues(tree,'id').indexOf(Object.keys(req)[0]);
-                    tree.push({id :h.id,version : h.version});    
-                return h;
-            };
-
-
-                var dependencyWithVersion = 
-                {
-                   id : Object.keys(req)[0],
-                   version: getValues(req, "version")[0]
-                }
-
-               tree.push(dependencyWithVersion);
-               tree.push({id :h.id,version : h.version});
-               
-
-            h.dependencies.push(start(
-                JSON.parse(getModuleWithVersion(
-                    Object.keys(req)[0], getValues(req, "version")[0]))))
-                 })
-    
-    return h;
- }
-
-
- h = {
-         id: node.id
-     }
- return h;
-}
-
-var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
-//getTree(testModule);
-
 var testList = [];
 makeTree(testModule);
 console.log(testList)
-//groupList = groupBy(testList, "id")
+groupList = groupBy(testList, "id")
 
 //If module is present and has a version that matches
 function makeTree(node){
@@ -153,8 +100,9 @@ function makeTree(node){
     if(!isEmpty(node.dependencies[0])){
     for (var i in reqs){
 
+       
 
-    if(getValues(testList, "id").includes(Object.keys(reqs[i])[0]) ){
+    if(getValues(testList, "id").includes(Object.keys(reqs[i])[0]) ){   
             let j = {
                 id: Object.keys(reqs[i])[0],
                 version: getValues(reqs[i], "version")[0]
@@ -162,15 +110,18 @@ function makeTree(node){
         return list;
         }
 
-
+    
 
     if(!getValues(testList, "id").includes(Object.keys(reqs[i])[0]) && !getValues(testList, "version").includes(reqs[i].version)){
     console.log(getValues(reqs[i], "version")[0])
+    console.log(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0]));   
+    
     console.log(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])));   
         makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
     }}}
 return list;
 }
+
 
 
 function getTree(node){
@@ -182,6 +133,7 @@ function getTree(node){
         version: node.version 
     }
 
+    
     reqs = node.dependencies;
  
     if(!isEmpty(node.dependencies[0])){
@@ -238,7 +190,7 @@ function getTree(node){
 
 
 
-
+  //Groups a list of objects by matching keys  
   function groupBy(xs, key) {
     return xs.reduce(function (rv, x) {
         (rv[x[key]] = rv[x[key]] || []).push(x);
@@ -250,15 +202,6 @@ function getTree(node){
   
   // => {3: ["one", "two"], 5: ["three"]}
 
-function makeSemver(tree){
-    semverArray = 
-    {};
-    tree.forEach((dep) => {
-        
-    })
-
-    return [];
-};
 
 //return an array of values that match on a certain key
 function getValues(obj, key) {
@@ -276,6 +219,7 @@ function getValues(obj, key) {
     return objects;
 }
 
+//Returns true if object is empty 
 function isEmpty(obj) {
     for(var prop in obj) {
       if(Object.prototype.hasOwnProperty.call(obj, prop)) {
@@ -372,19 +316,63 @@ function getValues(obj, key) {
     return objects;
 }
 
-//return an array of keys that match on a certain value
-function getKeys(obj, val) {
-    var objects = [];
-    for (var i in obj) {
-        if (!obj.hasOwnProperty(i)) continue;
-        if (typeof obj[i] == 'object') {
-            objects = objects.concat(getKeys(obj[i], val));
-        } else if (obj[i] == val) {
-            objects.push(i);
-        }
+
+//creates a recursive requirement tree
+//WARNING: Will loop if there are loops in required modules!!
+//TODO: add backtracing to not get stuck in loops with required modules
+function start(node){
+
+    let reqs = [];
+    let h = {
+        dependencies: [],
+        id: node.id,
+        version: node.version //TODO: add semver later
     }
-    return objects;
+
+    reqs = node.dependencies;
+ 
+    if(!isEmpty(node.dependencies[0])){
+     
+        node.dependencies.forEach((req) => {
+            if(Object.keys(req)[0] == undefined){return {};} 
+
+                var matches = checkMatches(tree, req);
+                console.log(matches);
+                console.log(getValues(req, 'version'));
+                
+                if(getValues(tree,'id').includes(Object.keys(req)[0]) && !matches.includes(getValues(req, 'version'))  ){
+                    var position = getValues(tree,'id').indexOf(Object.keys(req)[0]);
+                    tree.push({id :h.id,version : h.version});    
+                return h;
+            };
+
+
+                var dependencyWithVersion = 
+                {
+                   id : Object.keys(req)[0],
+                   version: getValues(req, "version")[0]
+                }
+
+               tree.push(dependencyWithVersion);
+               tree.push({id :h.id,version : h.version});
+               
+
+            h.dependencies.push(start(
+                JSON.parse(getModuleWithVersion(
+                    Object.keys(req)[0], getValues(req, "version")[0]))))
+                 })
+    
+    return h;
+ }
+
+
+ h = {
+         id: node.id
+     }
+ return h;
 }
+
+
 
 exports.start = start;
 exports.groupBy = groupBy;
