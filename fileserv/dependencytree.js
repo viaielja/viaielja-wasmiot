@@ -85,6 +85,8 @@ var testList = [];
 makeTree(testModule);
 console.log(testList)
 groupList = groupBy(testList, "id")
+console.log(groupList)
+
 
 //If module is present and has a version that matches
 function makeTree(node){
@@ -100,14 +102,28 @@ function makeTree(node){
     if(!isEmpty(node.dependencies[0])){
     for (var i in reqs){
 
-       
 
-    if(getValues(testList, "id").includes(Object.keys(reqs[i])[0]) ){   
-            let j = {
-                id: Object.keys(reqs[i])[0],
-                version: getValues(reqs[i], "version")[0]
-            }
-        return list;
+
+    if(getValues(testList, "id").includes(Object.keys(reqs[i])[0]) ){  
+        //add check for version 
+        let j = {
+            id: Object.keys(reqs[i])[0],
+            version: getValues(reqs[i], "version")[0]
+        }
+    
+
+    var listToSearch = getObjects(testList, "id", Object.keys(reqs[i])[0]);
+  
+
+        
+    if(!getValues(listToSearch, "version").includes(j.version)){
+        console.log(listToSearch[0].version == j.version );
+        //makeTree with current module and version!!
+        makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
+
+    }
+    
+          
         }
 
     
@@ -116,12 +132,10 @@ function makeTree(node){
     console.log(getValues(reqs[i], "version")[0])
     console.log(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0]));   
     
-    console.log(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])));   
         makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
     }}}
 return list;
 }
-
 
 
 function getTree(node){
@@ -200,7 +214,6 @@ function getTree(node){
   
 
   
-  // => {3: ["one", "two"], 5: ["three"]}
 
 
 //return an array of values that match on a certain key
@@ -373,7 +386,29 @@ function start(node){
 }
 
 
+//return an array of objects according to key, value, or key and value matching
+function getObjects(obj, key, val) {
+    var objects = [];
+    for (var i in obj) {
+        if (!obj.hasOwnProperty(i)) continue;
+        if (typeof obj[i] == 'object') {
+            objects = objects.concat(getObjects(obj[i], key, val));
+        } else
+            //if key matches and value matches or if key matches and value is not passed (eliminating the case where key matches but passed value does not)
+            if (i == key && obj[i] == val || i == key && val == '') { //
+                objects.push(obj);
+            } else if (obj[i] == val && key == '') {
+                //only add if the object is not already in the array
+                if (objects.lastIndexOf(obj) == -1) {
+                    objects.push(obj);
+                }
+            }
+    }
+    return objects;
+}
+
 
 exports.start = start;
 exports.groupBy = groupBy;
 exports.getTree = getTree;
+exports.makeTree = makeTree;
