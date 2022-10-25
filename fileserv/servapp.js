@@ -175,7 +175,7 @@ data = {
     }
 
 
-makeSemverDepList(data);
+//makeSemverDepList(data);
 
 function makeVersionList(versions){
     var acc = [];
@@ -189,9 +189,7 @@ function makeVersionList(versions){
     return acc;
 }
 
-var foldername = "dht22_logger"
-var versionname = "1.0.0"
-var versionname2 = "1.0.2"
+
 
 
 function semverHelper(data, item, value){
@@ -222,6 +220,29 @@ if(!dependency[version]){
 }
 else return null;
 
+}
+
+
+//returns module by its name and version from local module library
+function getModuleWithVersion(modulename, version){
+
+    //returns the json from a module based on the name
+    function getModuleJSON(modulename, version) {
+        if(!modulename || !version) {console.log("No such version " + modulename +  version ); return getModuleByName(modulename)};
+        let startpath = path.join(__dirname, 'modules');
+        let fixedVersion = modulename + "-" + version;
+        var truepath = path.join(startpath, modulename,fixedVersion, 'modulemetadata.json');
+        return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
+            if (err) return console.log(err + "NO SUCH MODULE");
+            manifest = JSON.parse(data);
+        });
+    }
+    //console.log("NAME OF FETCHED MODULE:   ");
+    //console.log(modulename);
+    
+    
+    return getModuleJSON(modulename, version);
+    
 }
 
 //loops through every module in list of local modules

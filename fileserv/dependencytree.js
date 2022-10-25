@@ -62,6 +62,7 @@ var modules =
 
 
 var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
+console.log(testModule);
 //getTree(testModule);
 
 
@@ -81,11 +82,7 @@ function checkMatches(list, req){
 //TODO: Array.prototype.group()??
 //
 
-var testList = [];
-makeTree(testModule);
-console.log(testList)
-groupList = groupBy(testList, "id")
-console.log(groupList)
+
 
 
 //If module is present and has a version that matches
