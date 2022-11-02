@@ -62,8 +62,14 @@ var modules =
 
 
 var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
-console.log(testModule);
-//getTree(testModule);
+
+var testList = [];
+//makeTree(testModule);
+/*console.log(testList)
+groupList = groupBy(testList, "id")
+console.log(groupList)
+*/
+console.log(testList)
 
 
 function checkMatches(list, req){
@@ -79,13 +85,13 @@ function checkMatches(list, req){
 };
 
 
-//TODO: Array.prototype.group()??
+
+
+
 //
-
-
-
-
-//If module is present and has a version that matches
+// Creates a list of modules dependencies. If the module is in the list but the version differs, creates a new item in the list
+//
+//
 function makeTree(node){
     var list = [];
     let reqs = node.dependencies;
@@ -114,7 +120,7 @@ function makeTree(node){
 
         
     if(!getValues(listToSearch, "version").includes(j.version)){
-        console.log(listToSearch[0].version == j.version );
+       // console.log(listToSearch[0].version == j.version );
         //makeTree with current module and version!!
         makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
 
@@ -126,12 +132,12 @@ function makeTree(node){
     
 
     if(!getValues(testList, "id").includes(Object.keys(reqs[i])[0]) && !getValues(testList, "version").includes(reqs[i].version)){
-    console.log(getValues(reqs[i], "version")[0])
-    console.log(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0]));   
+    //console.log(getValues(reqs[i], "version")[0])
+    //console.log(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0]));   
     
         makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
     }}}
-return list;
+return testList;
 }
 
 
@@ -405,7 +411,6 @@ function getObjects(obj, key, val) {
 }
 
 
-exports.start = start;
 exports.groupBy = groupBy;
 exports.getTree = getTree;
 exports.makeTree = makeTree;

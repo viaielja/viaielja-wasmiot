@@ -21,7 +21,7 @@ http.createServer(function (request, response) {
         });
        
         request.on('end', () => {
-            if (Object.keys(JSON.parse(data)).includes('architecture')) {
+            if (Object.keys(JSON.parse(data)).includes('architecture')) { // Handle Device Descriptions
                 console.log(' --- this is a device description --- ');
                 fileSystem.writeFile('./files/devicedescription.json', data, function (err) {
                     if (err) return console.log(err);
@@ -30,10 +30,10 @@ http.createServer(function (request, response) {
                 });
             }
             //save sent json content of manifest to a json file
-            else fileSystem.writeFile('./files/manifest.json', data, function (err) {
+            else fileSystem.writeFile('./files/manifest.json', data, function (err) { // Handle Manifest files
                 if (err) return console.log(err);
                 console.log('data written to file manifest.json');
-                response.end(startSearch()); 
+                response.end(startSearch()); //TODO: Start searching for suitable packages using saved file
             });
             response.end();
         });
@@ -105,27 +105,33 @@ const getDirectories = srcPath => fileSystem.readdirSync(srcPath).filter(file =>
 
 //searches the server for modules that satisfy device description and manifest
 function startSearch() {
-    DEVICEDESCRIPTION = getDeviceDescription();
+    //TODO: Start searching for suitable packages using saved file
+   /* DEVICEDESCRIPTION = getDeviceDescription();
     DEVICEMANIFEST = getManifest();
-    var modules = getDirectories("./modules"); //fetch name of the directories of every module
+    
     checkModules(DEVICEMANIFEST, DEVICEDESCRIPTION, modules);
     saveRequiredModules();
-        
-testModule = JSON.parse(getModuleJSON("dht22_logger"));
-dependencyList = dependencytree.start(testModule);
+     */   
+var modules = getDirectories("./modules"); //fetch name of the directories of every module
+console.log(modules);
+var deviceManifest = JSON.parse(getManifest());
+getObjects(deviceManifest, 'role', '' )
+//TODO: get manifest interfaces
+
+console.log(deviceManifest.roles)
+
+/*testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
+console.log(testModule);
+/*dependencyList = dependencytree.makeTree(testModule);
 console.log(dependencyList);
-groupedList = dependencytree.groupBy(dependencytree.getTree(testModule), 'id')
+/*groupedList = dependencytree.groupBy(dependencytree.getTree(testModule), 'id')
 console.log(groupedList);
-//makeSemverDepList(groupedList);
 
-
+return dependencyList;*/
 }
 
 
-
-
-
-
+startSearch();
 
 
 
@@ -228,7 +234,7 @@ function getModuleWithVersion(modulename, version){
 
     //returns the json from a module based on the name
     function getModuleJSON(modulename, version) {
-        if(!modulename || !version) {console.log("No such version " + modulename +  version ); return getModuleByName(modulename)};
+        if(!modulename || !version) {console.log("No such version " + modulename +  version ); return getModuleWithVersion(modulename, "1.0.0")};
         let startpath = path.join(__dirname, 'modules');
         let fixedVersion = modulename + "-" + version;
         var truepath = path.join(startpath, modulename,fixedVersion, 'modulemetadata.json');
@@ -383,16 +389,7 @@ function addToCandidateList(module){
 
 }
 
-//checks Architecture and platform supported by module
-function checkArchitecture(deviceDescription, module) {
-  if (deviceDescription.architecture === module.architecture
-        && deviceDescription.platform
-        === module.platform) {
-        console.log("architecture and platform matches!");
-        return true;
-    }
-    return false;
-}
+
 
 //returns the json from a module based on the name
 function getModuleJSON(modulename) {
@@ -413,6 +410,17 @@ function checkPeripherals(deviceDescription, module) {
     }
     else { console.log("module peripherals do not match"); return false; }
 }
+
+//checks Architecture and platform supported by module
+function checkArchitecture(deviceDescription, module) {
+    if (deviceDescription.architecture === module.architecture
+          && deviceDescription.platform
+          === module.platform) {
+          console.log("architecture and platform matches!");
+          return true;
+      }
+      return false;
+  }
 
 function checkInterfaces(deviceManifest, module) {
     //checks if all required interfaces are offered by module
@@ -486,7 +494,7 @@ function isSubset(set, subset) {
      }*/
 
 }
-
+//
 //handle manifest and matching of interfaces
 function digestManifest(manifest, moduleMetadata) {
     if (getObjects(manifest, 'roles', '') != []) {
@@ -559,6 +567,8 @@ function matchRoles(clientManifest, modulemetadata) {
 
 };
 
+
+//returns list of roles
 function getRoles(manifest) {
     console.log('---- searching for roles ----')
     roles = [];
