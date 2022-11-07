@@ -113,13 +113,18 @@ function startSearch() {
     saveRequiredModules();
      */   
 var modules = getDirectories("./modules"); //fetch name of the directories of every module
-console.log(modules);
 var deviceManifest = JSON.parse(getManifest());
-getObjects(deviceManifest, 'role', '' )
+var roles = deviceManifest.roles;
+for (const property in roles){
+var interfaceToMatch = roles[property].role_config.interface
+matchInterfaces(interfaceToMatch)
+}
 //TODO: get manifest interfaces
 
-console.log(deviceManifest.roles)
+/*for (const [key, value] of Object.entries(deviceManifest.roles)){
 
+    console.log(roles)
+}
 /*testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
 console.log(testModule);
 /*dependencyList = dependencytree.makeTree(testModule);
