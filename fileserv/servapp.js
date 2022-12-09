@@ -19,7 +19,7 @@ http.createServer(function (request, response) {
         request.on('data', chunk => {
             data += chunk;
         });
-       
+
         request.on('end', () => {
             if (Object.keys(JSON.parse(data)).includes('architecture')) { // Handle Device Descriptions
                 console.log(' --- this is a device description --- ');
@@ -42,7 +42,7 @@ http.createServer(function (request, response) {
     if (request.method === "GET" && request.url === "/") {
         console.log("received GET");
         var filePath = path.join(__dirname, 'files/simple.wasm'); //hardcoded filepath to served file
-        
+
         var stat = fileSystem.statSync(filePath);
 
         response.writeHead(200, {
@@ -106,95 +106,160 @@ const getDirectories = srcPath => fileSystem.readdirSync(srcPath).filter(file =>
 //searches the server for modules that satisfy device description and manifest
 function startSearch() {
     //TODO: Start searching for suitable packages using saved file
-   /* DEVICEDESCRIPTION = getDeviceDescription();
-    DEVICEMANIFEST = getManifest();
+
+    var listOfModules = getDirectories("./modules"); //get name of the directories of every module
+    var deviceManifest = JSON.parse(getManifest());  //get device manifest as JSON
+    var roles = deviceManifest.roles; //get roles from manifest
+
+    // for each role in the manifest, get the specific modules for requested interfaces
+    for (var i in roles) {
+        var requiredDeviceInterface = roles[i].role_config.interface
+        console.log(findModuleForDeviceInterface(deviceManifest, listOfModules))
+
+    }
+
+    //TODO: get manifest interfaces
+    /*for (const [key, value] of Object.entries(deviceManifest.roles)){
     
-    checkModules(DEVICEMANIFEST, DEVICEDESCRIPTION, modules);
-    saveRequiredModules();
-     */   
-var modules = getDirectories("./modules"); //fetch name of the directories of every module
-var deviceManifest = JSON.parse(getManifest());
-var roles = deviceManifest.roles;
-for (const property in roles){
-var interfaceToMatch = roles[property].role_config.interface
-matchInterfaces(interfaceToMatch)
-}
-//TODO: get manifest interfaces
-
-/*for (const [key, value] of Object.entries(deviceManifest.roles)){
-
-    console.log(roles)
-}
-/*testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
-console.log(testModule);
-/*dependencyList = dependencytree.makeTree(testModule);
-console.log(dependencyList);
-/*groupedList = dependencytree.groupBy(dependencytree.getTree(testModule), 'id')
-console.log(groupedList);
-
-return dependencyList;*/
+        console.log(roles)
+    }
+    /*testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
+    console.log(testModule);
+    /*dependencyList = dependencytree.makeTree(testModule);
+    console.log(dependencyList);
+    /*groupedList = dependencytree.groupBy(dependencytree.getTree(testModule), 'id')
+    console.log(groupedList);
+    
+    return dependencyList;*/
 }
 
+
+findModuleForDeviceInterface(deviceManifest, listOfModules)
+{
+
+    var i = 0
+    moduleInterfaces = listOfModules();
+    while (!checkInterfaces(manifestInterfaces, moduleInterfaces)) { }
+}
 
 startSearch();
 
+//check if a module fills an interface required in the manifest
+let checkInterfaces = (manifestInterfaces, moduleInterfaces) => {
+    for (let i = 0; i < manifestInterfaces.length; i++) {
+        if (moduleInterfaces.includes(manifestInterfaces[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+
+//check if module can be ran on a specific device by comparing module metadata and device description
+let checkArchPlatformPeripherals = (metadata, deviceDescription) => {
+    let arch = metadata.architecture;
+    let platform = metadata.platform;
+    let peripherals = metadata.peripherals;
+
+    if (deviceDescription.architecture === arch &&
+        deviceDescription.platform === platform &&
+        deviceDescription.peripherals.some(item => peripherals.includes(item))
+    ) {
+        return true;
+    }
+    return false;
+}
+
+
+//handle manifest and matching of interfaces
+function digestManifest(manifest, moduleMetadata) {
+    if (getObjects(manifest, 'roles', '') != []) {
+        console.log("this is a device deployment manifest");
+        var manifestRoles = getManifestRoles(manifest);
+        var interfaces = getValues(manifestRoles, 'interface');
+        var moduleInterfaces = getModuleInterfaces(moduleMetadata);
+
+        //save candidate name with interfaces for later
+        if (matchInterfaces(moduleInterfaces, interfaces)) {
+
+            console.log("found requested interfaces in module")
+            fileSystem.appendFile('./files/solutionCandidates.txt', JSON.stringify(moduleMetadata.id) + ' : ' + moduleInterfaces, function (err) {
+                if (err) throw err;
+                console.log('Candidate module has been saved');
+            });
+        }
+        else return;
+    }
+
+    else { console.log("this is something else"); }
+}
+
+function getModuleInterfaces(moduleMetadata) {
+    return moduleMetadata.interfaces;
+}
+
+function getManifestRoles(manifest) {
+    return getObjects(manifest, 'interface', '');
+}
 
 
 data = {
     networking: [
-      { id: 'networking', version: '1.0.0' },
-      { id: 'networking', version: '1.0.0' }
+        { id: 'networking', version: '1.0.0' },
+        { id: 'networking', version: '1.0.0' }
     ],
     dht22_logger: [
-      { id: 'dht22_logger', version: '1.0.0' },
-      { id: 'dht22_logger', version: '1.0.0' },
-      { id: 'dht22_logger', version: '1.0.0' },
-      { id: 'dht22_logger', version: '1.0.0' },
-      { id: 'dht22_logger', version: '1.0.0' },
-      { id: 'dht22_logger', version: '1.0.0' }
+        { id: 'dht22_logger', version: '1.0.0' },
+        { id: 'dht22_logger', version: '1.0.0' },
+        { id: 'dht22_logger', version: '1.0.0' },
+        { id: 'dht22_logger', version: '1.0.0' },
+        { id: 'dht22_logger', version: '1.0.0' },
+        { id: 'dht22_logger', version: '1.0.0' }
     ],
     supplement: [
-      { id: 'supplement', version: '1.0.0' },
-      { id: 'supplement', version: '1.0.0' }
+        { id: 'supplement', version: '1.0.0' },
+        { id: 'supplement', version: '1.0.0' }
     ],
     test_module: [
-      { id: 'test_module', version: '1.0.0' },
-      { id: 'test_module', version: '1.0.0' }
+        { id: 'test_module', version: '1.0.0' },
+        { id: 'test_module', version: '1.0.0' }
     ]
-  }
+}
 
-  function makeSemverDepList(groupedList){
+function makeSemverDepList(groupedList) {
     keys = Object.keys(groupedList);
     depList = [];
-   
 
-    keys.forEach((key, index) =>{
-        
+
+    keys.forEach((key, index) => {
+
         console.log()
-        
+
         let versionList = {
             id: key,
-            versions :
-            
-            //todo add condition if version is already in
-            makeVersionList(groupedList[key])
-        }
-         return depList.push(versionList)
-        }); 
+            versions:
 
-    
-    }
+                //todo add condition if version is already in
+                makeVersionList(groupedList[key])
+        }
+        return depList.push(versionList)
+    });
+
+
+}
 
 
 //makeSemverDepList(data);
 
-function makeVersionList(versions){
+function makeVersionList(versions) {
     var acc = [];
-   var value = versions.forEach((variable) => {
-    if (!acc.includes(variable.version)){
-        //for each each object in list of the key, do this
-        console.log(variable)
-    acc.push(variable.version);}
+    var value = versions.forEach((variable) => {
+        if (!acc.includes(variable.version)) {
+            //for each each object in list of the key, do this
+            console.log(variable)
+            acc.push(variable.version);
+        }
     })
 
     return acc;
@@ -203,21 +268,21 @@ function makeVersionList(versions){
 
 
 
-function semverHelper(data, item, value){
-   return data.forEach(function(item) {
-        var existing = output.filter(function(v, i) {
-          return v.name == item.name;
+function semverHelper(data, item, value) {
+    return data.forEach(function (item) {
+        var existing = output.filter(function (v, i) {
+            return v.name == item.name;
         });
         if (existing.length) {
-          var existingIndex = output.indexOf(existing[0]);
-          output[existingIndex].value = output[existingIndex].value.concat(item.value);
+            var existingIndex = output.indexOf(existing[0]);
+            output[existingIndex].value = output[existingIndex].value.concat(item.value);
         } else {
-          if (typeof item.value == 'string')
-            item.value = [item.value];
-          output.push(item);
+            if (typeof item.value == 'string')
+                item.value = [item.value];
+            output.push(item);
         }
-      });
-      
+    });
+
 }
 
 
@@ -226,23 +291,24 @@ function semverHelper(data, item, value){
 
 
 function reducer(dependency, version) {
-if(!dependency[version]){
-    dependency.push(version);
-}
-else return null;
+    if (!dependency[version]) {
+        dependency.push(version);
+    }
+    else return null;
 
 }
 
 
 //returns module by its name and version from local module library
-function getModuleWithVersion(modulename, version){
+function getModuleWithVersion(modulename, version) {
 
     //returns the json from a module based on the name
     function getModuleJSON(modulename, version) {
-        if(!modulename || !version) {console.log("No such version " + modulename +  version ); return getModuleWithVersion(modulename, "1.0.0")};
+        if (!modulename) { return null }
+        if (!version) { console.log("No such version, defaulting to 1.0.0 " + modulename + version); return getModuleWithVersion(modulename, "1.0.0") };
         let startpath = path.join(__dirname, 'modules');
         let fixedVersion = modulename + "-" + version;
-        var truepath = path.join(startpath, modulename,fixedVersion, 'modulemetadata.json');
+        var truepath = path.join(startpath, modulename, fixedVersion, 'modulemetadata.json');
         return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
             if (err) return console.log(err + "NO SUCH MODULE");
             manifest = JSON.parse(data);
@@ -250,18 +316,12 @@ function getModuleWithVersion(modulename, version){
     }
     //console.log("NAME OF FETCHED MODULE:   ");
     //console.log(modulename);
-    
-    
+
+
     return getModuleJSON(modulename, version);
-    
+
 }
 
-//loops through every module in list of local modules
-function checkModules(deviceManifest, deviceDescription, modules) {
-    for (var i in modules) {
-        checkIndividualModule(deviceManifest, deviceDescription, modules[i]);
-    }
-}
 
 function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
     //TODO: handle superdependencies of modules
@@ -273,47 +333,17 @@ function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
     checkArchitecture(deviceDescription, module);
     checkPeripherals(deviceDescription, module);
     checkInterfaces(deviceManifest, module);
-     //TODO: create a dependency tree
+    //TODO: create a dependency tree
     addToCandidateList(module);
 
 
-   
 
-  
+
+
 }
 
 
 
-//adds superdependencies to the list of modules
-function handleSuperDependencies(deviceDescription, module){
-    dependencies = getModuleDependencies(module);
-    dependencyList = Object.keys(dependencies);
-    var modulelist = REQUIREDPACKAGES;
-    
-  
-    
-if ((Object.keys(dependencies) === undefined) && checkArchitecture(deviceDescription, module) ){
-    addToCandidateList(module);
-}
-else{
-    for (var i in dependencyList){
-        console.log("SEARCHING FOR A DEPENDENCIES IN MODULE: " + dependencyList[i]);
-        var moduleMetadata =  JSON.parse(getModuleJSON(dependencyList[i]));
-    if (!REQUIREDPACKAGES.includes(dependencyList[i])){
-        console.log('--- module was not found in REQUIREDPACKAGES --- ');
-        addToCandidateList(module);
-
-       // getModuleJSON(dependencies[i]);
-        
-    }
-
-}
-
-console.log("--- CURRENTLY REQUIRED PACKAGES --- ");
-console.log(REQUIREDPACKAGES);
-//TODO:check if module is suitable for platf/arch/peripherals
-}
-}
 
 
 //returns an object containing dependencies of a module (superdependencies)
@@ -329,66 +359,17 @@ function getModuleDependencies(moduleMetadata) {
 }
 
 
-
-
-async function getPackageDependencyTree({ name, reference, dependencies }) {
-    return {
-      name,
-      reference,
-      dependencies: await Promise.all(
-        dependencies.map(async volatileDependency => {
-          let pinnedDependency = await getPinnedReference(volatileDependency);
-          let subDependencies = await getModuleDependencies(pinnedDependency);
-  
-          return await getPackageDependencyTree(
-            Object.assign({}, pinnedDependency, { dependencies: subDependencies })
-          );
-        })
-      ),
-    };
-  }
-
-
-
-
-//returns true if dependency is already found in the modulelist for candidates
-function checkModuleList(modulemetadata){
-    
-    console.log('SUPERDEPENDENCIES');
-    if (Object.keys(getModuleDependencies(modulemetadata) === undefined )){console.log('NO dependencies'); return false};
-var dependencies = Object.keys(getModuleDependencies(modulemetadata)); //grab list of names inside object "dependencies"
-var modulelist = REQUIREDPACKAGES;
-
-
-    for (var i in dependencies){
-        console.log(i);
-    if (!modulelist.includes(dependencies[i]) && !REQUIREDPACKAGES.includes(dependencies[i])){
-        console.log('--- module was not found in REQUIREDPACKAGES --- ');
-        REQUIREDPACKAGES.push(dependencies[i]);
-        addToCandidateList(dependencies[i]);
-        return false;
-    }
-
-    }
-    console.log('--- CURRENT REQUIRED MODULES --- ');
-    return true;
-
-}
-
-function saveRequiredModules(){
+function saveRequiredModules() {
     text = JSON.stringify(REQUIREDPACKAGES);
     fileSystem.appendFile('./files/solutionCandidates.txt', text, function (err) {
         if (err) throw err;
         console.log('Candidate modules have been saved');
+        REQUIREDPACKAGES = [];
     });
 }
 
-
-
-
-
-
-function addToCandidateList(module){
+//adds a module to the list of required modules
+function addToCandidateList(module) {
     text = module.id + ' : ' + getModuleInterfaces(module);
     REQUIREDPACKAGES.push(text);
 
@@ -419,19 +400,20 @@ function checkPeripherals(deviceDescription, module) {
 //checks Architecture and platform supported by module
 function checkArchitecture(deviceDescription, module) {
     if (deviceDescription.architecture === module.architecture
-          && deviceDescription.platform
-          === module.platform) {
-          console.log("architecture and platform matches!");
-          return true;
-      }
-      return false;
-  }
+        && deviceDescription.platform
+        === module.platform) {
+        console.log("architecture and platform matches!");
+        return true;
+    }
+    return false;
+}
 
+
+//checks if all required interfaces are offered by module
 function checkInterfaces(deviceManifest, module) {
-    //checks if all required interfaces are offered by module
-    console.log(" -- offered interfaces from module -- ")
+    console.log(" -- MODULE INTERFACES -- ")
     console.log(module.interfaces);
-    console.log(" -- interfaces required -- ");
+    console.log(" -- INTERFACES REQUIRED BY MANIFEST -- ");
     console.log(getInterfaces(deviceManifest));
     var fulfilledInterfaces = 0;
     for (var i in getInterfaces(deviceManifest)) {
@@ -472,13 +454,12 @@ function getManifest() {
 }
 
 
-
 //console.log(isSubset(["dht22" , "logitech_123"], ["dht22", "logitech_123", "networking"] ));
 //checks if one set is subset of another
 function isSubset(set, subset) {
     if (subset == "") { return false };
     console.log(set);
-    console.log("compared to ");
+    console.log(" compared to ");
     console.log(subset);
 
     for (var i in subset) {
@@ -491,44 +472,8 @@ function isSubset(set, subset) {
 
     }
     return true;
-    // if(set === subset) {console.log('exact'); return true};
-    /* if(!subset.every(isSub)){return false};
-     return true;
-     function isSub(value){
-         return set.includes(value);           
-     }*/
 
-}
-//
-//handle manifest and matching of interfaces
-function digestManifest(manifest, moduleMetadata) {
-    if (getObjects(manifest, 'roles', '') != []) {
-        console.log("this is a device deployment manifest");
-        var manifestRoles = getManifestRoles(manifest);
-        var interfaces = getValues(manifestRoles, 'interface');
-        var moduleInterfaces = getModuleInterfaces(moduleMetadata);
 
-        //save candidate name with interfaces for later
-        if (matchInterfaces(moduleInterfaces, interfaces)) {
-
-            console.log("found requested interfaces in module")
-            fileSystem.appendFile('./files/solutionCandidates.txt', JSON.stringify(moduleMetadata.id) + ' : ' + moduleInterfaces, function (err) {
-                if (err) throw err;
-                console.log('Candidate module has been saved');
-            });
-        }
-        else return;
-    }
-
-    else { console.log("this is something else"); }
-}
-
-function getModuleInterfaces(moduleMetadata) {
-    return moduleMetadata.interfaces;
-}
-
-function getManifestRoles(manifest) {
-    return getObjects(manifest, 'interface', '');
 }
 
 
@@ -586,7 +531,9 @@ function getRoles(manifest) {
     return roles;
 }
 
-//
+
+/*
+//get metadata of a module in a folder
 function getModulemetadata(dirPaths) {
     let startpath = path.join(__dirname, 'modules');
     for (var i in dirPaths) {
@@ -620,9 +567,10 @@ function getModulemetadata(dirPaths) {
         });
     }
 
-
-
 }
+*/
+
+//TODO: move stuff below to separate utility file
 
 //compares two individual objects for their contents to assert equality (deep equality)
 function deepEqual(object1, object2) {
@@ -650,7 +598,6 @@ function isObject(object) {
     return object != null && typeof object === 'object';
 }
 
-
 //return an array of objects according to key, value, or key and value matching
 function getObjects(obj, key, val) {
     var objects = [];
@@ -672,6 +619,7 @@ function getObjects(obj, key, val) {
     return objects;
 }
 
+
 //return an array of values that match on a certain key
 function getValues(obj, key) {
     var objects = [];
@@ -686,6 +634,7 @@ function getValues(obj, key) {
     return objects;
 }
 
+
 //return an array of keys that match on a certain value
 function getKeys(obj, val) {
     var objects = [];
@@ -699,13 +648,6 @@ function getKeys(obj, val) {
     }
     return objects;
 }
-
-function createDepList(depTree){
-///
-
-}
-
-
 
 
 
