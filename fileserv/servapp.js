@@ -112,12 +112,12 @@ function startSearch() {
     var roles = deviceManifest.roles; //get roles from manifest
 
     // for each role in the manifest, get the specific modules for requested interfaces
-    for (var i in roles) {
+ /*   for (var i in roles) {
         var requiredDeviceInterface = roles[i].role_config.interface
-        console.log(findModuleForDeviceInterface(deviceManifest, listOfModules))
+        findModuleForDeviceInterface(requiredDeviceInterface, listOfModules);
 
     }
-
+*/
     //TODO: get manifest interfaces
     /*for (const [key, value] of Object.entries(deviceManifest.roles)){
     
@@ -133,26 +133,39 @@ function startSearch() {
     return dependencyList;*/
 }
 
+//check if a module fills an interface required in the manifest
+let checkInterfaces = (requiredDeviceInterface, listOfModules) => {
 
-findModuleForDeviceInterface(deviceManifest, listOfModules)
-{
+    for (let i = 0; i < requiredDeviceInterface.length; i++) {
+        
+    
+        for (let j = 0; j < listOfModules.length; j++) {
+            var moduleInterfaces = getModuleInterfaces(JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")));
+            console.log(moduleInterfaces);
+            console.log(requiredDeviceInterface[i])
 
-    var i = 0
-    moduleInterfaces = listOfModules();
-    while (!checkInterfaces(manifestInterfaces, moduleInterfaces)) { }
+            if (moduleInterfaces.includes(requiredDeviceInterface[i])) {
+                console.log("moduleinterfaces "  + moduleInterfaces + "  contains  " + requiredDeviceInterface[i] )
+                return true;
+            }
+        }
+
+}
+    return false;
+}
+
+
+function findModuleForDeviceInterface(requiredDeviceInterface, listOfModules)
+{   
+   
+    while (!checkInterfaces(requiredDeviceInterface, listOfModules)) { console.log("not found") }
+    console.log("found");
 }
 
 startSearch();
 
-//check if a module fills an interface required in the manifest
-let checkInterfaces = (manifestInterfaces, moduleInterfaces) => {
-    for (let i = 0; i < manifestInterfaces.length; i++) {
-        if (moduleInterfaces.includes(manifestInterfaces[i])) {
-            return true;
-        }
-    }
-    return false;
-}
+
+
 
 
 
@@ -409,28 +422,6 @@ function checkArchitecture(deviceDescription, module) {
 }
 
 
-//checks if all required interfaces are offered by module
-function checkInterfaces(deviceManifest, module) {
-    console.log(" -- MODULE INTERFACES -- ")
-    console.log(module.interfaces);
-    console.log(" -- INTERFACES REQUIRED BY MANIFEST -- ");
-    console.log(getInterfaces(deviceManifest));
-    var fulfilledInterfaces = 0;
-    for (var i in getInterfaces(deviceManifest)) {
-        if (module.interfaces.includes(getInterfaces(deviceManifest)[i])) {
-            fulfilledInterfaces++;
-
-        }
-    }
-    if (fulfilledInterfaces == getInterfaces(deviceManifest).length) {
-        console.log("--- manifest interfaces satisfied --- ");
-        return true;
-    }
-    else {
-        console.log("--- manifest interfaces not satisfied --- ");
-        return false;
-    }
-}
 
 //reads the manifest sent by client
 function getDeviceDescription() {
