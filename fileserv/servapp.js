@@ -1,9 +1,13 @@
 const { Console, groupCollapsed } = require('console');
+const { chdir } = require('process');
+
 var http = require('http'),
     fileSystem = require('fs'),
     path = require('path'),
     dependencytree = require('./dependencytree.js'),
     semver = require('semver');
+    
+    chdir(__dirname);
 
 const { findSourceMap } = require('module');
 var REQUIREDPACKAGES = [];
@@ -11,7 +15,10 @@ var DEVICEMANIFEST;
 var DEVICEDESCRIPTION;
 
 
+<<<<<<< Updated upstream
 const getDirectories = srcPath => fileSystem.readdirSync(srcPath).filter(file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
+=======
+>>>>>>> Stashed changes
 
 //searches the server for modules that satisfy device description and manifest
 function startSearch() {
@@ -20,15 +27,22 @@ function startSearch() {
     var listOfModules = getDirectories("./modules"); //get name of the directories of every module
     var deviceManifest = JSON.parse(getManifest());  //get device manifest as JSON
     var roles = deviceManifest.roles; //get roles from manifest
+    console.log(getManifest());
+
+
+ 
 
     // for each role in the manifest, get the specific modules for requested interfaces
- /*   for (var i in roles) {
+    for (var i in roles) {
+        //check if interface matches
         var requiredDeviceInterface = roles[i].role_config.interface
         findModuleForDeviceInterface(requiredDeviceInterface, listOfModules);
-
+        console.log("Added module -> "  +  findModuleForDeviceInterface(requiredDeviceInterface, listOfModules) + "to list of required packages");
+        REQUIREDPACKAGES.push(findModuleForDeviceInterface(requiredDeviceInterface, listOfModules));
+         //TODO: ACTION AFTER FINDING MODULES
     }
-*/
-    //TODO: get manifest interfaces
+    console.log ("Here are the required packages " +  REQUIREDPACKAGES);
+
     /*for (const [key, value] of Object.entries(deviceManifest.roles)){
     
         console.log(roles)
@@ -43,6 +57,18 @@ function startSearch() {
     return dependencyList;*/
 }
 
+
+
+function findModuleForDeviceInterface(requiredDeviceInterface, listOfModules)
+{   
+   
+    while (!checkInterfaces(requiredDeviceInterface, listOfModules)) { console.log("Interface not found") }
+    console.log("Interface found!");
+    return checkInterfaces(requiredDeviceInterface, listOfModules);
+
+}
+
+
 //check if a module fills an interface required in the manifest
 let checkInterfaces = (requiredDeviceInterface, listOfModules) => {
 
@@ -51,12 +77,13 @@ let checkInterfaces = (requiredDeviceInterface, listOfModules) => {
     
         for (let j = 0; j < listOfModules.length; j++) {
             var moduleInterfaces = getModuleInterfaces(JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")));
+            console.log(JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")))
             console.log(moduleInterfaces);
-            console.log(requiredDeviceInterface[i])
+            console.log(requiredDeviceInterface)
 
-            if (moduleInterfaces.includes(requiredDeviceInterface[i])) {
-                console.log("moduleinterfaces "  + moduleInterfaces + "  contains  " + requiredDeviceInterface[i] )
-                return true;
+            if (moduleInterfaces.includes(requiredDeviceInterface)) {
+                console.log("module -> "  + JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")).id + "  contains  " + requiredDeviceInterface )
+                return JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")).id;
             }
         }
 
@@ -65,25 +92,15 @@ let checkInterfaces = (requiredDeviceInterface, listOfModules) => {
 }
 
 
-function findModuleForDeviceInterface(requiredDeviceInterface, listOfModules)
-{   
-   
-    while (!checkInterfaces(requiredDeviceInterface, listOfModules)) { console.log("not found") }
-    console.log("found");
-}
-
-startSearch();
-
-
 
 
 
 
 //check if module can be ran on a specific device by comparing module metadata and device description
-let checkArchPlatformPeripherals = (metadata, deviceDescription) => {
-    let arch = metadata.architecture;
-    let platform = metadata.platform;
-    let peripherals = metadata.peripherals;
+let checkArchPlatformPeripherals = (moduleMetadata, deviceDescription) => {
+    let arch = moduleMetadata.architecture;
+    let platform = moduleMetadata.platform;
+    let peripherals =moduleMetadata.peripherals;
 
     if (deviceDescription.architecture === arch &&
         deviceDescription.platform === platform &&
@@ -210,16 +227,6 @@ function semverHelper(data, item, value) {
 
 
 
-//console.log(makeSemverDepList(data));
-
-
-function reducer(dependency, version) {
-    if (!dependency[version]) {
-        dependency.push(version);
-    }
-    else return null;
-
-}
 
 
 //returns module by its name and version from local module library
@@ -264,9 +271,6 @@ function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
 
 
 }
-
-
-
 
 
 //returns an object containing dependencies of a module (superdependencies)
@@ -355,29 +359,6 @@ function getManifest() {
 }
 
 
-//console.log(isSubset(["dht22" , "logitech_123"], ["dht22", "logitech_123", "networking"] ));
-//checks if one set is subset of another
-function isSubset(set, subset) {
-    if (subset == "") { return false };
-    console.log(set);
-    console.log(" compared to ");
-    console.log(subset);
-
-    for (var i in subset) {
-        //console.log(i);
-        // console.log(set.includes(subset[i]));
-        if (!set.includes(subset[i])) {
-            console.log(set + " does not include :" + subset[i]);
-            return false;
-        }
-
-    }
-    return true;
-
-
-}
-
-
 //checks if all required interfaces are offered by module
 function matchInterfaces(moduleInterfaces, manifestInterfaces) {
     console.log(" -- offered interfaces from module -- ")
@@ -432,6 +413,9 @@ function getRoles(manifest) {
     return roles;
 }
 
+
+
+startSearch();
 
 /*
 //get metadata of a module in a folder
@@ -552,4 +536,42 @@ function getKeys(obj, val) {
 
 
 
+//console.log(isSubset(["dht22" , "logitech_123"], ["dht22", "logitech_123", "networking"] ));
+//checks if one set is subset of another
+function isSubset(set, subset) {
+    if (subset == "") { return false };
+    console.log(set);
+    console.log(" compared to ");
+    console.log(subset);
+
+    for (var i in subset) {
+        //console.log(i);
+        // console.log(set.includes(subset[i]));
+        if (!set.includes(subset[i])) {
+            console.log(set + " does not include :" + subset[i]);
+            return false;
+        }
+
+    }
+    return true;
+
+
+}
+
+
+function getDirectories(srcPath) {
+    return fileSystem.readdirSync(srcPath).filter(
+        file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
+}
+
+//console.log(makeSemverDepList(data));
+
+
+function reducer(dependency, version) {
+    if (!dependency[version]) {
+        dependency.push(version);
+    }
+    else return null;
+
+}
 
