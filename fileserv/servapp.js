@@ -15,10 +15,7 @@ var DEVICEMANIFEST;
 var DEVICEDESCRIPTION;
 
 
-<<<<<<< Updated upstream
 const getDirectories = srcPath => fileSystem.readdirSync(srcPath).filter(file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
-=======
->>>>>>> Stashed changes
 
 //searches the server for modules that satisfy device description and manifest
 function startSearch() {
@@ -35,14 +32,18 @@ function startSearch() {
     // for each role in the manifest, get the specific modules for requested interfaces
     for (var i in roles) {
         //check if interface matches
+   
         var requiredDeviceInterface = roles[i].role_config.interface
-        findModuleForDeviceInterface(requiredDeviceInterface, listOfModules);
-        console.log("Added module -> "  +  findModuleForDeviceInterface(requiredDeviceInterface, listOfModules) + "to list of required packages");
-        REQUIREDPACKAGES.push(findModuleForDeviceInterface(requiredDeviceInterface, listOfModules));
+        var requiredModule = findModuleForDeviceInterface(requiredDeviceInterface, listOfModules);
+        console.log("Added module -> "  +  requiredModule.id + " with version :  " +  requiredModule.version   + "  to list of required packages");
+        REQUIREDPACKAGES.push({id : requiredModule.id,version : requiredModule.version, role : i});
+       
+   
          //TODO: ACTION AFTER FINDING MODULES
     }
-    console.log ("Here are the required packages " +  REQUIREDPACKAGES);
-
+    console.log ("Here are the required packages ");
+    console.log(REQUIREDPACKAGES);
+    
     /*for (const [key, value] of Object.entries(deviceManifest.roles)){
     
         console.log(roles)
@@ -63,7 +64,7 @@ function findModuleForDeviceInterface(requiredDeviceInterface, listOfModules)
 {   
    
     while (!checkInterfaces(requiredDeviceInterface, listOfModules)) { console.log("Interface not found") }
-    console.log("Interface found!");
+    console.log("Interface found!" + checkInterfaces(requiredDeviceInterface, listOfModules));
     return checkInterfaces(requiredDeviceInterface, listOfModules);
 
 }
@@ -83,7 +84,7 @@ let checkInterfaces = (requiredDeviceInterface, listOfModules) => {
 
             if (moduleInterfaces.includes(requiredDeviceInterface)) {
                 console.log("module -> "  + JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")).id + "  contains  " + requiredDeviceInterface )
-                return JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")).id;
+                return JSON.parse(getModuleJSON(listOfModules[j], "1.0.0"));
             }
         }
 
@@ -559,7 +560,7 @@ function isSubset(set, subset) {
 }
 
 
-function getDirectories(srcPath) {
+function getDirectories2(srcPath) {
     return fileSystem.readdirSync(srcPath).filter(
         file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
 }
