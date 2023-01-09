@@ -1,9 +1,10 @@
 var express = require("express");
-
 var fileSystem = require('fs'),
     path = require('path');
 
 const { chdir } = require('process');
+
+var utils = require("./utils");
 
 
 // Set working directory to this file's root in order to use relative paths
@@ -11,92 +12,68 @@ const { chdir } = require('process');
 // versions (16 vs 18).
 chdir(__dirname);
 
+/// Middleware to log all requests as needed.
+const logger = (request, response, next) => {
+    console.log(`received ${request.method}: ${request.originalUrl}`);
+    if (request.method == "POST") {
+        // If client is sending a POST request, log sent data.
+        console.log(`body: ${JSON.stringify(request.body)}`);
+    }
+    next();
+}
+
 var app = express();
+// MIDDLEWARES (Note: call-order matters!):
+// Enable JSON-body parsing.
+app.use(express.json());
+app.use(logger);
 
-app.get("/", (request, response) => {
-    console.log("received GET");
-    var filePath = path.join(__dirname, 'files/simple.wasm'); //hardcoded filepath to served file
 
-    var stat = fileSystem.statSync(filePath);
+/// GET a Wasm-module; used by IoT-devices.
+app.get("/files/modules/:wasmModule", (request, response) => {
+    var filePath = path.join(__dirname, `files/${request.params.wasmModule}`); // filepath to served file
 
-    response.writeHead(200, {
-        'Content-Type': 'application/wasm',
-        'Content-Length': stat.size
-    });
-
-    var readStream = fileSystem.createReadStream(filePath);
-    readStream.on('data', function (data) {
-        var flushed = response.write(data);
-        // pause the stream when there's already data there
-        if (!flushed)
-            readStream.pause();
-    });
-
-    response.on('drain', function () {
-        // Resume the read stream when the write stream is empty
-        readStream.resume();
-    });
-
-    readStream.on('end', function () {
-        response.end();
-    });
+    utils.respondWithFile(response, filePath, 'application/wasm');
 });
+
 
 app.get("/foo", (request, response) => {
     var filePath = path.join(__dirname, request.url);
     console.log(filePath);
 
-    var stat = fileSystem.statSync(filePath);
-
     if (filePath.endsWith('ico')) { var contenttype = 'image/x-image' }
     else { contenttype = 'text/html' }
-    response.writeHead(200, {
-        'Content-Type': contenttype,
-        'Content-Length': stat.size
-    });
-    var readStream = fileSystem.createReadStream(filePath);
-    readStream.on('data', function (data) {
-        var flushed = response.write(data);
-        // pause the stream when there's already data there
-        if (!flushed)
-            readStream.pause();
-    });
+    utils.respondWithFile(response, filePath, contenttype);
+});
 
-    response.on('drain', function () {
-        // Resume the read stream when the write stream is empty
-        readStream.resume();
-    });
-
-    readStream.on('end', function () {
-        response.end(console.log('ended readstream, listening'));
-    });
-})
 
 app.post("/", (request, response) => {
-    let data = '';
-    console.log('received POST');
-    request.on('data', chunk => {
-        data += chunk;
+    let data = request.body;
+
+    if (Object.keys(data).includes('architecture')) { // Handle Device Descriptions
+        console.log(' --- this is a device description --- ');
+        fileSystem.writeFile('./files/devicedescription.json', JSON.stringify(data), function (err) {
+            if (err) return console.log(err);
+            console.log('--- data written to file devicedescription.json ---');
+        });
+    }
+    //save sent json content of manifest to a json file
+    else fileSystem.writeFile('./files/manifest.json', JSON.stringify(data), function (err) { // Handle Manifest files
+        if (err) return console.log(err);
+        console.log('data written to file manifest.json');
+        // TODO How to do this with expressjs?
+        //response.end(startSearch()); //TODO: Start searching for suitable packages using saved file
     });
 
-    request.on('end', () => {
-        if (Object.keys(JSON.parse(data)).includes('architecture')) { // Handle Device Descriptions
-            console.log(' --- this is a device description --- ');
-            fileSystem.writeFile('./files/devicedescription.json', data, function (err) {
-                if (err) return console.log(err);
-                console.log('--- data written to file devicedescription.json ---');
-                response.end();
-            });
-        }
-        //save sent json content of manifest to a json file
-        else fileSystem.writeFile('./files/manifest.json', data, function (err) { // Handle Manifest files
-            if (err) return console.log(err);
-            console.log('data written to file manifest.json');
-            response.end(startSearch()); //TODO: Start searching for suitable packages using saved file
-        });
-        response.end();
-    });
+    response.send("API called :)");
 });
+
+
+/// Direct to some "page" when bad URL used.
+app.all("/*", (_, response) => {
+    response.send("<p>Wasm-IoT - Orchestration server<br/>Please use an existing route.</p>");
+});
+
 
 const port = 3000;
 app.listen(port, () => {
