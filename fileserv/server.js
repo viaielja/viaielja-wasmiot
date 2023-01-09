@@ -1,5 +1,6 @@
-var http = require('http'),
-    fileSystem = require('fs'),
+var express = require("express");
+
+var fileSystem = require('fs'),
     path = require('path');
 
 const { chdir } = require('process');
@@ -10,78 +11,68 @@ const { chdir } = require('process');
 // versions (16 vs 18).
 chdir(__dirname);
 
-http.createServer(function (request, response) {
-    switch (request.method)
-    {
-    case "POST": //if client is sending a POST request, log sent data
-        handlePost(request, response);
-        break;
-    case "GET":
-        handleGet(request, response);
-        break;
-    }
-}).listen(3000);
+var app = express();
 
-function handleGet(request, response) {
-    if (request.url === "/") {
-        console.log("received GET");
-        var filePath = path.join(__dirname, 'files/simple.wasm'); //hardcoded filepath to served file
+app.get("/", (request, response) => {
+    console.log("received GET");
+    var filePath = path.join(__dirname, 'files/simple.wasm'); //hardcoded filepath to served file
 
-        var stat = fileSystem.statSync(filePath);
+    var stat = fileSystem.statSync(filePath);
 
-        response.writeHead(200, {
-            'Content-Type': 'application/wasm',
-            'Content-Length': stat.size
-        });
+    response.writeHead(200, {
+        'Content-Type': 'application/wasm',
+        'Content-Length': stat.size
+    });
 
-        var readStream = fileSystem.createReadStream(filePath);
-        readStream.on('data', function (data) {
-            var flushed = response.write(data);
-            // pause the stream when there's already data there
-            if (!flushed)
-                readStream.pause();
-        });
+    var readStream = fileSystem.createReadStream(filePath);
+    readStream.on('data', function (data) {
+        var flushed = response.write(data);
+        // pause the stream when there's already data there
+        if (!flushed)
+            readStream.pause();
+    });
 
-        response.on('drain', function () {
-            // Resume the read stream when the write stream is empty
-            readStream.resume();
-        });
+    response.on('drain', function () {
+        // Resume the read stream when the write stream is empty
+        readStream.resume();
+    });
 
-        readStream.on('end', function () {
-            response.end();
-        });
-    } else {
-        var filePath = path.join(__dirname, request.url);
-        console.log(filePath);
+    readStream.on('end', function () {
+        response.end();
+    });
+});
 
-        var stat = fileSystem.statSync(filePath);
+app.get("/foo", (request, response) => {
+    var filePath = path.join(__dirname, request.url);
+    console.log(filePath);
 
-        if (filePath.endsWith('ico')) { var contenttype = 'image/x-image' }
-        else { contenttype = 'text/html' }
-        response.writeHead(200, {
-            'Content-Type': contenttype,
-            'Content-Length': stat.size
-        });
-        var readStream = fileSystem.createReadStream(filePath);
-        readStream.on('data', function (data) {
-            var flushed = response.write(data);
-            // pause the stream when there's already data there
-            if (!flushed)
-                readStream.pause();
-        });
+    var stat = fileSystem.statSync(filePath);
 
-        response.on('drain', function () {
-            // Resume the read stream when the write stream is empty
-            readStream.resume();
-        });
+    if (filePath.endsWith('ico')) { var contenttype = 'image/x-image' }
+    else { contenttype = 'text/html' }
+    response.writeHead(200, {
+        'Content-Type': contenttype,
+        'Content-Length': stat.size
+    });
+    var readStream = fileSystem.createReadStream(filePath);
+    readStream.on('data', function (data) {
+        var flushed = response.write(data);
+        // pause the stream when there's already data there
+        if (!flushed)
+            readStream.pause();
+    });
 
-        readStream.on('end', function () {
-            response.end(console.log('ended readstream, listening'));
-        });
-    }
-}
+    response.on('drain', function () {
+        // Resume the read stream when the write stream is empty
+        readStream.resume();
+    });
 
-function handlePost(request, response) {
+    readStream.on('end', function () {
+        response.end(console.log('ended readstream, listening'));
+    });
+})
+
+app.post("/", (request, response) => {
     let data = '';
     console.log('received POST');
     request.on('data', chunk => {
@@ -105,4 +96,9 @@ function handlePost(request, response) {
         });
         response.end();
     });
-}
+});
+
+const port = 3000;
+app.listen(port, () => {
+    console.log(`Listening on port: ${port}`);
+});

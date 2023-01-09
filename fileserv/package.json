@@ -10,6 +10,7 @@
   "description": "",
   "dependencies": {
     "deptrace": "^0.2.4",
+    "express": "^4.18.2",
     "semver": "^7.3.7"
   }
 }
