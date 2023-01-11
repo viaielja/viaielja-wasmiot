@@ -23,27 +23,39 @@ const logger = (request, response, next) => {
 }
 
 var app = express();
+
+// TODO Use actual database (or atleast a JSON-file).
+var db = {
+    "deployment": {
+        "86": { "path": "manifest.json" }
+    },
+};
+
 // MIDDLEWARES (Note: call-order matters!):
-// Enable JSON-body parsing.
+// Enable JSON-body parsing (NOTE: content-type by default has to be application/json).
 app.use(express.json());
 app.use(logger);
 
 
 /// GET a Wasm-module; used by IoT-devices.
-app.get("/files/modules/:wasmModule", (request, response) => {
+app.get("/file/module/:wasmModule", (request, response) => {
     var filePath = path.join(__dirname, `files/${request.params.wasmModule}`); // filepath to served file
 
     utils.respondWithFile(response, filePath, 'application/wasm');
 });
 
 
-app.get("/foo", (request, response) => {
-    var filePath = path.join(__dirname, request.url);
-    console.log(filePath);
+/// GET list of packages or the "deployment manifest"; used by IoT-devices.
+app.get("/file/manifest/:deploymentId", (request, response) => {
+    let id = request.params.deploymentId;
 
-    if (filePath.endsWith('ico')) { var contenttype = 'image/x-image' }
-    else { contenttype = 'text/html' }
-    utils.respondWithFile(response, filePath, contenttype);
+    let manifestPath = null;
+    if (db.deployment.hasOwnProperty(id)) {
+        manifestPath = db.deployment[id].path;
+    }
+    let filePath = path.join(__dirname, `files/${manifestPath}`);
+
+    utils.respondWithFile(response, filePath, "application/json");
 });
 
 
