@@ -8,5 +8,12 @@ module.exports = {
 function respondWithFile(response, filePath, contentType) {
     response.status(200)
         .type(contentType)
-        .sendFile(filePath);
+        .sendFile(filePath, err => {
+            if (err) {
+                response.sendStatus(404);
+                console.log(`Tried to access nonexistent path: '${filePath}'`);
+            } else {
+                console.log(`Send file: '${filePath}'`);
+            }
+        });
 }

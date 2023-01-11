@@ -69,9 +69,19 @@ app.post("/", (request, response) => {
 });
 
 
-/// Direct to some "page" when bad URL used.
+/// Direct to some "index-page" when bad URL used.
 app.all("/*", (_, response) => {
-    response.send("<p>Wasm-IoT - Orchestration server<br/>Please use an existing route.</p>");
+    response.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset='utf-8'>
+  <title>Wasm-IoT</title>
+</head>
+<body>
+  <p>Wasm-IoT - Orchestration server<br/>Please use an existing route.</p>
+</body>
+</html>`
+    );
 });
 
 
