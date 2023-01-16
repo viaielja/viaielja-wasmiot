@@ -10,3 +10,12 @@ function respondWithFile(response, filePath, contentType) {
         .type(contentType)
         .sendFile(filePath);
 }
+
+function reducer(dependency, version) {
+    if (!dependency[version]) {
+        dependency.push(version);
+    }
+    else return null;
+
+}
+
