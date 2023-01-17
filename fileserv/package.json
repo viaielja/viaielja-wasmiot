@@ -11,6 +11,7 @@
   "dependencies": {
     "deptrace": "^0.2.4",
     "express": "^4.18.2",
+    "multicast-dns": "^7.2.5",
     "semver": "^7.3.7"
   }
 }
