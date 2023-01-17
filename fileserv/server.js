@@ -39,9 +39,7 @@ app.use(logger);
 
 /// GET a Wasm-module; used by IoT-devices.
 app.get("/file/module/:wasmModule", (request, response) => {
-    var filePath = path.join(__dirname, `files/${request.params.wasmModule}`); // filepath to served file
-
-    utils.respondWithFile(response, filePath, 'application/wasm');
+    utils.respondWithFile(response, request.params.wasmModule, "files", ".wasm");
 });
 
 
@@ -52,10 +50,10 @@ app.get("/file/manifest/:deploymentId", (request, response) => {
     let manifestPath = null;
     if (db.deployment.hasOwnProperty(id)) {
         manifestPath = db.deployment[id].path;
+        utils.respondWithFile(response, manifestPath, "files", ".json");
+    } else {
+        response.status(400).send(`Not a valid deployment-id: '${id}'`);
     }
-    let filePath = path.join(__dirname, `files/${manifestPath}`);
-
-    utils.respondWithFile(response, filePath, "application/json");
 });
 
 
