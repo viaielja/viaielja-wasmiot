@@ -7,6 +7,9 @@ module.exports = {
 
 /**
  * Perform boilerplate tasks when responding with a file read from filesystem.
+ *
+ * Terms for the different parts of a path as defined by NodeJS:
+ * https://nodejs.org/dist/latest-v18.x/docs/api/path.html#pathparsepath
  * @param {*} response The response object.
  * @param {*} filePath Name of the file to send POSSIBLY INPUTTED/REQUESTED BY USER/CLIENT.
  * @param {*} directory Directory to search for the file.
@@ -19,17 +22,16 @@ function respondWithFile(response, filePath, directory, extension) {
     if (file.ext !== extension) {
         response.status(400).send(`Bad extension on "${file.base}"; needs "${extension}"`)
     } else {
-        // Form full filepath to served file.
-        let realFilePath = path.join(__dirname, `${directory}/${file.base}`);
-
+        let filePath = path.join(__dirname, "files", directory, file.base);
         response.status(200)
-            // The sendfile-method handles Content-Type header based on filename's extension.
-            .sendFile(realFilePath, err => {
+            // The sendfile-method handles the Content-Type header based on
+            // filename's extension.
+            .sendFile(filePath, {}, err => {
                 if (err) {
-                    console.log(`Error serving file '${realFilePath}': ${JSON.stringify(err)}`);
+                    console.log(`Error serving file '${filePath}': ${err}`);
                     response.sendStatus(400);
                 } else {
-                    console.log(`Send file: '${realFilePath}'`);
+                    console.log(`Send file: '${filePath}'`);
                 }
             });
     }
