@@ -1,8 +1,16 @@
 const path = require('path');
 
+
+const FILE_ROOT = path.join(__dirname, "files");
+const MODULE_DIR = "module"
+const MANIFEST_DIR = "manifest"
+
 module.exports = {
     respondWithFile,
-}
+    FILE_ROOT,
+    MODULE_DIR,
+    MANIFEST_DIR,
+};
 
 
 /**
@@ -22,7 +30,7 @@ function respondWithFile(response, filePath, directory, extension) {
     if (file.ext !== extension) {
         response.status(400).send(`Bad extension on "${file.base}"; needs "${extension}"`)
     } else {
-        let filePath = path.join(__dirname, "files", directory, file.base);
+        let filePath = path.join(FILE_ROOT, directory, file.base);
         response.status(200)
             // The sendfile-method handles the Content-Type header based on
             // filename's extension.
