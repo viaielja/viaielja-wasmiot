@@ -14,7 +14,7 @@ sends a fetch POST request to a server containing manifest in the body
     const rawResponse = await fetch('http://localhost:3000/file/device', {
         method: 'POST',
         headers: {
-      'Content-Type': 'application/html'
+      'Content-Type': 'application/json'
         },
         body: JSON.stringify(manifest)
       }).then(data => console.log(data)); //log the response sent by the server
