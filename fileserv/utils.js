@@ -2,14 +2,16 @@ const path = require('path');
 
 
 const FILE_ROOT = path.join(__dirname, "files");
-const MODULE_DIR = "module"
-const MANIFEST_DIR = "manifest"
+const MODULE_DIR = "module";
+const MANIFEST_DIR = "manifest";
+const ORCHESTRATOR_NAME = "wasmiot-orchestrator.local";
 
 module.exports = {
     respondWithFile,
     FILE_ROOT,
     MODULE_DIR,
     MANIFEST_DIR,
+    ORCHESTRATOR_NAME,
 };
 
 

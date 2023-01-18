@@ -1,11 +1,12 @@
-var express = require("express");
-var fileSystem = require('fs'),
-    path = require('path');
-
+const express      = require("express"),
+      fileSystem   = require('fs'),
+      path         = require('path'),
+      multicastDns = require('multicast-dns'),
+      util         = require('util');
 const { chdir } = require('process');
 
 const utils = require("./utils");
-const { FILE_ROOT, MODULE_DIR, MANIFEST_DIR } = require("./utils");
+const { FILE_ROOT, MODULE_DIR, MANIFEST_DIR, ORCHESTRATOR_NAME } = require("./utils");
 
 
 // Set working directory to this file's root in order to use relative paths
@@ -45,6 +46,7 @@ const requestLogger = (request, response, next) => {
 }
 
 var app = express();
+var mdns = multicastDns();
 
 // TODO Use actual database (or atleast a JSON-file).
 var db = {
@@ -156,13 +158,49 @@ app.all("/*", (_, response) => {
     );
 });
 
+//////////////////////////////////////////////////
+// Server initialization:
 
-const port = 3000;
-app.listen(port, () => {
-    // TODO Create the needed directory structure.
-    console.log(`Listening on port: ${port}`);
+// Handle CTRL-C gracefully; from https://stackoverflow.com/questions/43003870/how-do-i-shut-down-my-express-server-gracefully-when-its-process-is-killed
+// FIXME Does not seem to work with atleast "SIGTERM".
+process.on("SIGTERM", () => {
+    server.close((err) => {
+        // Shutdown the mdns
+        if (err) {
+            console.log(`Errors from earlier 'close' event: ${err}`);
+        }
+        console.log("Closing server...");
+        mdns.destroy();
+        console.log("Destroyed the mDNS instance.");
+        console.log("Done!");
+    });
 });
 
+const PORT = 3000;
+
+/**
+ * The underlying nodejs http-server that app.listen() returns.
+ */
+const server = app.listen(PORT, () => {
+    // TODO Confirm/create the needed directory structure.
+    initializeMdns();
+    console.log(`Listening on port: ${PORT}`);
+});
+
+function initializeMdns() {
+    mdns.on("query", (query) => {
+        console.log(`Orchestrator received mDNS query: ${util.inspect(query)}`);
+        mdns.respond({
+            answers: [
+                {
+                    name: ORCHESTRATOR_NAME,
+                    type: "A",
+                    data: "127.0.0.1", // TODO Remove hardcode.
+                }
+            ]
+        })
+    });
+}
 
 //////////////////////////////////////////////////
 // Database-functions NOTE/TODO Use an actual database! These are just
