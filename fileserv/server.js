@@ -1,12 +1,13 @@
-const express      = require("express"),
-      fileSystem   = require('fs'),
-      path         = require('path'),
-      multicastDns = require('multicast-dns'),
-      util         = require('util');
+const fileSystem = require('fs'),
+    path = require('path'),
+    http = require('http');
 const { chdir } = require('process');
 
+const bonjour = require('bonjour')();
+const express = require("express")();
+
 const utils = require("./utils");
-const { FILE_ROOT, MODULE_DIR, MANIFEST_DIR, ORCHESTRATOR_NAME } = require("./utils");
+const { FILE_ROOT, MODULE_DIR, MANIFEST_DIR, IOT_HOST_DOMAIN } = require("./utils");
 
 
 // Set working directory to this file's root in order to use relative paths
@@ -19,7 +20,7 @@ chdir(__dirname);
  * TODO Database plz.
  */
 const fileDir = {
-    "name" : FILE_ROOT,
+    "name": FILE_ROOT,
     "children": [
         {
             "name": MODULE_DIR,
@@ -45,26 +46,26 @@ const requestLogger = (request, response, next) => {
     next();
 }
 
-var app = express();
-var mdns = multicastDns();
-
 // TODO Use actual database (or atleast a JSON-file).
 var db = {
     "deployment": {
         "86": { "path": "manifest.json" }
     },
+    "device": {
+
+    }
 };
 
 // MIDDLEWARES (Note: call-order matters!):
 // Enable JSON-body parsing (NOTE: content-type by default has to be application/json).
-app.use(express.json());
-app.use(requestLogger);
+express.use(require("express").json());
+express.use(requestLogger);
 
 
 /**
  * GET a Wasm-module; used by IoT-devices.
  */
-app.get("/file/module/:wasmModule", (request, response) => {
+express.get("/file/module/:wasmModule", (request, response) => {
     utils.respondWithFile(response, request.params.wasmModule, MODULE_DIR, ".wasm");
 });
 
@@ -72,7 +73,7 @@ app.get("/file/module/:wasmModule", (request, response) => {
 /**
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
  */
-app.get("/file/manifest/:deploymentId", (request, response) => {
+express.get("/file/manifest/:deploymentId", (request, response) => {
     let id = request.params.deploymentId;
 
     let manifestPath = null;
@@ -89,7 +90,7 @@ app.get("/file/manifest/:deploymentId", (request, response) => {
  * POST a new device's architecture information (i.e., device description) to
  * add to orchestrator's database.
  */
-app.post("/file/device", (request, response) => {
+express.post("/file/device", (request, response) => {
     let data = request.body;
     console.log(' --- this is a device description --- ');
     fileSystem.writeFile('./files/devicedescription.json', JSON.stringify(data), function (err) {
@@ -103,7 +104,7 @@ app.post("/file/device", (request, response) => {
  * POST a new deployment(TODO is that correct?) manifest to add to
  * orchestrator's database.
  */
-app.post("/file/manifest", (request, response) => {
+express.post("/file/manifest", (request, response) => {
     let data = request.body;
     let deploymentId = generateDeploymentId();
 
@@ -144,7 +145,7 @@ app.post("/file/manifest", (request, response) => {
 /**
  * Direct to some "index-page" when bad URL used.
  */
-app.all("/*", (_, response) => {
+express.all("/*", (_, response) => {
     response.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -181,25 +182,48 @@ const PORT = 3000;
 /**
  * The underlying nodejs http-server that app.listen() returns.
  */
-const server = app.listen(PORT, () => {
+const server = express.listen(PORT, () => {
     // TODO Confirm/create the needed directory structure.
     initializeMdns();
     console.log(`Listening on port: ${PORT}`);
 });
 
+/**
+ * Start querying for IoT-devices and add their descriptions to database as
+ * needed.
+ */
 function initializeMdns() {
-    mdns.on("query", (query) => {
-        console.log(`Orchestrator received mDNS query: ${util.inspect(query)}`);
-        mdns.respond({
-            answers: [
-                {
-                    name: ORCHESTRATOR_NAME,
-                    type: "A",
-                    data: "127.0.0.1", // TODO Remove hardcode.
+    // Browse for all http services TODO browse for http services under the
+    // wasmiot-domain instead?
+    let browser = bonjour.find({ type: 'http' }, function (service) {
+        console.log(`Found an HTTP server: ${service.name}! Querying it's description...`);
+        http.get({ host: service.host, port: 3001, path: "/description" }, (res) => {
+            console.log("Reached the device via HTTP: " + res.statusCode);
+            let rawData = '';
+            res.on('data', (chunk) => { rawData += chunk; });
+            res.on('end', () => {
+                try {
+                    let dataObj = JSON.parse(rawData);
+                    addToDatabase("device", service.name, dataObj);
+                    console.log(`Added new device description: ${JSON.stringify(dataObj)}`)
+                } catch (e) {
+                    console.error(e.message);
                 }
-            ]
-        })
-    });
+            });
+        });
+
+    })
+
+    const callback = () => {
+        console.log("Sending mDNS query...");
+        browser.update();
+    };
+    // Send service queries every 5 seconds.
+    // TODO Is this really needed?
+    setInterval(callback, 5000);
+
+    console.log(`mDNS initialized; searching for hosts under ${IOT_HOST_DOMAIN}`);
+    callback(); // This is to execute the callback immediately as well.
 }
 
 //////////////////////////////////////////////////
@@ -209,7 +233,7 @@ function initializeMdns() {
 function generateDeploymentId() {
     // Get the largest ID and continue from that (assuming they're all
     // numerical) TODO Use an actual database.
-    let last = Object.keys(db["deployment"]).map(x=> parseInt(x)).sort().at(-1);
+    let last = Object.keys(db["deployment"]).map(x => parseInt(x)).sort().at(-1);
     return last ? last + 1 : 0;
 }
 

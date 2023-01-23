@@ -1,72 +1,50 @@
-const mdns = require('multicast-DNS')();
-const util = require('util');
-
-console.log("Starting mdns...");
-
 const os = require('os');
-const IP = os.networkInterfaces()["lo"][0]["address"];
-const {ORCHESTRATOR_NAME} = require("../fileserv/utils");
+const util = require('util');
+const http = require('http');
+const express = require("express")();
+const bonjour = require("bonjour")();
+
+const { IOT_HOST_DOMAIN } = require("../fileserv/utils");
 
 /**
- * Some information identifying this device.
+ * Name identifying this device on the network.
  */
-const deviceInfo = (() => {
+const HOSTNAME = (() => {
     const process = require("process");
-    return `${process.ppid}>#${process.pid},${IP}`;
+    const deviceName = `device-${process.ppid}-${process.pid}`;
+    return `${deviceName}.${IOT_HOST_DOMAIN}`;
 })();
 
-mdns.on("response", (response) => {
-    for (answer of response.answers) {
-        if (answer.type === "A") {
-            let logmsg = `Device ${deviceInfo} received ${answer.type} `
-            if (answer.name === ORCHESTRATOR_NAME) {
-                logmsg += `from assumed orchestrator: ${answer.data}`;
-                // TODO:
-                // 1) Save the received orchestrator info,
-                // 2) respond with device CoRE description,
-                // 3) start endpoint to begin deployment,
-                // 4) upon deployment, query for modules.
-                mdns.destroy();
-                console.log(`Device ${deviceInfo} destroyed its mDNS instance!`);
-            } else if (answer.data === IP) {
-                logmsg += `from its own IP address: ${answer.data}`;
-                // Ignore
-            } else {
-                logmsg += `from unknown host: ${answer.data}`;
-                // TODO Is this event concerning?
-            }
-            console.log(logmsg);
-        } else {
-            console.log(`Device ${deviceInfo} received type '${answer.type}' response`);
-        }
-    }
+let port = 3001;
+if (process.argv.length > 2) {
+    port = Number.parseInt(process.argv.at(2));
+}
+console.log(`${HOSTNAME}: starting HTTP-server and mDNS publish...`);
+
+express.get("/description", (_, response) => {
+    response.send({ "architecture": "intel i7", "platform": "Windows 11", "repository": "TODO What dis?", "peripherals": [] });
 });
 
-mdns.on("query", (query) => {
-    console.log(`Device ${deviceInfo} received query:  ${util.inspect(query)}`);
-    // For now, respond with own IP-address.
-    mdns.respond({
-            answers: [{
-                name: `Device:${deviceInfo}`,
-                type: "A",
-                data: IP,
-            }]
-        },
-        () => {
-            console.log(`${deviceInfo}: Responding to query...`);
-        }
-    )
+express.get("/*", (_, response) => {
+    // TODO This would be computed in WebAssembly.
+    response.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset='utf-8'>
+  <title>Wasm-IoT</title>
+</head>
+<body>
+  <p>Wasm-IoT - Device<br/>Your random number is ${Math.random() * 100}</p>
+</body>
+</html>`);
+})
+
+// Start server to respond to description-queries.
+express.listen(port, () => {
+    console.log(`Serving HTTP on port ${port}`)
 });
 
-
-// "Advertise this device" by searching for the orchestration server's
-// IP-Address (hence type 'A'). TODO Maybe user SRV-record instead? see:
-// https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/
-mdns.query({
-    questions:[{
-        name: "wasmiot-orchestrator.local",
-        type: "A"
-    }] 
-});
-
-console.log("Done!");
+// Start advertising this device.
+const serviceInfo = { name: "Random Number Generator Box 100", port: port, type: "http" };
+bonjour.publish(serviceInfo);
+console.log(`Advertising the following service info: ${JSON.stringify(serviceInfo)}`);

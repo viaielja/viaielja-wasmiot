@@ -4,7 +4,9 @@ const path = require('path');
 const FILE_ROOT = path.join(__dirname, "files");
 const MODULE_DIR = "module";
 const MANIFEST_DIR = "manifest";
-const ORCHESTRATOR_NAME = "wasmiot-orchestrator.local";
+// TODO: Use dot after "local" or no?
+const ORCHESTRATOR_NAME = "orchestrator-wasmiot.local.";
+const IOT_HOST_DOMAIN = "device-wasmiot.local.";
 
 module.exports = {
     respondWithFile,
@@ -12,6 +14,7 @@ module.exports = {
     MODULE_DIR,
     MANIFEST_DIR,
     ORCHESTRATOR_NAME,
+    IOT_HOST_DOMAIN,
 };
 
 
