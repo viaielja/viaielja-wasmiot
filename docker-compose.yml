@@ -1,0 +1,18 @@
+services:
+  orchestrator:
+    build:
+      context: ./fileserv
+      # TODO Does the .devcontainer affect `docker compose`?
+      dockerfile: ../.devcontainer/Dockerfile
+    ports:
+      - 3000:3000
+    # ...but this don't?
+    command: nodejs server.js
+  device-random-num-gen-100:
+    build:
+      context: ./client
+      dockerfile: ../.devcontainer/Dockerfile
+    ports:
+      - 3001:3001
+    # Why this need sh -c...
+    command: nodejs mdnsDevice.js

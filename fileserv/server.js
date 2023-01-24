@@ -171,10 +171,14 @@ process.on("SIGTERM", () => {
             console.log(`Errors from earlier 'close' event: ${err}`);
         }
         console.log("Closing server...");
-        mdns.destroy();
-        console.log("Destroyed the mDNS instance.");
-        console.log("Done!");
     });
+
+    // This seems to be synchronous because no callback provided(?)
+    clearInterval(mdnsQueryPump);
+    bonjour.destroy();
+    console.log("Destroyed the mDNS instance.");
+
+    console.log("Done!");
 });
 
 const PORT = 3000;
@@ -187,6 +191,12 @@ const server = express.listen(PORT, () => {
     initializeMdns();
     console.log(`Listening on port: ${PORT}`);
 });
+
+
+/**
+ * ID of the interval that sends mDNS queries. Needed when shutting server down.
+ */
+let mdnsQueryPump;
 
 /**
  * Start querying for IoT-devices and add their descriptions to database as
@@ -220,7 +230,7 @@ function initializeMdns() {
     };
     // Send service queries every 5 seconds.
     // TODO Is this really needed?
-    setInterval(callback, 5000);
+    mdnsQueryPump = setInterval(callback, 5000);
 
     console.log(`mDNS initialized; searching for hosts under ${IOT_HOST_DOMAIN}`);
     callback(); // This is to execute the callback immediately as well.

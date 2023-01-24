@@ -1,7 +1,9 @@
 const express = require("express")();
 const bonjour = require("bonjour")();
 
-const { IOT_HOST_DOMAIN } = require("../fileserv/utils");
+// TODO Should this (or the eventual device host suffix) be stored somewhere
+// centrally or just keep as a convention?
+const IOT_HOST_DOMAIN = "device-wasmiot.local.";
 
 /**
  * Name identifying this device on the network.
@@ -37,7 +39,7 @@ express.get("/*", (_, response) => {
 })
 
 // Start server to respond to description-queries.
-express.listen(port, () => {
+const SERVER = express.listen(port, () => {
     console.log(`Serving HTTP on port ${port}`)
 });
 
@@ -45,3 +47,21 @@ express.listen(port, () => {
 const serviceInfo = { name: "Random Number Generator Box 100", port: port, type: "http" };
 bonjour.publish(serviceInfo);
 console.log(`Advertising the following service info: ${JSON.stringify(serviceInfo)}`);
+
+
+// Handle shutdown when stopping from Docker desktop.
+process.on("SIGTERM", () => {
+    SERVER.close((err) => {
+        // Shutdown the mdns
+        if (err) {
+            console.log(`Errors from earlier 'close' event: ${err}`);
+        }
+        console.log("Closing server...");
+    });
+
+    // This seems to be synchronous because no callback provided(?)
+    bonjour.destroy();
+    console.log("Destroyed the mDNS instance.");
+
+    console.log("Done!");
+});
