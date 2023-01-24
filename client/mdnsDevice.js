@@ -1,6 +1,3 @@
-const os = require('os');
-const util = require('util');
-const http = require('http');
 const express = require("express")();
 const bonjour = require("bonjour")();
 
