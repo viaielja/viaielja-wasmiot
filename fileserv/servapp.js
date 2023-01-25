@@ -565,14 +565,3 @@ function getDirectories2(srcPath) {
         file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
 }
 
-//console.log(makeSemverDepList(data));
-
-
-function reducer(dependency, version) {
-    if (!dependency[version]) {
-        dependency.push(version);
-    }
-    else return null;
-
-}
-
