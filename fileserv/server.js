@@ -5,35 +5,16 @@ const { chdir } = require('process');
 
 const bonjour = require('bonjour')();
 const express = require("express")();
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 
 
 const utils = require("./utils");
-const { FILE_ROOT, MODULE_DIR, MANIFEST_DIR, IOT_HOST_DOMAIN } = require("./utils");
-
+const { IOT_HOST_DOMAIN } = require("./utils");
 
 // Set working directory to this file's root in order to use relative paths
 // (i.e. "./foo/bar"). TODO Find out if the problem is with incompatible Node
 // versions (16 vs 18).
 chdir(__dirname);
-
-/**
- * Describes the folder structure for initializing it on server startup
- * TODO Database plz.
- */
-const fileDir = {
-    "name": FILE_ROOT,
-    "children": [
-        {
-            "name": MODULE_DIR,
-            "children": []
-        },
-        {
-            "name": MANIFEST_DIR,
-            "children": []
-        }
-    ]
-};
 
 
 /**
@@ -48,14 +29,13 @@ const requestLogger = (request, response, next) => {
     next();
 }
 
-// TODO Use actual database (or atleast a JSON-file).
-var db = {
-    "deployment": {
-        "86": { "path": "manifest.json" }
-    },
-    "device": {
-
-    }
+/**
+ * Way to operate on the collections in database.
+ */
+let db = {
+    device: null,
+    module: null,
+    deployment: null,
 };
 
 // MIDDLEWARES (Note: call-order matters!):
@@ -67,38 +47,66 @@ express.use(requestLogger);
 /**
  * GET a Wasm-module; used by IoT-devices.
  */
-express.get("/file/module/:wasmModule", (request, response) => {
-    utils.respondWithFile(response, request.params.wasmModule, MODULE_DIR, ".wasm");
+express.get("/file/module/:moduleId", async (request, response) => {
+    let doc = await db.module.findOne({_id: ObjectId(request.params.moduleId)});
+    if (doc) {
+        // TODO Only respond with the binary, not JSON.
+        response.json(doc);
+    } else {
+        let errmsg = `Failed querying for deployment id: ${request.params.moduleId}`;
+        console.log(errmsg);
+        response.status(400).send(errmsg);
+    }
 });
 
+/**
+ * GET list of all Wasm-modules; used by Actors in constructing a deployment.
+ */
+express.get("/file/module/", async (request, response) => {
+    // TODO What should this ideally return? Only IDs and descriptions?
+    response.json(await db.module.find().toArray());
+});
 
 /**
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
  */
-express.get("/file/manifest/:deploymentId", (request, response) => {
-    let id = request.params.deploymentId;
-
-    let manifestPath = null;
-    if (db.deployment.hasOwnProperty(id)) {
-        manifestPath = db.deployment[id].path;
-        utils.respondWithFile(response, manifestPath, MANIFEST_DIR, ".json");
+express.get("/file/manifest/:deploymentId", async (request, response) => {
+    let doc = await db.deployment.findOne({_id: ObjectId(request.params.deploymentId)});
+    if (doc) {
+        response.json(doc);
     } else {
-        response.status(400).send(`Not a valid deployment-id: '${id}'`);
+        let errmsg = `Failed querying for deployment id: ${request.params.deploymentId}`;
+        console.log(errmsg);
+        response.status(400).send(errmsg);
     }
 });
+
+/**
+ * GET list of all deployments; used by Actors in inspecting their deployments.
+ */
+express.get("/file/manifest/", async (request, response) => {
+    // TODO What should this ideally return? Only IDs and descriptions?
+    response.json(await db.deployment.find().toArray());
+});
+
 
 
 /**
  * POST a new device's architecture information (i.e., device description) to
  * add to orchestrator's database.
  */
-express.post("/file/device", (request, response) => {
-    let data = request.body;
-    console.log(' --- this is a device description --- ');
-    fileSystem.writeFile('./files/devicedescription.json', JSON.stringify(data), function (err) {
-        if (err) return console.log(err);
-        console.log('--- data written to file devicedescription.json ---');
-    });
+express.post("/file/device", async (request, response) => {
+    // TODO Only add what is allowed (e.g. _id should not come from POST).
+    let result = await db.device.insertOne(request.body)
+    if (result.acknowledged) {
+        let msg = "New device added";
+        console.log(msg);
+        response.send(msg);
+    } else {
+        let msg = "failed to add the device";
+        console.log(msg);
+        response.status(500).send(msg);
+    }
 });
 
 
@@ -106,42 +114,38 @@ express.post("/file/device", (request, response) => {
  * POST a new deployment(TODO is that correct?) manifest to add to
  * orchestrator's database.
  */
-express.post("/file/manifest", (request, response) => {
+express.post("/file/manifest", async (request, response) => {
     let data = request.body;
-    let deploymentId = generateDeploymentId();
-
-    let filePath = path.join(FILE_ROOT, MANIFEST_DIR, `manifest-${deploymentId}`);
+    let deploymentName = data.id;
 
     let status = 200;
-    let message = `Manifest ${deploymentId} added`;
+    let message = `Manifest ${deploymentName} added`;
 
-    if (fileSystem.existsSync(filePath)) {
-        console.log(`Tried to write existing manifest: ${filePath}`);
+    // TODO When would a new deployment not be accepted? Based on user credits??
+    let doc = await db.deployment.findOne({ name: deploymentName });
+    if (doc) {
+        console.log(`Tried to write existing manifest: ${JSON.stringify(doc)}`);
         status = 400;
-        message = `Manifest already exists for deployment #${deploymentId}`;
+        message = `Manifest already exists for deployment ${deploymentName}`;
     } else {
-        // TODO Changed from async to sync (because client probably needs to know
-        // if the request failed in order to send again) but was there some
-        // reason not to?
-        fileSystem.writeFileSync(filePath, JSON.stringify(data), function (err) {
-            if (err) {
-                console.log(`Failed adding the manifest: ${err}`);
-                status = 500;
-                message = "Failed adding the manifest";
-            } else {
-                //save sent json content of manifest to a json file
-                console.log(`Manifest written to file '${filePath}'`);
+        // Add the new deployment to database.
+        // TODO Only add what is allowed (e.g. _id should not come from POST).
+        // TODO Add the whole body not just name.
+        let result = await db.deployment.insertOne({ name: deploymentName });
+        if (!result.acknowledged) {
+            console.log(`Failed adding the manifest: ${err}`);
+            status = 500;
+            message = "Failed adding the manifest";
+        } else {
+            console.log(`Manifest added to database '${deploymentName}'`);
 
-                // Add its metadata to the database.
-                addToDatabase("deployment", deploymentId, filePath);
-                console.log(`Manifest added to database '${deploymentId}'`);
-
-                startSearch(); //TODO: Start searching for suitable packages using saved file.
-            }
-        });
+            //TODO: Start searching for suitable packages using saved file.
+            //startSearch();
+        }
     }
 
-    response.status(status).send(message).end(); // TODO Is calling 'end' really necessary?
+    // TODO Is calling 'end' really necessary?
+    response.status(status).send(message).end();
 });
 
 /**
@@ -162,26 +166,10 @@ express.all("/*", (_, response) => {
 });
 
 //////////////////////////////////////////////////
-// Server initialization:
+// Server handling stuff:
 
-// Handle CTRL-C gracefully; from https://stackoverflow.com/questions/43003870/how-do-i-shut-down-my-express-server-gracefully-when-its-process-is-killed
-// FIXME Does not seem to work with atleast "SIGTERM".
-process.on("SIGTERM", () => {
-    server.close((err) => {
-        // Shutdown the mdns
-        if (err) {
-            console.log(`Errors from earlier 'close' event: ${err}`);
-        }
-        console.log("Closing server...");
-    });
-
-    // This seems to be synchronous because no callback provided(?)
-    clearInterval(mdnsQueryPump);
-    bonjour.destroy();
-    console.log("Destroyed the mDNS instance.");
-
-    console.log("Done!");
-});
+///////////
+// STARTUP:
 
 const PORT = 3000;
 
@@ -192,7 +180,8 @@ let server;
 
 async function main() {
     server = express.listen(PORT, () => {
-        // TODO Confirm/create the needed directory structure.
+        // TODO Sometimes database is not ready for server operations. Consult
+        // the docker-compose tutorial?
         initializeDatabase();
         initializeMdns();
         console.log(`Listening on port: ${PORT}`);
@@ -200,7 +189,7 @@ async function main() {
 }
 
 /**
- * Way to operate on the database.
+ * For initializations and closing the database connection on shutdown.
  */
 let databaseClient;
 
@@ -212,15 +201,18 @@ async function initializeDatabase() {
     const uri = `mongodb://${process.env.CONFIG_MONGODB_ADMINUSERNAME}:${process.env.CONFIG_MONGODB_ADMINPASSWORD}@mongo:27017/`;
     databaseClient = new MongoClient(uri);
     try {
-        await databaseClient.connect();
+        const orchDb = await (await databaseClient.connect()).db();
+        // Create references to the needed collections.
+        db.module     = orchDb.collection("module");
+        db.device     = orchDb.collection("device");
+        db.deployment = orchDb.collection("deployment");
+
         // Print something from the db as example of connection.
-        console.log("CONNECTED TO DATABASE: "+ JSON.stringify(await databaseClient.db().admin().listDatabases(), null, 2));
+        console.log("Connected to and initialized database: "+ JSON.stringify(await orchDb.admin().listDatabases(), null, 2));
     } catch (e) {
         console.error("FAILED CONNECTING TO DATABASE >>>");
         console.error(e);
         console.error("<<<");
-    } finally {
-        await databaseClient.close();
     }
 }
 
@@ -267,25 +259,32 @@ function initializeMdns() {
     callback(); // This is to execute the callback immediately as well.
 }
 
-//////////////////////////////////////////////////
-// Database-functions NOTE/TODO Use an actual database! These are just
-// placeholders in order to reduce clutter inside the code.
+////////////
+// SHUTDOWN:
 
-function generateDeploymentId() {
-    // Get the largest ID and continue from that (assuming they're all
-    // numerical) TODO Use an actual database.
-    let last = Object.keys(db["deployment"]).map(x => parseInt(x)).sort().at(-1);
-    return last ? last + 1 : 0;
-}
+// Handle CTRL-C gracefully; from https://stackoverflow.com/questions/43003870/how-do-i-shut-down-my-express-server-gracefully-when-its-process-is-killed
+// TODO CTRL-C is apparently handled with SIGINT instead.
 
-/**
- * Add the object to the desired table in database.
- * @param {*} table The table to add the object to.
- * @param {*} id The id of the object in the table.
- * @param {*} obj The JSON-object to add.
- */
-function addToDatabase(table, id, obj) {
-    db[table][id] = obj;
-}
+process.on("SIGTERM", async () => {
+    server.close((err) => {
+        // Shutdown the mdns
+        if (err) {
+            console.log(`Errors from earlier 'close' event: ${err}`);
+        }
+        console.log("Closing server...");
+    });
 
+    // This seems to be synchronous because no callback provided(?)
+    clearInterval(mdnsQueryPump);
+    bonjour.destroy();
+    console.log("Destroyed the mDNS instance.");
+
+    await databaseClient.close();
+    console.log("Closed database connection.");
+
+    console.log("Done!");
+});
+
+///////////
+// RUN MAIN
 main().catch(console.error);
