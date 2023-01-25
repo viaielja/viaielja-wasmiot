@@ -5,6 +5,8 @@ const { chdir } = require('process');
 
 const bonjour = require('bonjour')();
 const express = require("express")();
+const { MongoClient } = require("mongodb");
+
 
 const utils = require("./utils");
 const { FILE_ROOT, MODULE_DIR, MANIFEST_DIR, IOT_HOST_DOMAIN } = require("./utils");
@@ -186,12 +188,41 @@ const PORT = 3000;
 /**
  * The underlying nodejs http-server that app.listen() returns.
  */
-const server = express.listen(PORT, () => {
-    // TODO Confirm/create the needed directory structure.
-    initializeMdns();
-    console.log(`Listening on port: ${PORT}`);
-});
+let server;
 
+async function main() {
+    server = express.listen(PORT, () => {
+        // TODO Confirm/create the needed directory structure.
+        initializeDatabase();
+        initializeMdns();
+        console.log(`Listening on port: ${PORT}`);
+    });
+}
+
+/**
+ * Way to operate on the database.
+ */
+let databaseClient;
+
+/**
+ * Adapted from:
+ * https://www.mongodb.com/developer/languages/javascript/node-connect-mongodb/
+ */
+async function initializeDatabase() {
+    const uri = `mongodb://${process.env.CONFIG_MONGODB_ADMINUSERNAME}:${process.env.CONFIG_MONGODB_ADMINPASSWORD}@mongo:27017/`;
+    databaseClient = new MongoClient(uri);
+    try {
+        await databaseClient.connect();
+        // Print something from the db as example of connection.
+        console.log("CONNECTED TO DATABASE: "+ JSON.stringify(await databaseClient.db().admin().listDatabases(), null, 2));
+    } catch (e) {
+        console.error("FAILED CONNECTING TO DATABASE >>>");
+        console.error(e);
+        console.error("<<<");
+    } finally {
+        await databaseClient.close();
+    }
+}
 
 /**
  * ID of the interval that sends mDNS queries. Needed when shutting server down.
@@ -208,7 +239,7 @@ function initializeMdns() {
     let browser = bonjour.find({ type: 'http' }, function (service) {
         console.log(`Found an HTTP server: ${service.name}! Querying it's description...`);
         http.get({ host: service.host, port: 3001, path: "/description" }, (res) => {
-            console.log("Reached the device via HTTP: " + res.statusCode);
+            console.log(`Reached the device at ${service.host} via HTTP: ${res.statusCode}`);
             let rawData = '';
             res.on('data', (chunk) => { rawData += chunk; });
             res.on('end', () => {
@@ -256,3 +287,5 @@ function generateDeploymentId() {
 function addToDatabase(table, id, obj) {
     db[table][id] = obj;
 }
+
+main().catch(console.error);

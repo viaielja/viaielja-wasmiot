@@ -8,6 +8,13 @@ services:
       - 3000:3000
     # ...but this don't?
     command: nodejs server.js
+    # TODO Add volumes for db.
+    environment:
+      # TODO These should not be these + use a local .env file instead.
+      CONFIG_MONGODB_ADMINUSERNAME: root
+      CONFIG_MONGODB_ADMINPASSWORD: example
+      #CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+
   device-random-num-gen-100:
     build:
       context: ./client
@@ -16,3 +23,12 @@ services:
       - 3001:3001
     # Why this need sh -c...
     command: nodejs mdnsDevice.js
+
+  mongo:
+    image: mongo
+    restart: always
+    # TODO Add volumes for db.
+    environment:
+      # TODO These should not be these + use a local .env file instead.
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
