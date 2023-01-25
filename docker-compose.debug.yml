@@ -2,14 +2,12 @@ version: '3.4'
 
 services:
   orchestrator:
-    build:
-      # TODO These paths are messy, but currently work and VSCode debugger finds
-      # the correct paths for setting/stopping breakpoints.
-      context: .
-      # TODO Does the .devcontainer affect `docker compose`?
-      dockerfile: ./fileserv/Dockerfile
+    # Continue from the original (i.e., docker-compose.yml). See:
+    # https://docs.docker.com/compose/extends/
+    extends:
+      file: docker-compose.yml
+      service: orchestrator
     ports:
-      - 3000:3000
       # VSCode + Docker Compose debugging config from:
       # https://tech.indy.fr/2022/06/10/how-to-use-vscode-debugger-with-multiple-docker-services/
       # and https://code.visualstudio.com/docs/containers/docker-compose
@@ -18,24 +16,14 @@ services:
     # TODO Add volumes for db.
     environment:
       NODE_ENV: development
-      # TODO These should not be these + use a local .env file instead.
-      CONFIG_MONGODB_ADMINUSERNAME: root
-      CONFIG_MONGODB_ADMINPASSWORD: example
-      #CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
-
+  
+  # Import the other services from original.
   device-random-num-gen-100:
-    build:
-      context: ./client
-      dockerfile: ../.devcontainer/Dockerfile
-    ports:
-      - 3001:3001
-    command: nodejs mdnsDevice.js
+    extends:
+      file: docker-compose.yml
+      service: device-random-num-gen-100
 
   mongo:
-    image: mongo
-    restart: always
-    # TODO Add volumes for db.
-    environment:
-      # TODO These should not be these + use a local .env file instead.
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
+    extends:
+      file: docker-compose.yml
+      service: mongo
