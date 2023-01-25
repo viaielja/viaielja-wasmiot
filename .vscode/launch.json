@@ -10,6 +10,13 @@
                 "package": "${workspaceFolder}/fileserv/package.json",
                 "localRoot": "${workspaceFolder}/fileserv"
             }
+        },
+        {
+            "type": "node",
+            "request": "attach",
+            "name": "Docker: Debug server",
+            "remoteRoot": "/app",
+            "port": 9229
         }
     ]
 }
