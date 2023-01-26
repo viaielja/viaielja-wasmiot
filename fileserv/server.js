@@ -89,6 +89,16 @@ express.get("/file/manifest/", async (request, response) => {
     response.json(await db.deployment.find().toArray());
 });
 
+/**
+ * GET list of all available IoT-devices; used by Actors in constructing a
+ * deployment.
+ */
+express.get("/file/device/", async (request, response) => {
+    // TODO What should this ideally return? Only IDs and descriptions?
+    response.json(await db.device.find().toArray());
+});
+
+
 
 
 /**
@@ -230,14 +240,14 @@ function initializeMdns() {
     // wasmiot-domain instead?
     let browser = bonjour.find({ type: 'http' }, function (service) {
         console.log(`Found an HTTP server: ${service.name}! Querying it's description...`);
-        http.get({ host: service.host, port: 3001, path: "/description" }, (res) => {
+        http.get({ host: service.host, port: service.port, path: "/description" }, (res) => {
             console.log(`Reached the device at ${service.host} via HTTP: ${res.statusCode}`);
             let rawData = '';
             res.on('data', (chunk) => { rawData += chunk; });
             res.on('end', () => {
                 try {
                     let dataObj = JSON.parse(rawData);
-                    addToDatabase("device", service.name, dataObj);
+                    db.device.insertOne({ name: service.name, placeholderfield: dataObj });
                     console.log(`Added new device description: ${JSON.stringify(dataObj)}`)
                 } catch (e) {
                     console.error(e.message);
