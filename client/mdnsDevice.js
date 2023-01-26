@@ -15,8 +15,10 @@ const HOSTNAME = (() => {
 })();
 
 let port = 3001;
-if (process.argv.length > 2) {
+let maxNum = 100;
+if (process.argv.length > 3) {
     port = Number.parseInt(process.argv.at(2));
+    maxNum = Number.parseInt(process.argv.at(3));
 }
 console.log(`${HOSTNAME}: starting HTTP-server and mDNS publish...`);
 
@@ -33,7 +35,7 @@ express.get("/*", (_, response) => {
   <title>Wasm-IoT</title>
 </head>
 <body>
-  <p>Wasm-IoT - Device<br/>Your random number is ${Math.random() * 100}</p>
+  <p>Wasm-IoT - Device<br/>Your random number is ${Math.random() * maxNum}</p>
 </body>
 </html>`);
 })
@@ -44,7 +46,7 @@ const SERVER = express.listen(port, () => {
 });
 
 // Start advertising this device.
-const serviceInfo = { name: "Random Number Generator Box 100", port: port, type: "http" };
+const serviceInfo = { name: `Random Number Generator Box ${maxNum}`, port: port, type: "http" };
 bonjour.publish(serviceInfo);
 console.log(`Advertising the following service info: ${JSON.stringify(serviceInfo)}`);
 
