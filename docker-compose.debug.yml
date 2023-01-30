@@ -1,0 +1,29 @@
+version: '3.4'
+
+services:
+  orchestrator:
+    # Continue from the original (i.e., docker-compose.yml). See:
+    # https://docs.docker.com/compose/extends/
+    extends:
+      file: docker-compose.yml
+      service: orchestrator
+    ports:
+      # VSCode + Docker Compose debugging config from:
+      # https://tech.indy.fr/2022/06/10/how-to-use-vscode-debugger-with-multiple-docker-services/
+      # and https://code.visualstudio.com/docs/containers/docker-compose
+      - 9229:9229
+    command: nodejs --inspect=0.0.0.0:9229 ./fileserv/server.js
+    # TODO Add volumes for db.
+    environment:
+      NODE_ENV: development
+  
+  # Import the other services from original.
+  device-random-num-gen-100:
+    extends:
+      file: docker-compose.yml
+      service: device-random-num-gen-100
+
+  mongo:
+    extends:
+      file: docker-compose.yml
+      service: mongo
