@@ -17,14 +17,26 @@ services:
       CONFIG_MONGODB_ADMINUSERNAME: root
       CONFIG_MONGODB_ADMINPASSWORD: example
       #CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
-
-  device-random-num-gen-100:
+  
+  # TODO Set IOT-device hostnames to end with ".local."? Considered using `domainname`
+  # (see https://docs.docker.com/compose/compose-file/#domainname) but had no
+  # luck.
+  node-device:
     build:
       context: ./client
       dockerfile: ../.devcontainer/Dockerfile
     ports:
-      - 3001:3001
-    command: nodejs mdnsDevice.js
+      - 3002:3002
+    command: nodejs mdnsDevice.js 3002
+
+  flask-device:
+    build:
+      context: ../flask-host/
+      dockerfile: .devcontainer/Dockerfile
+    command: python __main__.py
+    ports:
+      # 5000 is probably the default Flask-port.
+      - 3001:5000
 
   mongo:
     image: mongo

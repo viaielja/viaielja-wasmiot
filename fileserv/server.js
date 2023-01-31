@@ -8,8 +8,7 @@ const express = require("express")();
 const { MongoClient, ObjectId } = require("mongodb");
 
 
-const utils = require("./utils");
-const { IOT_HOST_DOMAIN } = require("./utils");
+const { DEVICE_DESC_ROUTE, DEVICE_TYPE } = require("./utils");
 
 // Set working directory to this file's root in order to use relative paths
 // (i.e. "./foo/bar"). TODO Find out if the problem is with incompatible Node
@@ -189,10 +188,10 @@ const PORT = 3000;
 let server;
 
 async function main() {
-    server = express.listen(PORT, () => {
+    server = express.listen(PORT, async () => {
         // TODO Sometimes database is not ready for server operations. Consult
         // the docker-compose tutorial?
-        initializeDatabase();
+        await initializeDatabase();
         initializeMdns();
         console.log(`Listening on port: ${PORT}`);
     });
@@ -238,10 +237,17 @@ let mdnsQueryPump;
 function initializeMdns() {
     // Browse for all http services TODO browse for http services under the
     // wasmiot-domain instead?
-    let browser = bonjour.find({ type: 'http' }, function (service) {
-        console.log(`Found an HTTP server: ${service.name}! Querying it's description...`);
-        http.get({ host: service.host, port: service.port, path: "/description" }, (res) => {
-            console.log(`Reached the device at ${service.host} via HTTP: ${res.statusCode}`);
+    let queryOptions = { type: DEVICE_TYPE };
+    let browser = bonjour.find(queryOptions, function (service) {
+        // TODO This is due to flask-host self-defining its address into ending
+        // with ".local.", and is not a great way to handle it.
+        let host = service.host.endsWith(".local")
+            ? service.host.substring(0, service.host.indexOf(".local")) 
+            : service.host;
+        let requestOptions = { host: host, port: service.port, path: DEVICE_DESC_ROUTE };
+        console.log(`Found '${service.name}'! Querying it (HTTP)... ${JSON.stringify(requestOptions)}`);
+        http.get(requestOptions, (res) => {
+            console.log(`The query on device at '${service.host}' returned ${res.statusCode}`);
             let rawData = '';
             res.on('data', (chunk) => { rawData += chunk; });
             res.on('end', () => {
@@ -258,6 +264,7 @@ function initializeMdns() {
     })
 
     const callback = () => {
+        // TODO Update database on mdns-service-list instead?
         console.log("Sending mDNS query...");
         browser.update();
     };
@@ -265,7 +272,7 @@ function initializeMdns() {
     // TODO Is this really needed?
     mdnsQueryPump = setInterval(callback, 5000);
 
-    console.log(`mDNS initialized; searching for hosts under ${IOT_HOST_DOMAIN}`);
+    console.log(`mDNS initialized; searching for hosts with ${JSON.stringify(queryOptions)}`);
     callback(); // This is to execute the callback immediately as well.
 }
 

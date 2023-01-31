@@ -17,11 +17,17 @@ services:
     environment:
       NODE_ENV: development
   
-  # Import the other services from original.
-  device-random-num-gen-100:
+  # Import the other services from original. TODO Can these be just
+  # automatically "imported" from the parent compose file?
+  node-device:
     extends:
       file: docker-compose.yml
-      service: device-random-num-gen-100
+      service: node-device
+
+  flask-device:
+    extends:
+      file: docker-compose.yml
+      service: flask-device
 
   mongo:
     extends:

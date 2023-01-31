@@ -1,28 +1,29 @@
 const express = require("express")();
 const bonjour = require("bonjour")();
 
-// TODO Should this (or the eventual device host suffix) be stored somewhere
-// centrally or just keep as a convention?
-const IOT_HOST_DOMAIN = "device-wasmiot.local.";
-
 /**
  * Name identifying this device on the network.
  */
-const HOSTNAME = (() => {
-    const process = require("process");
-    const deviceName = `device-${process.ppid}-${process.pid}`;
-    return `${deviceName}.${IOT_HOST_DOMAIN}`;
-})();
+const HOSTNAME = require("os").hostname();
+
+/**
+ * Type of service to advertise self as.
+ * ...Apparently this JS-library is not the same as the python-counterpart
+ * which can use "_webthing._tcp.local."
+ */
+const SERVICE_TYPE = "webthing";//"_webthing._tcp.local.";
 
 let port = 3001;
 let maxNum = 100;
-if (process.argv.length > 3) {
+if (process.argv.length > 2) {
     port = Number.parseInt(process.argv.at(2));
+}
+if (process.argv.length > 3) {
     maxNum = Number.parseInt(process.argv.at(3));
 }
 console.log(`${HOSTNAME}: starting HTTP-server and mDNS publish...`);
 
-express.get("/description", (_, response) => {
+express.get("/.well-known/wot-thing-description", (_, response) => {
     response.send({ "architecture": "intel i7", "platform": "Windows 11", "repository": "TODO What dis?", "peripherals": [] });
 });
 
@@ -46,7 +47,7 @@ const SERVER = express.listen(port, () => {
 });
 
 // Start advertising this device.
-const serviceInfo = { name: `Random Number Generator Box ${maxNum}`, port: port, type: "http" };
+const serviceInfo = { name: `RNG-Box ${maxNum}`, port: port, type: SERVICE_TYPE };
 bonjour.publish(serviceInfo);
 console.log(`Advertising the following service info: ${JSON.stringify(serviceInfo)}`);
 
