@@ -6,4 +6,4 @@ WORKDIR /app
 COPY ./fileserv/package.json /app/fileserv/package.json
 RUN npm install ./fileserv
 
-COPY . /app
+COPY ./fileserv /app/fileserv
