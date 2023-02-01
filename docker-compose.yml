@@ -3,14 +3,11 @@ version: '3.4'
 services:
   orchestrator:
     build:
-      # TODO These paths are messy, but currently work and VSCode debugger finds
-      # the correct paths for setting/stopping breakpoints.
-      context: .
-      # TODO Does the .devcontainer affect `docker compose`?
-      dockerfile: ./fileserv/Dockerfile
+      context: ./fileserv
+      dockerfile: ./Dockerfile
     ports:
       - 3000:3000
-    command: nodejs ./fileserv/server.js
+    command: nodejs ./server.js
     # TODO Add volumes for db.
     environment:
       # TODO These should not be these + use a local .env file instead.
@@ -24,7 +21,7 @@ services:
   node-device:
     build:
       context: ./client
-      dockerfile: ../.devcontainer/Dockerfile
+      dockerfile: ../fileserv/Dockerfile
     ports:
       - 3002:3002
     command: nodejs mdnsDevice.js 3002

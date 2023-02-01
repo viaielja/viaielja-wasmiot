@@ -9,7 +9,7 @@
 	// "features": {},
 	"build": {
 		"dockerfile": "Dockerfile",
-		"context": "../fileserv",
+		"context": "..",
 	},
 
 	//"remoteUser": "vscode",
