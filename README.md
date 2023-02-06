@@ -1,6 +1,16 @@
 # vilin_projekti
 
+## Setup
+### Supervisor
+The supervisor is a _git submodule_ so clone and update it following the command's documentation: https://git-scm.com/book/en/v2/Git-Tools-Submodules
 
+The supervisor also needs the following (if using docker, then compose should handle all these):
+  - a `configs` directory at its root containing files:
+    - `remote_functions.json`
+    - `modules.json`
+  - Some environment variables TODO which?
+
+---
 
 ## Getting started
 
