@@ -37,7 +37,7 @@ services:
 
   mongo:
     image: mongo
-    restart: always
+    restart: unless-stopped
     # TODO Add volumes for db.
     environment:
       # TODO These should not be these + use a local .env file instead.
