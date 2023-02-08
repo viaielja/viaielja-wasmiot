@@ -4,13 +4,9 @@
 	"name": "Node.js",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	//"image": "mcr.microsoft.csm/devcontainers/javascript-node:0-18"
-
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
-	"build": {
-		"dockerfile": "Dockerfile",
-		"context": "..",
-	},
+	"dockerComposeFile": "../docker-compose.debug.server.yml",
+	"service": "orchestrator",
+	"workspaceFolder": "/app",
 
 	//"remoteUser": "vscode",
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.

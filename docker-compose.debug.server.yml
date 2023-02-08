@@ -8,10 +8,11 @@ services:
       file: docker-compose.yml
       service: orchestrator
     build:
-      # NOTE Using these paths is messy, but currently works and VSCode debugger finds
-      # the correct filepaths for setting breakpoints.
+      # For debugging the whole project directory needs to be available, not
+      # just `fileserv`.
       context: .
-      dockerfile: ./.devcontainer/Dockerfile
+      dockerfile: ./fileserv/Dockerfile
+      target: server-debug
     ports:
       # VSCode + Docker Compose debugging config from:
       # https://tech.indy.fr/2022/06/10/how-to-use-vscode-debugger-with-multiple-docker-services/
@@ -38,3 +39,8 @@ services:
     extends:
       file: docker-compose.yml
       service: mongo
+
+volumes:
+  device1-configs:
+  device1-modules:
+  device1-output:

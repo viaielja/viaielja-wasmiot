@@ -5,10 +5,10 @@ services:
     build:
       context: ./fileserv
       dockerfile: ./Dockerfile
+      target: compose
     ports:
       - 3000:3000
     command: nodejs ./server.js
-    # TODO Add volumes for db.
     environment:
       # TODO These should not be these + use a local .env file instead.
       CONFIG_MONGODB_ADMINUSERNAME: root
@@ -22,6 +22,7 @@ services:
     build:
       context: ./client
       dockerfile: ../fileserv/Dockerfile
+      target: compose
     ports:
       - 3002:3002
     command: nodejs mdnsDevice.js 3002
