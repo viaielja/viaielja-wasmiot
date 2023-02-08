@@ -30,6 +30,7 @@ services:
     build:
       context: ./flask-host/
       dockerfile: .devcontainer/Dockerfile
+      target: base
       args:
         - DEVICE_NAME='thingi1'
         # TODO Are these needed now that using git submodules (earlier for
