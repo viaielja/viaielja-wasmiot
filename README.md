@@ -1,8 +1,16 @@
 # vilin_projekti
 
 ## Setup
-### Supervisor
+### Supervisor (git submodule)
 The supervisor is a _git submodule_ so clone and update it following the command's documentation: https://git-scm.com/book/en/v2/Git-Tools-Submodules
+
+For example cloning would go like this:
+```
+git clone git@gitlab.jyu.fi:wasmiot/wasmiot-orchestrator.git
+git submodule init
+git submodule update
+```
+The command `git submodule update` might complain on Windows with unauthorized access to which a workaround is to start using WSL2 (the [Remote Development](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack) VSCode extension might be useful/required). 
 
 The supervisor also needs the following (if using docker, then compose should handle all these):
   - a `configs` directory at its root containing files:
