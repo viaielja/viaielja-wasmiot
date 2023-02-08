@@ -45,9 +45,11 @@ services:
     volumes:
       # Named volumes instead of the mounts like in example(?), in order to
       # prevent confusion when simulating multiple devices(?).
+      - ./flask-host/host-app:/flask-host/host_app:bind
       - device1-configs:/flask-host/configs
       - device1-modules:/flask-host/modules
       - device1-output:/flask-host/output
+
   mongo:
     image: mongo
     restart: unless-stopped
