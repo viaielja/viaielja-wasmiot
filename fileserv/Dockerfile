@@ -20,5 +20,7 @@ FROM base AS server-debug
 # Install dependencies first in order to not rebuild every time code changes.
 COPY ./fileserv/package.json /app/fileserv/package.json
 RUN npm install ./fileserv
+COPY ./client/package.json /app/client/package.json
+RUN npm install ./client
 
-COPY ./fileserv /app/fileserv
+COPY . /app
