@@ -1,6 +1,19 @@
 # vilin_projekti
 
 ## Setup
+
+### TL;DR
+
+Tested on Windows 10:
+```powershell
+git clone git@gitlab.jyu.fi:wasmiot/wasmiot-orchestrator.git
+cd .\wasmiot-orchestrator\
+git clone git@gitlab.jyu.fi:wasmiot/flask-host.git
+git submodule init
+git submodule update
+docker compose up
+```
+
 ### Supervisor (git submodule)
 The supervisor is a _git submodule_ so clone and update it following the command's documentation: https://git-scm.com/book/en/v2/Git-Tools-Submodules
 
@@ -10,7 +23,16 @@ git clone git@gitlab.jyu.fi:wasmiot/wasmiot-orchestrator.git
 git submodule init
 git submodule update
 ```
-The command `git submodule update` might complain on Windows with unauthorized access to which a workaround is to start using WSL2 (the [Remote Development](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack) VSCode extension might be useful/required). 
+
+The command `git submodule update` might complain on Windows with unauthorized
+access to which some workarounds are:
+- Start using WSL2 (the [Remote
+  Development](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack)
+  VSCode extension might be useful/required).
+- Based on a [similar situation on Stack
+  Overflow](https://stackoverflow.com/questions/60850933/git-submodule-update-permission-denied),
+  it seems that updates should start working as normal after the submodule is
+  first __manually cloned__ into its directory.
 
 The supervisor also needs the following (if using docker, then compose should handle all these):
   - a `configs` directory at its root containing files:
