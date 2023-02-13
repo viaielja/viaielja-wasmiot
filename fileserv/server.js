@@ -15,6 +15,7 @@ const { DEVICE_DESC_ROUTE, DEVICE_TYPE } = require("./utils");
 // versions (16 vs 18).
 chdir(__dirname);
 
+const FRONT_END_DIR = path.join(__dirname, "frontend");
 
 /**
  * Middleware to log all requests as needed.
@@ -161,17 +162,7 @@ express.post("/file/manifest", async (request, response) => {
  * Direct to some "index-page" when bad URL used.
  */
 express.all("/*", (_, response) => {
-    response.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset='utf-8'>
-  <title>Wasm-IoT</title>
-</head>
-<body>
-  <p>Wasm-IoT - Orchestration server<br/>Please use an existing route.</p>
-</body>
-</html>`
-    );
+    response.sendFile(path.join(FRONT_END_DIR, "index.html"));
 });
 
 //////////////////////////////////////////////////
@@ -238,7 +229,7 @@ function initializeMdns() {
     // Browse for all http services TODO browse for http services under the
     // wasmiot-domain instead?
     let queryOptions = { type: DEVICE_TYPE };
-    let browser = bonjour.find(queryOptions, function (service) {
+    bonjour.find(queryOptions, function (service) {
         // TODO This is due to flask-host self-defining its address into ending
         // with ".local.", and is not a great way to handle it.
         let host = service.host.endsWith(".local")
@@ -263,17 +254,9 @@ function initializeMdns() {
 
     })
 
-    const callback = () => {
-        // TODO Update database on mdns-service-list instead?
-        console.log("Sending mDNS query...");
-        browser.update();
-    };
-    // Send service queries every 5 seconds.
-    // TODO Is this really needed?
-    mdnsQueryPump = setInterval(callback, 5000);
-
+    // Bonjour/mDNS sends the queries on its own; no need to send updates
+    // manually.
     console.log(`mDNS initialized; searching for hosts with ${JSON.stringify(queryOptions)}`);
-    callback(); // This is to execute the callback immediately as well.
 }
 
 ////////////

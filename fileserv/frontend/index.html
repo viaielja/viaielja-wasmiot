@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset='utf-8'>
+  <title>Wasm-IoT</title>
+  <script>
+    function addModuleRow(event) {
+        event.preventDefault();
+        let item = document.createElement("li");
+        let input = document.createElement("input", { type: "text"});
+        item.appendChild(input);
+        document.querySelector("#module-sequence-list").appendChild(item);
+    }
+    window.onload = function() {
+      document.querySelector("#add-module-row").addEventListener("click", addModuleRow);
+    };
+  </script>
+</head>
+<body>
+  <h1>WasmIoT - Orchestrator</h1>
+  <div>
+    <h2>Compose your application</h2>
+    <form action="/file/deployment">
+      <ol id="module-sequence-list">
+          <li><input type="text"></li>
+      </ol>
+      <button type="button" id="add-module-row">Add row</button>
+    </form>
+  </div>
+</body>
+</html>
