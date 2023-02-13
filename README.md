@@ -42,6 +42,15 @@ The supervisor also needs the following (if using docker, then compose should ha
 
 ---
 
+## Debugging
+For debugging, the devcontainer should work quite well with just using VSCode
+like you would locally.
+
+__Something that has to be done though__, is to __manually__ run `npm
+install` after getting inside the container (This might be because of bind mounting with
+the current project directory structure?). Note that this will also result in a
+_local_ `node_modules` directory in all its glory.
+
 ## Getting started
 
 To make it easy for you to get started with GitLab, here's a list of recommended next steps.

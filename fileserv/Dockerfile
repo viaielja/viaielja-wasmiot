@@ -18,6 +18,7 @@ COPY . /app
 FROM base AS server-debug
 
 # Install dependencies first in order to not rebuild every time code changes.
+# FIXME This does not work while simultaneously bind-mounting the project root.
 COPY ./fileserv/package.json /app/fileserv/package.json
 RUN npm install ./fileserv
 COPY ./client/package.json /app/client/package.json
