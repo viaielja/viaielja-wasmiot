@@ -24,4 +24,7 @@ RUN npm install ./fileserv
 COPY ./client/package.json /app/client/package.json
 RUN npm install ./client
 
+# Install nodemon (https://nodemon.io/) for automatic reloads on code changes.
+RUN npm install -g nodemon
+
 COPY . /app
