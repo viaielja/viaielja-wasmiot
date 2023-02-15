@@ -229,14 +229,20 @@ function initializeMdns() {
     // Browse for all http services TODO browse for http services under the
     // wasmiot-domain instead?
     let queryOptions = { type: DEVICE_TYPE };
-    bonjour.find(queryOptions, function (service) {
-        // TODO This is due to flask-host self-defining its address into ending
+    bonjour.find(queryOptions, async function (service) {
+        // FIXME This is due to flask-host self-defining its address into ending
         // with ".local.", and is not a great way to handle it.
         let host = service.host.endsWith(".local")
             ? service.host.substring(0, service.host.indexOf(".local")) 
             : service.host;
         let requestOptions = { host: host, port: service.port, path: DEVICE_DESC_ROUTE };
-        console.log(`Found '${service.name}'! Querying it (HTTP)... ${JSON.stringify(requestOptions)}`);
+        console.log(`Found '${service.name}'! ${JSON.stringify(service, null, 2)}`);
+        let device_doc = await db.device.findOne({name: service.name});
+        if (device_doc !== null) {
+            console.log(`The device named '${device_doc.name}' is already in the database!`);
+            return;
+        }
+        console.log(`\t Querying description via HTTP... ${JSON.stringify(requestOptions)}`);
         http.get(requestOptions, (res) => {
             console.log(`The query on device at '${service.host}' returned ${res.statusCode}`);
             let rawData = '';
@@ -244,7 +250,10 @@ function initializeMdns() {
             res.on('end', () => {
                 try {
                     let dataObj = JSON.parse(rawData);
-                    db.device.insertOne({ name: service.name, placeholderfield: dataObj });
+                    db.device.insertOne({
+                        name: service.name,
+                        description: dataObj
+                    });
                     console.log(`Added new device description: ${JSON.stringify(dataObj)}`)
                 } catch (e) {
                     console.error(e.message);
