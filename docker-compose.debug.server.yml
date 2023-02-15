@@ -29,15 +29,14 @@ services:
   
   # Import the other services from original. TODO Can these be just
   # automatically "imported" from the parent compose file?
-  node-device:
+  adequate-webcam-laptop:
     extends:
       file: docker-compose.yml
-      service: node-device
-
-  flask-device:
+      service: adequate-webcam-laptop
+  lousy-webcam-laptop:
     extends:
       file: docker-compose.yml
-      service: flask-device
+      service: lousy-webcam-laptop
 
   mongo:
     extends:
@@ -48,3 +47,7 @@ volumes:
   device1-configs:
   device1-modules:
   device1-output:
+
+  device2-configs:
+  device2-modules:
+  device2-output:

@@ -1,5 +1,27 @@
 # vilin_projekti
 
+## Docker compose
+Running orchestrator only:
+```
+docker compose up --build
+```
+
+You can test how orchestrator interacts with devices by running the containers
+in the same compose (TODO Define common network for testing any new container)
+for example by clicking the _⏵ button_ on Docker Desktop GUI.
+
+Also running the simulated devices with one command:
+```
+docker compose --profile device up --build
+```
+
+OR you can use the VSCode GUI:
+1. Right click `docker-compose.yml` file from explorer
+2. Select "Compose Up - Select Services"
+3. Select "profiles"
+4. Do not select "ABSTRACT_BASE_HACK_DO_NOT_USE"
+5. Click "OK"
+
 ## Setup
 
 ### TL;DR
