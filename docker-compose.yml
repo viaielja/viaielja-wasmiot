@@ -18,34 +18,54 @@ services:
   # TODO Set IOT-device hostnames to end with ".local."? Considered using `domainname`
   # (see https://docs.docker.com/compose/compose-file/#domainname) but had no
   # luck.
-  adequate-webcam-laptop:
+  #
+  device-base:
+    profiles:
+      # NOTE: This makes it so that the service can be extended and the
+      # ::OVERRIDE::-marked settings overridden without starting this service
+      # during `docker compose up`. The "inherited" services need to be started
+      # on their own though...
+      - ABSTRACT_BASE_HACK_DO_NOT_USE
+      - device
     build:
       context: ./flask-host/
       dockerfile: .devcontainer/Dockerfile
-      target: base
+      target: run
+      # args:
+      #   - DEVICE_NAME='thingi' # ::OVERRIDE::
+      #   # TODO Are these needed now that using git submodules (earlier for
+      #   # pulling from gitlab in separate local clone?).
+      #   #- DEPLOY_USER=${DEPLOY_USER}
+      #   #- DEPLOY_TOKEN=${DEPLOY_TOKEN}
+    # ports:
+    #   # 5000 is the default Flask-port that is probably used.
+    #   - 0:5000 # ::OVERRIDE::
+    volumes:
+      - ./flask-host/host_app:/app/host_app:bind
+      # Mount an example device description file to the device. TODO Better
+      # would be to just copy it to named volume, but can that be automated
+      # elegantly?
+      - ./client/files/webcam-laptop.device-description.json:/app/configs/device-description.json
+ 
+  adequate-webcam-laptop:
+    extends: device-base
+    profiles:
+      - device
+    build:
       args:
         - DEVICE_NAME='adequate-webcam-laptop'
-        # TODO Are these needed now that using git submodules (earlier for
-        # pulling from gitlab in separate local clone?).
-        #- DEPLOY_USER=${DEPLOY_USER}
-        #- DEPLOY_TOKEN=${DEPLOY_TOKEN}
-    command: python __main__.py
     ports:
-      # 5000 is the default Flask-port that is probably used.
       - 3001:5000
     volumes:
-      # Named volumes instead of the mounts like in example(?), in order to
-      # prevent confusion when simulating multiple devices(?).
-      - ./flask-host/host-app:/flask-host/host_app:bind
-      - device1-configs:/flask-host/configs
-      - device1-modules:/flask-host/modules
-      - device1-output:/flask-host/output
-      # Mount an example device description file to the device.
-      - ./client/files/webcam-laptop.device-description.json:/flask-host/configs/device-description.json
-    # Simulate constrained memory. See
-    # https://docs.docker.com/config/containers/resource_constraints/
-    # https://docs.docker.com/compose/compose-file/compose-file-v3/#resources
+      # Named volumes instead of the mounts in order to prevent files on host
+      # and confusion when simulating multiple devices.
+      - device1-configs:/app/configs
+      - device1-modules:/app/modules
+      - device1-output:/app/output
     deploy:
+      # Simulate constrained memory. See
+      # https://docs.docker.com/config/containers/resource_constraints/
+      # https://docs.docker.com/compose/compose-file/compose-file-v3/#resources
       resources:
         limits:
           cpus: '0.5'    
@@ -54,32 +74,18 @@ services:
 
 
   lousy-webcam-laptop:
+    extends: device-base
+    profiles:
+      - device
     build:
-      context: ./flask-host/
-      dockerfile: .devcontainer/Dockerfile
-      target: base
       args:
         - DEVICE_NAME='lousy-webcam-laptop'
-        # TODO Are these needed now that using git submodules (earlier for
-        # pulling from gitlab in separate local clone?).
-        #- DEPLOY_USER=${DEPLOY_USER}
-        #- DEPLOY_TOKEN=${DEPLOY_TOKEN}
-    command: python __main__.py
     ports:
-      # 5000 is the default Flask-port that is probably used.
       - 3002:5000
     volumes:
-      # Named volumes instead of the mounts like in example(?), in order to
-      # prevent confusion when simulating multiple devices(?).
-      - ./flask-host/host-app:/flask-host/host_app:bind
-      - device2-configs:/flask-host/configs
-      - device2-modules:/flask-host/modules
-      - device2-output:/flask-host/output
-      # Mount an example device description file to the device.
-      - ./client/files/webcam-laptop.device-description.json:/flask-host/configs/device-description.json
-    # Simulate constrained memory. See
-    # https://docs.docker.com/config/containers/resource_constraints/
-    # https://docs.docker.com/compose/compose-file/compose-file-v3/#resources
+      - device2-configs:/app/configs
+      - device2-modules:/app/modules
+      - device2-output:/app/output
     deploy:
       resources:
         limits:
