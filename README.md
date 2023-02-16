@@ -22,6 +22,12 @@ OR you can use the VSCode GUI:
 4. Do not select "ABSTRACT_BASE_HACK_DO_NOT_USE"
 5. Click "OK"
 
+### About the devices
+__Remember__ that volumes overwrite the `device-description.json` -file ->
+delete volume from time to time. TODO Ideally the description would be
+installed __after__ the device (container) has started instead of into the image
+itself like at the moment.
+
 ## Setup
 
 ### TL;DR

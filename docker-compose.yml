@@ -24,9 +24,8 @@ services:
       # NOTE: This makes it so that the service can be extended and the
       # ::OVERRIDE::-marked settings overridden without starting this service
       # during `docker compose up`. The "inherited" services need to be started
-      # on their own though...
+      # on their own though (separate profile)...
       - ABSTRACT_BASE_HACK_DO_NOT_USE
-      - device
     build:
       context: ./flask-host/
       dockerfile: .devcontainer/Dockerfile
@@ -42,10 +41,6 @@ services:
     #   - 0:5000 # ::OVERRIDE::
     volumes:
       - ./flask-host/host_app:/app/host_app:bind
-      # Mount an example device description file to the device. TODO Better
-      # would be to just copy it to named volume, but can that be automated
-      # elegantly?
-      - ./client/files/webcam-laptop.device-description.json:/app/configs/device-description.json
  
   adequate-webcam-laptop:
     extends: device-base
@@ -53,6 +48,7 @@ services:
       - device
     build:
       args:
+        - DEVICE_TYPE='webcam-laptop'
         - DEVICE_NAME='adequate-webcam-laptop'
     ports:
       - 3001:5000
@@ -79,6 +75,7 @@ services:
       - device
     build:
       args:
+        - DEVICE_TYPE='webcam-laptop'
         - DEVICE_NAME='lousy-webcam-laptop'
     ports:
       - 3002:5000

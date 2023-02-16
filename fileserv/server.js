@@ -245,6 +245,8 @@ function initializeMdns() {
         console.log(`\t Querying description via HTTP... ${JSON.stringify(requestOptions)}`);
         http.get(requestOptions, (res) => {
             console.log(`The query on device at '${service.host}' returned ${res.statusCode}`);
+            // TODO Query again on failure response or better(?) remove the
+            // device from mDNS.
             let rawData = '';
             res.on('data', (chunk) => { rawData += chunk; });
             res.on('end', () => {
