@@ -1,0 +1,23 @@
+{
+    "platform": {
+        "memory": {
+            "bytes": null
+        },
+        "cpu": {
+            "humanReadableName": null,
+            "clockSpeed": {
+                "Hz": null
+            }
+        }
+    },
+    "supervisorInterfaces": [
+        "millis",
+        "delay",
+        "print",
+        "println",
+        "printInt",
+        "rpcCall",
+        "getTemperature",
+        "getHumidity"
+    ]
+}

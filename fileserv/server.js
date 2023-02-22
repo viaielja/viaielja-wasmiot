@@ -173,7 +173,9 @@ async function saveDeviceData(service) {
     queryDeviceData(requestOptions, (data) => {
         let deviceDescription = JSON.parse(data);
 
-        // Save description in database.
+        // Save description in database. TODO Use some standard way to
+        // interact with descriptions (validations, operation,
+        // contentType, security etc)?.
         db.device.updateOne(
             { _id: newId },
             { $set: { description: deviceDescription } },
@@ -181,20 +183,6 @@ async function saveDeviceData(service) {
             { upsert: true }
         );
         console.log(`Adding device description for '${service.name}'`);
-
-        // Now get and save the platform info TODO Use some standard way to
-        // interact with Thing Descriptions (validations, operation,
-        // contentType, security etc)?.
-        requestOptions.path = deviceDescription.properties.platform.forms[0].href;
-        queryDeviceData(requestOptions, (data2) => {
-            let platformInfo = JSON.parse(data2);
-            db.device.updateOne(
-                { _id: newId },
-                { $set: { platform: platformInfo } },
-                { upsert: true }
-            );
-            console.log(`Adding device platform info for '${service.name}'`);
-        });
     });
 }
 
