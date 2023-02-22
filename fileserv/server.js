@@ -95,6 +95,7 @@ async function initializeDatabase() {
 
 /**
  * Query device __for 'data'-events__ and if fails, remove from mDNS-cache.
+ * NOTE: This is for device introduction and not for general queries!
  * @param {*} options Options to use in the GET request including the URL.
  * @param {*} callback What to do with the data when request ends.
  */
@@ -105,11 +106,13 @@ function queryDeviceData(options, callback) {
             // failed to answer to HTTP-GET.
             console.log(`Service at '${options.host}${options.path}' failed to respond: Status ${res.statusCode}`);
 
-            let service = bonjourBrowser.services.find(x => x.host == options.host);
+            let service = bonjourBrowser.services.find(x => x.host == `${options.host}.local`);
             if (service) {
-                service.stop(() => {
-                    console.log("Unpublished service: " + JSON.stringify(service));
-                });
+                // FIXME/TODO Bonjour keeps the device saved, but it should forget it
+                // here because the device is not functional.
+                console.log("UNIMPLEMENTED/TODO: Should forget the faulty device " + service.host);
+            } else {
+                console.log(`Did not find ${options.host} in currently known mDNS devices`);
             }
             return null;
         } else {
@@ -128,9 +131,11 @@ function queryDeviceData(options, callback) {
 async function saveDeviceData(service) {
     // Check for duplicate service
     let device_doc = await db.device.findOne({ name: service.name });
+
+    // Check if all the required information has been received earlier.
     if (device_doc !== null
-        && device_doc.description !== null
-        && device_doc.platform !== null
+        && device_doc.hasOwnProperty("description") && device_doc.description !== null
+        && device_doc.hasOwnProperty("platform") && device_doc.platform !== null
     ) {
         console.log(`The device named '${device_doc.name}' is already in the database!`);
         return;
