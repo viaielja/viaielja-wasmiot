@@ -105,10 +105,12 @@ function queryDeviceData(options, callback) {
             // failed to answer to HTTP-GET.
             console.log(`Service at '${options.host}${options.path}' failed to respond: Status ${res.statusCode}`);
 
-            bonjourBrowser.services.find(x => x.host == options.host).stop(() => {
-                console.log("Unpublished service: " + JSON.stringify(service));
-            });
-
+            let service = bonjourBrowser.services.find(x => x.host == options.host);
+            if (service) {
+                service.stop(() => {
+                    console.log("Unpublished service: " + JSON.stringify(service));
+                });
+            }
             return null;
         } else {
             let rawData = '';
@@ -201,7 +203,13 @@ function initializeMdns() {
         // TODO/FIXME: A device is no longer "found" on mDNS after this but the
         // description-query-chain might fail ending up with nothing but nulls
         // in the database...
-        console.log(`Found '${service.name}'! ${JSON.stringify(service, null, 2)}`);
+        let serviceInfo = {
+            "addresses": service.addresses,
+            "name": service.name,
+            "fqdn": service.fqdn,
+            "host": service.host,
+        };
+        console.log(`Found '${service.name}'! ${JSON.stringify(serviceInfo, null, 2)}`);
         saveDeviceData(service);
     }
 
