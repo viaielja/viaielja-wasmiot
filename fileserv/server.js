@@ -1,33 +1,18 @@
+/**
+ * Initialize server, database, mDNS and routes as needed. TODO How to access database in the routes?
+ */
+
 const fileSystem = require('fs'),
     path = require('path'),
     http = require('http');
 const { chdir } = require('process');
 
+const { MongoClient } = require("mongodb");
+
 const bonjour = require('bonjour')();
 const express = require("express")();
-const { MongoClient, ObjectId } = require("mongodb");
 
-
-const { DEVICE_DESC_ROUTE, DEVICE_TYPE } = require("./utils");
-
-// Set working directory to this file's root in order to use relative paths
-// (i.e. "./foo/bar"). TODO Find out if the problem is with incompatible Node
-// versions (16 vs 18).
-chdir(__dirname);
-
-const FRONT_END_DIR = path.join(__dirname, "frontend");
-
-/**
- * Middleware to log all requests as needed.
- */
-const requestLogger = (request, response, next) => {
-    console.log(`received ${request.method}: ${request.originalUrl}`);
-    if (request.method == "POST") {
-        // If client is sending a POST request, log sent data.
-        console.log(`body: ${JSON.stringify(request.body)}`);
-    }
-    next();
-}
+const { DEVICE_TYPE, DEVICE_DESC_ROUTE } = require("./utils");
 
 /**
  * Way to operate on the collections in database.
@@ -38,160 +23,52 @@ let db = {
     deployment: null,
 };
 
-// MIDDLEWARES (Note: call-order matters!):
-// Enable JSON-body parsing (NOTE: content-type by default has to be application/json).
-express.use(require("express").json());
-express.use(requestLogger);
-
-
-/**
- * GET a Wasm-module; used by IoT-devices.
- */
-express.get("/file/module/:moduleId", async (request, response) => {
-    let doc = await db.module.findOne({_id: ObjectId(request.params.moduleId)});
-    if (doc) {
-        // TODO Only respond with the binary, not JSON.
-        response.json(doc);
-    } else {
-        let errmsg = `Failed querying for deployment id: ${request.params.moduleId}`;
-        console.log(errmsg);
-        response.status(400).send(errmsg);
-    }
-});
-
-/**
- * GET list of all Wasm-modules; used by Actors in constructing a deployment.
- */
-express.get("/file/module/", async (request, response) => {
-    // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await db.module.find().toArray());
-});
-
-/**
- * GET list of packages or the "deployment manifest"; used by IoT-devices.
- */
-express.get("/file/manifest/:deploymentId", async (request, response) => {
-    let doc = await db.deployment.findOne({_id: ObjectId(request.params.deploymentId)});
-    if (doc) {
-        response.json(doc);
-    } else {
-        let errmsg = `Failed querying for deployment id: ${request.params.deploymentId}`;
-        console.log(errmsg);
-        response.status(400).send(errmsg);
-    }
-});
-
-/**
- * GET list of all deployments; used by Actors in inspecting their deployments.
- */
-express.get("/file/manifest/", async (request, response) => {
-    // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await db.deployment.find().toArray());
-});
-
-/**
- * GET list of all available IoT-devices; used by Actors in constructing a
- * deployment.
- */
-express.get("/file/device/", async (request, response) => {
-    // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await db.device.find().toArray());
-});
-
-
-
-
-/**
- * POST a new device's architecture information (i.e., device description) to
- * add to orchestrator's database.
- */
-express.post("/file/device", async (request, response) => {
-    // TODO Only add what is allowed (e.g. _id should not come from POST).
-    let result = await db.device.insertOne(request.body)
-    if (result.acknowledged) {
-        let msg = "New device added";
-        console.log(msg);
-        response.send(msg);
-    } else {
-        let msg = "failed to add the device";
-        console.log(msg);
-        response.status(500).send(msg);
-    }
-});
-
-
-/**
- * POST a new deployment(TODO is that correct?) manifest to add to
- * orchestrator's database.
- */
-express.post("/file/manifest", async (request, response) => {
-    let data = request.body;
-    let deploymentName = data.id;
-
-    let status = 200;
-    let message = `Manifest ${deploymentName} added`;
-
-    // TODO When would a new deployment not be accepted? Based on user credits??
-    let doc = await db.deployment.findOne({ name: deploymentName });
-    if (doc) {
-        console.log(`Tried to write existing manifest: ${JSON.stringify(doc)}`);
-        status = 400;
-        message = `Manifest already exists for deployment ${deploymentName}`;
-    } else {
-        // Add the new deployment to database.
-        // TODO Only add what is allowed (e.g. _id should not come from POST).
-        // TODO Add the whole body not just name.
-        let result = await db.deployment.insertOne({ name: deploymentName });
-        if (!result.acknowledged) {
-            console.log(`Failed adding the manifest: ${err}`);
-            status = 500;
-            message = "Failed adding the manifest";
-        } else {
-            console.log(`Manifest added to database '${deploymentName}'`);
-
-            //TODO: Start searching for suitable packages using saved file.
-            //startSearch();
-        }
-    }
-
-    // TODO Is calling 'end' really necessary?
-    response.status(status).send(message).end();
-});
-
-/**
- * Direct to some "index-page" when bad URL used.
- */
-express.all("/*", (_, response) => {
-    response.sendFile(path.join(FRONT_END_DIR, "index.html"));
-});
-
-//////////////////////////////////////////////////
-// Server handling stuff:
-
-///////////
-// STARTUP:
-
-const PORT = 3000;
-
 /**
  * The underlying nodejs http-server that app.listen() returns.
  */
 let server;
 
-async function main() {
-    server = express.listen(PORT, async () => {
-        // TODO Sometimes database is not ready for server operations. Consult
-        // the docker-compose tutorial?
-        await initializeDatabase();
-        initializeMdns();
-        console.log(`Listening on port: ${PORT}`);
-    });
-}
+/**
+ * Browser to use for example for listing or unpublishing services found by mDNS.
+ */
+let bonjourBrowser;
 
 /**
  * For initializations and closing the database connection on shutdown.
  */
 let databaseClient;
+
+// Set working directory to this file's root in order to use relative paths
+// (i.e. "./foo/bar"). TODO Find out if the problem is with incompatible Node
+// versions (16 vs 18).
+chdir(__dirname);
+
+const FRONT_END_DIR = path.join(__dirname, "frontend");
+
+const PORT = 3000;
+
+///////////
+// RUN MAIN
+server = express.listen(PORT, async () => {
+    // TODO Sometimes database is not ready for server operations. Consult
+    // the docker-compose tutorial?
+    await initializeDatabase();
+    console.log(db);
+    bonjourBrowser = initializeMdns();
+    console.log(`Listening on port: ${PORT}`);
+});
+
+module.exports = {
+    // From:
+    // https://stackoverflow.com/questions/24621940/how-to-properly-reuse-connection-to-mongodb-across-nodejs-application-and-module
+    getDb: function() { return db; },
+};
+
+// NOTE: This needs to be here in order to initialize database before routes get
+// access to it...
+const routes = require("./routes");
+
+
 
 /**
  * Adapted from:
@@ -203,48 +80,17 @@ async function initializeDatabase() {
     try {
         const orchDb = await (await databaseClient.connect()).db();
         // Create references to the needed collections.
-        db.module     = orchDb.collection("module");
-        db.device     = orchDb.collection("device");
+        db.module = orchDb.collection("module");
+        db.device = orchDb.collection("device");
         db.deployment = orchDb.collection("deployment");
 
         // Print something from the db as example of connection.
-        console.log("Connected to and initialized database: "+ JSON.stringify(await orchDb.admin().listDatabases(), null, 2));
+        console.log("Connected to and initialized database: " + JSON.stringify(await orchDb.admin().listDatabases(), null, 2));
     } catch (e) {
         console.error("FAILED CONNECTING TO DATABASE >>>");
         console.error(e);
         console.error("<<<");
     }
-}
-
-/**
- * Browser to use for example for listing or unpublishing services found by mDNS.
- */
-let bonjourBrowser;
-
-/**
- * Start querying for IoT-devices and add their descriptions to database as
- * needed.
- */
-function initializeMdns() {
-    // Browse for all http services TODO browse for http services under the
-    // wasmiot-domain instead?
-    let queryOptions = { type: DEVICE_TYPE };
-    bonjourBrowser = bonjour.find(queryOptions, async function (service) {
-        // TODO/FIXME: A device is no longer "found" on mDNS after this but the
-        // description-query-chain might fail ending up with nothing but nulls
-        // in the database...
-        console.log(`Found '${service.name}'! ${JSON.stringify(service, null, 2)}`);
-        saveDeviceData(service);
-    });
-
-    // Remove service from database once it leaves/"says goodbye".
-    bonjourBrowser.on("down", (service) => {
-        db.device.deleteOne({ name: service.name });
-    });
-
-    // Bonjour/mDNS sends the queries on its own; no need to send updates
-    // manually.
-    console.log(`mDNS initialized; searching for hosts with ${JSON.stringify(queryOptions)}`);
 }
 
 /**
@@ -258,13 +104,11 @@ function queryDeviceData(options, callback) {
             // Find and forget the service in question that's advertised host
             // failed to answer to HTTP-GET.
             console.log(`Service at '${options.host}${options.path}' failed to respond: Status ${res.statusCode}`);
-            for (let service of bonjourBrowser.services) {
-                if (service.host === options.host) {
-                    service.stop(()=> {
-                        console.log("Unpublished service: " + JSON.stringify(service));
-                    });
-                }
-            }
+
+            bonjourBrowser.services.find(x => x.host == options.host).stop(() => {
+                console.log("Unpublished service: " + JSON.stringify(service));
+            });
+
             return null;
         } else {
             let rawData = '';
@@ -281,7 +125,7 @@ function queryDeviceData(options, callback) {
  */
 async function saveDeviceData(service) {
     // Check for duplicate service
-    let device_doc = await db.device.findOne({name: service.name});
+    let device_doc = await db.device.findOne({ name: service.name });
     if (device_doc !== null
         && device_doc.description !== null
         && device_doc.platform !== null
@@ -289,7 +133,7 @@ async function saveDeviceData(service) {
         console.log(`The device named '${device_doc.name}' is already in the database!`);
         return;
     }
-    
+
     // Insert or get new device into database for updating in GET-callbacks.
     let newId;
     if (device_doc === null) {
@@ -310,7 +154,7 @@ async function saveDeviceData(service) {
     // FIXME This is due to flask-host self-defining its address into ending
     // with ".local.", and is not a great way to handle it.
     let host = service.host.endsWith(".local")
-        ? service.host.substring(0, service.host.indexOf(".local")) 
+        ? service.host.substring(0, service.host.indexOf(".local"))
         : service.host;
 
     let requestOptions = { host: host, port: service.port, path: DEVICE_DESC_ROUTE };
@@ -347,6 +191,73 @@ async function saveDeviceData(service) {
     });
 }
 
+/**
+ * Start querying for IoT-devices and add their descriptions to database as
+ * needed. Also set event listeners for browser TODO and services?.
+ * @return The resulting Bonjour browser.
+ */
+function initializeMdns() {
+    async function onFound(service) {
+        // TODO/FIXME: A device is no longer "found" on mDNS after this but the
+        // description-query-chain might fail ending up with nothing but nulls
+        // in the database...
+        console.log(`Found '${service.name}'! ${JSON.stringify(service, null, 2)}`);
+        saveDeviceData(service);
+    }
+
+    function onDown(service) {
+        // Remove service from database once it leaves/"says goodbye".
+        db.device.deleteOne({ name: service.name });
+    }
+
+    // Browse for all http services TODO browse for http services under the
+    // wasmiot-domain instead?
+    let queryOptions = { type: DEVICE_TYPE };
+    let browser = bonjour.find(queryOptions, onFound);
+
+    browser.on("down", onDown);
+
+    // Bonjour/mDNS sends the queries on its own; no need to send updates
+    // manually.
+    console.log(`mDNS initialized; searching for hosts with ${JSON.stringify(queryOptions)}`);
+
+    return browser;
+}
+
+
+///////////////////////////////////////////
+// MIDDLEWARES (Note: call-order matters!):
+
+/**
+ * Middleware to log all requests as needed.
+ */
+const requestLogger = (request, response, next) => {
+    console.log(`received ${request.method}: ${request.originalUrl}`);
+    if (request.method == "POST") {
+        // If client is sending a POST request, log sent data.
+        console.log(`body: ${JSON.stringify(request.body)}`);
+    }
+    next();
+}
+
+// Enable JSON-body parsing (NOTE: content-type by default has to be application/json).
+express.use(require("express").json());
+express.use(requestLogger);
+
+//////////
+// ROUTES:
+
+express.use("/file/device", routes.device);
+express.use("/file/module", routes.modules);
+express.use("/file/manifest", routes.deployment);
+
+/**
+ * Direct to some "index-page" when bad URL used.
+ */
+express.all("/*", (_, response) => {
+    response.sendFile(path.join(FRONT_END_DIR, "index.html"));
+});
+
 ////////////
 // SHUTDOWN:
 
@@ -370,7 +281,3 @@ process.on("SIGTERM", async () => {
 
     console.log("Done!");
 });
-
-///////////
-// RUN MAIN
-main().catch(console.error);

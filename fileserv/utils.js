@@ -1,6 +1,4 @@
 const path = require('path');
-
-
 const FILE_ROOT = path.join(__dirname, "files");
 const MODULE_DIR = "module";
 const MANIFEST_DIR = "manifest";
