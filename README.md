@@ -1,18 +1,9 @@
 # vilin_projekti
 
-## Docker compose
-Running orchestrator only:
+## Orchestrator
+Running orchestrator and its database only:
 ```
 docker compose up --build
-```
-
-You can test how orchestrator interacts with devices by running the containers
-in the same compose (TODO Define common network for testing any new container)
-for example by clicking the _⏵ button_ on Docker Desktop GUI.
-
-Also running the simulated devices with one command:
-```
-docker compose --profile device up --build
 ```
 
 OR you can use the VSCode GUI:
@@ -22,11 +13,32 @@ OR you can use the VSCode GUI:
 4. Do not select "ABSTRACT_BASE_HACK_DO_NOT_USE"
 5. Click "OK"
 
-### About the devices
-__Remember__ that volumes overwrite the `device-description.json` -file ->
-delete volume from time to time. TODO Ideally the description would be
-installed __after__ the device (container) has started instead of into the image
-itself like at the moment.
+## Devices
+You can test how orchestrator interacts with devices by running the containers
+in the same compose (TODO Define common network for testing any new container)
+for example by clicking the _⏵ button_ on Docker Desktop GUI.
+
+Also running the simulated devices with one command:
+```
+docker compose --profile device up --build
+```
+### Adding new devices to Docker compose
+When adding a brand new device to your local Docker compose -simulation, you
+have to (in addition to the entries into `.yml`) add its config-files into its
+Docker-volume after running.
+
+This can be achieved for example with (replace `<service name>`,
+`<device type>`, `<config type>` and `<your container>`):
+```powershell
+<# First run the container. #>
+docker compose up <device name> --build -d;
+<# Then copy the needed description into it. #>
+docker cp `
+./client/files/<your device type>.<config type>-description.json `
+<your container>:/app/configs/device-description.json
+```
+
+
 
 ## Setup
 
@@ -67,23 +79,6 @@ The supervisor also needs the following (if using docker, then compose should ha
     - `remote_functions.json`
     - `modules.json`
   - Some environment variables TODO which?
-
-### Adding new devices to Docker compose
-When adding a brand new device to your local Docker compose -simulation, you
-have to (in addition to the entries into `.yml`) add its config-files into its
-Docker-volume after running.
-
-This can be achieved for example with (replace `<service name>`, `<device type>`
-and `<your container>`):
-
-```powershell
-<# First run the container. #>
-docker compose up <device name> --build -d;
-<# Then copy the needed device description into it. #>
-docker cp `
-./client/files/<your device type>.device-description.json `
-<your container>:/app/configs/device-description.json
-```
 
 ---
 
