@@ -37,6 +37,10 @@ services:
     extends:
       file: docker-compose.yml
       service: lousy-webcam-laptop
+  low-power-temperature-sensor:
+    extends:
+      file: docker-compose.yml
+      service: low-power-temperature-sensor
 
   mongo:
     extends:
@@ -44,6 +48,9 @@ services:
       service: mongo
 
 volumes:
+  mongo-config:
+  mongo-db:
+
   device1-configs:
   device1-modules:
   device1-output:
@@ -51,3 +58,7 @@ volumes:
   device2-configs:
   device2-modules:
   device2-output:
+
+  device3-configs:
+  device3-modules:
+  device3-output:

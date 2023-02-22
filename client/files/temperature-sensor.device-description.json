@@ -1,0 +1,50 @@
+{
+    "@context": "https://www.w3.org/2022/wot/td/v1.1",
+    "@type": "Thing",
+    "title": "Low-power sensor device",
+    "description": "A low-power device with sensor for reading the temperature in its vicinity",
+    "properties": {
+        "platform": {
+            "description": "Hardware information about the Thing",
+            "type": "object",
+            "readOnly": true,
+            "properties": {
+                "memory": {
+                    "type": "object",
+                    "properties": {
+                        "bytes": { "type": "number" }
+                    }
+                },
+                "cpuGrading": { 
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0
+                }
+            },
+            "forms": [{
+                "op": "readproperty",
+                "href": "/property/meta/platform",
+                "contentType": "application/json"
+            }]
+        },
+        "temperature": {
+            "description": "Measure and return current temperature (Based on: https://www.w3.org/TR/wot-thing-description11/#example-34)",
+            "uriVariables": {
+                "unit": {
+                    "type": "string",
+                    "enum": ["fahrenheit_value","celsius_value"],
+                    "description": "Desired unit for the temperature value"
+                }
+            },
+            "forms": [{
+                "op": "readproperty",
+                "href": "/{?unit}",
+                "contentType": "application/json"
+            }]
+        }
+    },
+    "security": "TODO: Mandatory",
+    "securityDefinitions": {
+        "scheme": "TODO: Mandatory"
+    }
+}

@@ -89,6 +89,29 @@ services:
           cpus: '0.1'    
           memory: 8G
 
+
+  low-power-temperature-sensor:
+    extends: device-base
+    profiles:
+      - device
+    build:
+      args:
+        - DEVICE_TYPE='temperature-sensor'
+        - DEVICE_NAME='basic-temperature-sensor'
+    ports:
+      - 3003:5000
+    volumes:
+      - device3-configs:/app/configs
+      - device3-modules:/app/modules
+      - device3-output:/app/output
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'    
+          # NOTE: It seems that at <40M the container shuts down soon after
+          # startup with 'Exited(137)'
+          memory: 40M
+
   mongo:
     image: mongo
     restart: unless-stopped
@@ -97,8 +120,14 @@ services:
       # TODO These should not be these + use a local .env file instead.
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - mongo-config:/DATA/CONFIGDB
+      - mongo-db:/DATA/DB
 
 volumes:
+  mongo-config:
+  mongo-db:
+
   device1-configs:
   device1-modules:
   device1-output:
@@ -106,3 +135,7 @@ volumes:
   device2-configs:
   device2-modules:
   device2-output:
+
+  device3-configs:
+  device3-modules:
+  device3-output:

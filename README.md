@@ -68,6 +68,23 @@ The supervisor also needs the following (if using docker, then compose should ha
     - `modules.json`
   - Some environment variables TODO which?
 
+### Adding new devices to Docker compose
+When adding a brand new device to your local Docker compose -simulation, you
+have to (in addition to the entries into `.yml`) add its config-files into its
+Docker-volume after running.
+
+This can be achieved for example with (replace `<service name>`, `<device type>`
+and `<your container>`):
+
+```powershell
+<# First run the container. #>
+docker compose up <device name> --build -d;
+<# Then copy the needed device description into it. #>
+docker cp `
+./client/files/<your device type>.device-description.json `
+<your container>:/app/configs/device-description.json
+```
+
 ---
 
 ## Debugging
