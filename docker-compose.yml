@@ -110,7 +110,7 @@ services:
           cpus: '0.1'    
           # NOTE: It seems that at <40M the container shuts down soon after
           # startup with 'Exited(137)'
-          memory: 40M
+          memory: 50M
 
   mongo:
     image: mongo
