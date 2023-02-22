@@ -1,5 +1,6 @@
 const { Router } = require("express");
 const { getDb } = require("../server.js");
+const { ObjectId } = require("mongodb");
 
 const router = Router();
 
@@ -9,6 +10,7 @@ module.exports = { router };
  * GET a Wasm-module; used by IoT-devices.
  */
 router.get("/:moduleId", async (request, response) => {
+    // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
     let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
     if (doc) {
         // TODO Only respond with the binary, not JSON.

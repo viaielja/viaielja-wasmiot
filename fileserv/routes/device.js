@@ -11,7 +11,7 @@ module.exports = { router };
  */
 router.get("/", async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await getDb()().device.find().toArray());
+    response.json(await getDb().device.find().toArray());
 });
 
 /**

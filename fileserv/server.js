@@ -7,12 +7,11 @@ const fileSystem = require('fs'),
     http = require('http');
 const { chdir } = require('process');
 
-const { MongoClient, ObjectId } = require("mongodb");
+const { MongoClient } = require("mongodb");
 
 const bonjour = require('bonjour')();
 const express = require("express")();
 
-const routes = require("./routes");
 const { DEVICE_TYPE, DEVICE_DESC_ROUTE } = require("./utils");
 
 /**
@@ -45,6 +44,31 @@ let databaseClient;
 chdir(__dirname);
 
 const FRONT_END_DIR = path.join(__dirname, "frontend");
+
+const PORT = 3000;
+
+///////////
+// RUN MAIN
+server = express.listen(PORT, async () => {
+    // TODO Sometimes database is not ready for server operations. Consult
+    // the docker-compose tutorial?
+    await initializeDatabase();
+    console.log(db);
+    bonjourBrowser = initializeMdns();
+    console.log(`Listening on port: ${PORT}`);
+});
+
+module.exports = {
+    // From:
+    // https://stackoverflow.com/questions/24621940/how-to-properly-reuse-connection-to-mongodb-across-nodejs-application-and-module
+    getDb: function() { return db; },
+};
+
+// NOTE: This needs to be here in order to initialize database before routes get
+// access to it...
+const routes = require("./routes");
+
+
 
 /**
  * Adapted from:
@@ -234,22 +258,6 @@ express.all("/*", (_, response) => {
     response.sendFile(path.join(FRONT_END_DIR, "index.html"));
 });
 
-///////////
-// STARTUP:
-
-const PORT = 3000;
-
-async function main() {
-    server = express.listen(PORT, async () => {
-        // TODO Sometimes database is not ready for server operations. Consult
-        // the docker-compose tutorial?
-        await initializeDatabase();
-        console.log(db);
-        bonjourBrowser = initializeMdns();
-        console.log(`Listening on port: ${PORT}`);
-    });
-}
-
 ////////////
 // SHUTDOWN:
 
@@ -273,13 +281,3 @@ process.on("SIGTERM", async () => {
 
     console.log("Done!");
 });
-
-///////////
-// RUN MAIN
-main().catch(console.error);
-
-module.exports = {
-    // From:
-    // https://stackoverflow.com/questions/24621940/how-to-properly-reuse-connection-to-mongodb-across-nodejs-application-and-module
-    getDb: () => db,
-};

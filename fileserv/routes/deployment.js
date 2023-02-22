@@ -1,5 +1,6 @@
 const { Router } = require("express");
 const { getDb } = require("../server.js");
+const { ObjectId } = require("mongodb");
 
 const router = Router();
 
@@ -9,6 +10,7 @@ module.exports = { router };
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
  */
 router.get("/:deploymentId", async (request, response) => {
+    // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
     let doc = await getDb().deployment.findOne({ _id: ObjectId(request.params.deploymentId) });
     if (doc) {
         response.json(doc);
