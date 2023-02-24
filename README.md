@@ -86,10 +86,16 @@ The supervisor also needs the following (if using docker, then compose should ha
 For debugging, the devcontainer should work quite well with just using VSCode
 like you would locally.
 
-__Something that has to be done though__, is to __manually__ run `npm
-install` after getting inside the container (This might be because of bind mounting with
-the current project directory structure?). Note that this will also result in a
-_local_ `node_modules` directory in all its glory.
+### Things that __have__ to be done
+Manually run `npm install` after getting inside the container (TODO: This might be
+because of bind mounting with the current project directory structure?).
+Note that this will also result in a _local_ `node_modules` directory in all
+its glory.
+
+### Things that __might__ have to be done
+In VSCode, opening the project in devcontainer might fail. Somehow it helped 
+to locally run `docker compose -f .\docker-compose.debug.server.yml up` and
+after this the devcontainer should start opening fine.
 
 ## Getting started
 
