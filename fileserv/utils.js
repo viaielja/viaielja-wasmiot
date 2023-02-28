@@ -1,6 +1,6 @@
 const path = require('path');
 const FILE_ROOT = path.join(__dirname, "files");
-const MODULE_DIR = "module";
+const MODULE_DIR = path.join(__dirname, "files", "wasm");
 const MANIFEST_DIR = "manifest";
 // TODO: Use dot after "local" or no?
 const ORCHESTRATOR_NAME = "orchestrator-wasmiot.local.";

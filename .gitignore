@@ -131,3 +131,6 @@ dist
 
 # vim
 *.swp
+
+# Place where the orchestrator saves uploaded WASM-modules.
+fileserv/files/wasm/
