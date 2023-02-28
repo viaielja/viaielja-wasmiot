@@ -54,12 +54,10 @@ function startSearch() {
 // This function searches for a module in the given list that satisfies the required device interface
 function findModuleForDeviceInterface(requiredDeviceInterface, listOfModules) {   
     let interfaceFound = checkInterfaces(requiredDeviceInterface, listOfModules);
-   
     while (!interfaceFound) { 
         console.log("Interface not found");
         interfaceFound = checkInterfaces(requiredDeviceInterface, listOfModules);
     }
-
     console.log("Interface found!" + interfaceFound);
     return interfaceFound;
 }
@@ -70,7 +68,7 @@ let checkInterfaces = (requiredDeviceInterface, moduleList) => {
     for (let i = 0; i < requiredDeviceInterface.length; i++) {
         for (let j = 0; j < moduleList.length; j++) {
             const moduleJSON = JSON.parse(getModuleJSON(moduleList[j], "1.0.0"));
-            const moduleInterfaces = getModuleInterfaces(moduleJSON);
+            const moduleInterfaces = moduleJSON.interfaces;
             if (moduleInterfaces.includes(requiredDeviceInterface)) {
                 console.log(`module -> ${moduleJSON.id} contains ${requiredDeviceInterface}`);
                 return moduleJSON;
@@ -83,55 +81,24 @@ let checkInterfaces = (requiredDeviceInterface, moduleList) => {
 
 
 
+//checks if architecture matches
+let checkArchitecture = (moduleMetadata, deviceDescription) => {
+    return moduleMetadata.architecture === deviceDescription.architecture;
+}
 
-//check if module can be ran on a specific device by comparing module metadata and device description
-let checkArchPlatformPeripherals = (moduleMetadata, deviceDescription) => {
-    let arch = moduleMetadata.architecture;
-    let platform = moduleMetadata.platform;
-    let peripherals =moduleMetadata.peripherals;
+//checks if platform matches
+let checkPlatform = (moduleMetadata, deviceDescription) => {
+    return moduleMetadata.platform === deviceDescription.platform;
+}
 
-    if (deviceDescription.architecture === arch &&
-        deviceDescription.platform === platform &&
-        deviceDescription.peripherals.some(item => peripherals.includes(item))
-    ) {
+//checks if peripherals of device are a subset of the module peripherals
+let checkPeripherals = (moduleMetadata, deviceDescription) => {
+    if (isSubset(deviceDescription.peripherals, moduleMetadata.peripherals)) {
+        console.log("Module peripherals match!");
         return true;
     }
-    return false;
+    else { console.log("module peripherals do not match"); return false; }
 }
-
-
-//handle manifest and matching of interfaces
-function digestManifest(manifest, moduleMetadata) {
-    if (getObjects(manifest, 'roles', '') != []) {
-        console.log("this is a device deployment manifest");
-        var manifestRoles = getManifestRoles(manifest);
-        var interfaces = getValues(manifestRoles, 'interface');
-        var moduleInterfaces = getModuleInterfaces(moduleMetadata);
-
-        //save candidate name with interfaces for later
-        if (matchInterfaces(moduleInterfaces, interfaces)) {
-
-            console.log("found requested interfaces in module")
-            fileSystem.appendFile('./files/solutionCandidates.txt', JSON.stringify(moduleMetadata.id) + ' : ' + moduleInterfaces, function (err) {
-                if (err) throw err;
-                console.log('Candidate module has been saved');
-            });
-        }
-        else return;
-    }
-
-    else { console.log("this is something else"); }
-}
-
-function getModuleInterfaces(moduleMetadata) {
-    return moduleMetadata.interfaces;
-}
-
-function getManifestRoles(manifest) {
-    return getObjects(manifest, 'interface', '');
-}
-
-
 
 function makeSemverDepList(groupedList) {
     keys = Object.keys(groupedList);
@@ -155,8 +122,6 @@ function makeSemverDepList(groupedList) {
 
 }
 
-
-//makeSemverDepList(data);
 
 function makeVersionList(versions) {
     var acc = [];
@@ -193,8 +158,6 @@ function semverHelper(data, item, value) {
 
 
 
-
-
 // Returns a module as a JSON object based on its name and version from the local module library
 function getModuleWithVersion(modulename, version) {
 
@@ -219,54 +182,15 @@ function getModuleWithVersion(modulename, version) {
   }
 
 
-function checkIndividualModule(deviceManifest, deviceDescription, modulename) {
-    //TODO: handle superdependencies of modules
-    //TODO: handle loops in superdepency
-    //TODO: find most satisfying group of candidates 
-    var module = JSON.parse(getModuleJSON(modulename));
-    deviceDescription = JSON.parse(deviceDescription);
-    deviceManifest = JSON.parse(deviceManifest);
-    checkArchitecture(deviceDescription, module);
-    checkPeripherals(deviceDescription, module);
-    checkInterfaces(deviceManifest, module);
-    //TODO: create a dependency tree
-    addToCandidateList(module);
-
-
-
-
-
-}
-
-
-//returns an object containing dependencies of a module (superdependencies)
-function getModuleDependencies(moduleMetadata) {
-    var dependencies = moduleMetadata.dependencies;
-    if (dependencies === undefined) {
-        console.log("--- no dependencies found ---")
-        return undefined;
-    }
-    console.log(" --- dependencies of module --- ");
-    console.log(Object.keys(dependencies));
-    return dependencies;
-}
-
-
-function saveRequiredModules() {
+function saveRequiredModules(filename = 'solutionCandidates') {
     text = JSON.stringify(REQUIREDPACKAGES);
-    fileSystem.appendFile('./files/solutionCandidates.txt', text, function (err) {
+    fileSystem.appendFile(path.join('./files/', filename, '.txt'), text, function (err) {
         if (err) throw err;
         console.log('Candidate modules have been saved');
         REQUIREDPACKAGES = [];
     });
 }
 
-//adds a module to the list of required modules
-function addToCandidateList(module) {
-    text = module.id + ' : ' + getModuleInterfaces(module);
-    REQUIREDPACKAGES.push(text);
-
-}
 
 
 
@@ -278,27 +202,6 @@ function getModuleJSON(modulename) {
         if (err) return console.log(err + "NO SUCH MODULE");
         manifest = JSON.parse(data);
     });
-}
-
-
-//checks whether peripherals in device description and  module metadata match
-function checkPeripherals(deviceDescription, module) {
-    if (isSubset(deviceDescription.peripherals, module.peripherals)) {
-        console.log("Module peripherals match!");
-        return true;
-    }
-    else { console.log("module peripherals do not match"); return false; }
-}
-
-//checks Architecture and platform supported by module
-function checkArchitecture(deviceDescription, module) {
-    if (deviceDescription.architecture === module.architecture
-        && deviceDescription.platform
-        === module.platform) {
-        console.log("architecture and platform matches!");
-        return true;
-    }
-    return false;
 }
 
 
@@ -349,79 +252,12 @@ function matchInterfaces(moduleInterfaces, manifestInterfaces) {
     }
 }
 
-//returns interfaces from the roles
-function getInterfaces(deviceManifest) {
-    return getValues(deviceManifest.roles, "interface");
-}
-
-function matchRoles(clientManifest, modulemetadata) {
-    var clientRoles = getRoles(clientManifest),
-        serverRoles = getRoles(modulemetadata);
-
-    if (deepEqual(clientRoles, serverRoles)) {
-        console.log(serverRoles);
-    }
-    else console.log("no match found");
-
-};
-
-
-//returns list of roles
-function getRoles(manifest) {
-    console.log('---- searching for roles ----')
-    roles = [];
-    //TODO: .ever would work better here
-    for (var i in manifest.roles) {
-        roles.push(manifest.roles[i]);
-        console.log(roles[i]);
-    }
-
-    return roles;
-}
 
 
 
 startSearch();
 
-/*
-//get metadata of a module in a folder
-function getModulemetadata(dirPaths) {
-    let startpath = path.join(__dirname, 'modules');
-    for (var i in dirPaths) {
 
-        console.log(dirPaths[i]);
-        var moduleMetadata;
-        var truepath = path.join(startpath, dirPaths[i], 'modulemetadata.json');
-        //console.log(truepath);
-
-        //move to separate function for general use
-        var moduleMetadata = fileSystem.readFile(truepath, 'utf8', function (err, data) {
-            let metadata = data;
-            checkModule(JSON.parse(data));
-
-        });
-
-    }
-
-    //handels device description sent by device
-    function digestDeviceDescription(manifest, modulemetadata) {
-        // console.log(modulemetadata);
-        var deviceDescription;
-        var moduleMetadata;
-        deviceDescription = fileSystem.readFile('./files/devicedescription.json', 'UTF-8', function (err, data) {
-            if (err) return console.log(err);
-
-            console.log('---- file has been read ----')
-            deviceDescription = JSON.parse(data);
-            moduleMetadata = modulemetadata;
-
-        });
-    }
-
-}
-*/
-
-//TODO: move stuff below to separate utility file
 
 //compares two individual objects for their contents to assert equality (deep equality)
 function deepEqual(object1, object2) {
@@ -450,6 +286,7 @@ function isObject(object) {
 }
 
 //return an array of objects according to key, value, or key and value matching
+//accepts an object to search, a key to search for, and a value to search for
 function getObjects(obj, key, val) {
     var objects = [];
     for (var i in obj) {
@@ -503,7 +340,7 @@ function getKeys(obj, val) {
 
 
 //console.log(isSubset(["dht22" , "logitech_123"], ["dht22", "logitech_123", "networking"] ));
-//checks if one set is subset of another
+//checks if the latter is the subset of the first array
 function isSubset(set, subset) {
     if (subset == "") { return false };
     console.log(set);
@@ -524,9 +361,4 @@ function isSubset(set, subset) {
 
 }
 
-
-function getDirectories2(srcPath) {
-    return fileSystem.readdirSync(srcPath).filter(
-        file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
-}
 
