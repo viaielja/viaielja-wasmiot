@@ -9,89 +9,76 @@ var http = require('http'),
     
     chdir(__dirname);
 
-const { findSourceMap } = require('module');
-var REQUIREDPACKAGES = [];
-var DEVICEMANIFEST;
-var DEVICEDESCRIPTION;
+
 
 
 const getDirectories = srcPath => fileSystem.readdirSync(srcPath).filter(file => fileSystem.statSync(path.join(srcPath, file)).isDirectory());
 
 //searches the server for modules that satisfy device description and manifest
 function startSearch() {
-    //TODO: Start searching for suitable packages using saved file
-
     var listOfModules = getDirectories("./modules"); //get name of the directories of every module
     var deviceManifest = JSON.parse(getManifest());  //get device manifest as JSON
     var roles = deviceManifest.roles; //get roles from manifest
-    console.log(getManifest());
-
-
- 
+    var finalList = [];
+    var requiredPackages = [];
 
     // for each role in the manifest, get the specific modules for requested interfaces
     for (var i in roles) {
         //check if interface matches
-   
         var requiredDeviceInterface = roles[i].role_config.interface
         var requiredModule = findModuleForDeviceInterface(requiredDeviceInterface, listOfModules);
         console.log("Added module -> "  +  requiredModule.id + " with version :  " +  requiredModule.version   + "  to list of required packages");
-        REQUIREDPACKAGES.push({id : requiredModule.id,version : requiredModule.version, role : i});
-       
+        requiredPackages.push({id : requiredModule.id,version : requiredModule.version, role : i});
+    }
+    
+    console.log("Here are the required packages ");
+    console.log(requiredPackages);
+    
+    
+    // loop through REQUIREDPACKAGES and pass id and version to another function
+    requiredPackages.forEach(function(package) {
+        let role = package.role;
+        let packages = dependencytree.getAllDependencies(
+            JSON.parse(getModuleWithVersion(package.id, package.version)), traversed = new Set())
+
+
+        finalList.push({role: role, packages : dependencytree.groupBy(packages, "id") });
+    });
+    
+    console.log(finalList);
+    
+    return finalList;
+}
+
+
+// This function searches for a module in the given list that satisfies the required device interface
+function findModuleForDeviceInterface(requiredDeviceInterface, listOfModules) {   
+    let interfaceFound = checkInterfaces(requiredDeviceInterface, listOfModules);
    
-         //TODO: ACTION AFTER FINDING MODULES
+    while (!interfaceFound) { 
+        console.log("Interface not found");
+        interfaceFound = checkInterfaces(requiredDeviceInterface, listOfModules);
     }
-    console.log ("Here are the required packages ");
-    console.log(REQUIREDPACKAGES);
-    
-    /*for (const [key, value] of Object.entries(deviceManifest.roles)){
-    
-        console.log(roles)
-    }
-    /*testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
-    console.log(testModule);
-    /*dependencyList = dependencytree.makeTree(testModule);
-    console.log(dependencyList);
-    /*groupedList = dependencytree.groupBy(dependencytree.getTree(testModule), 'id')
-    console.log(groupedList);
-    
-    return dependencyList;*/
+
+    console.log("Interface found!" + interfaceFound);
+    return interfaceFound;
 }
 
 
 
-function findModuleForDeviceInterface(requiredDeviceInterface, listOfModules)
-{   
-   
-    while (!checkInterfaces(requiredDeviceInterface, listOfModules)) { console.log("Interface not found") }
-    console.log("Interface found!" + checkInterfaces(requiredDeviceInterface, listOfModules));
-    return checkInterfaces(requiredDeviceInterface, listOfModules);
-
-}
-
-
-//check if a module fills an interface required in the manifest
-let checkInterfaces = (requiredDeviceInterface, listOfModules) => {
-
+let checkInterfaces = (requiredDeviceInterface, moduleList) => {
     for (let i = 0; i < requiredDeviceInterface.length; i++) {
-        
-    
-        for (let j = 0; j < listOfModules.length; j++) {
-            var moduleInterfaces = getModuleInterfaces(JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")));
-            console.log(JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")))
-            console.log(moduleInterfaces);
-            console.log(requiredDeviceInterface)
-
+        for (let j = 0; j < moduleList.length; j++) {
+            const moduleJSON = JSON.parse(getModuleJSON(moduleList[j], "1.0.0"));
+            const moduleInterfaces = getModuleInterfaces(moduleJSON);
             if (moduleInterfaces.includes(requiredDeviceInterface)) {
-                console.log("module -> "  + JSON.parse(getModuleJSON(listOfModules[j], "1.0.0")).id + "  contains  " + requiredDeviceInterface )
-                return JSON.parse(getModuleJSON(listOfModules[j], "1.0.0"));
+                console.log(`module -> ${moduleJSON.id} contains ${requiredDeviceInterface}`);
+                return moduleJSON;
             }
         }
-
-}
+    }
     return false;
 }
-
 
 
 
@@ -145,28 +132,6 @@ function getManifestRoles(manifest) {
 }
 
 
-data = {
-    networking: [
-        { id: 'networking', version: '1.0.0' },
-        { id: 'networking', version: '1.0.0' }
-    ],
-    dht22_logger: [
-        { id: 'dht22_logger', version: '1.0.0' },
-        { id: 'dht22_logger', version: '1.0.0' },
-        { id: 'dht22_logger', version: '1.0.0' },
-        { id: 'dht22_logger', version: '1.0.0' },
-        { id: 'dht22_logger', version: '1.0.0' },
-        { id: 'dht22_logger', version: '1.0.0' }
-    ],
-    supplement: [
-        { id: 'supplement', version: '1.0.0' },
-        { id: 'supplement', version: '1.0.0' }
-    ],
-    test_module: [
-        { id: 'test_module', version: '1.0.0' },
-        { id: 'test_module', version: '1.0.0' }
-    ]
-}
 
 function makeSemverDepList(groupedList) {
     keys = Object.keys(groupedList);
@@ -230,28 +195,28 @@ function semverHelper(data, item, value) {
 
 
 
-//returns module by its name and version from local module library
+// Returns a module as a JSON object based on its name and version from the local module library
 function getModuleWithVersion(modulename, version) {
 
-    //returns the json from a module based on the name
+    // Returns the JSON for a module based on its name and version
     function getModuleJSON(modulename, version) {
-        if (!modulename) { return null }
-        if (!version) { console.log("No such version, defaulting to 1.0.0 " + modulename + version); return getModuleWithVersion(modulename, "1.0.0") };
-        let startpath = path.join(__dirname, 'modules');
-        let fixedVersion = modulename + "-" + version;
-        var truepath = path.join(startpath, modulename, fixedVersion, 'modulemetadata.json');
-        return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
-            if (err) return console.log(err + "NO SUCH MODULE");
-            manifest = JSON.parse(data);
-        });
+      // If either `modulename` or `version` is falsy, log an error message and return the module with the same name.
+      if (!modulename || !version) {
+        console.log("No such version " + modulename + version);
+        return getModuleByName(modulename);
+      }
+      // Construct the file path for the module's `modulemetadata.json` file based on its name and version
+      const startpath = path.join(__dirname, 'modules');
+      const fixedVersion = modulename + "-" + version;
+      const truepath = path.join(startpath, modulename, fixedVersion, 'modulemetadata.json');
+      // Read the module metadata from the file system and parse it as JSON
+      return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
+        if (err) return console.log(err + "NO SUCH MODULE");
+        manifest = JSON.parse(data);
+      });
     }
-    //console.log("NAME OF FETCHED MODULE:   ");
-    //console.log(modulename);
-
-
     return getModuleJSON(modulename, version);
-
-}
+  }
 
 
 function checkIndividualModule(deviceManifest, deviceDescription, modulename) {

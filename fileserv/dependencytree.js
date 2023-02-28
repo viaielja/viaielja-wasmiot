@@ -66,7 +66,7 @@ var modules =
 
 
 var testModule = JSON.parse(getModuleWithVersion("dht22_logger", "1.0.2"));
-var testList = [];
+var testList = getAllDependencies(testModule, traversed = new Set());
 
 console.log(testList)
 
@@ -83,55 +83,54 @@ function checkMatches(list, req) {
     return matches;
 };
 
-
-
-
-
-//
-// Creates a LIST (not a tree at this point) of modules dependencies. If the module is in the list but the version differs, creates a new item in the list
-function makeTree(node) {
-    var list = [];
-    let reqs = node.dependencies;
-
-
-    let h = {
-        id: node.id,
-        version: node.version //TODO: add semver later
-    }
-    testList.push(h);
-    if (!isEmpty(node.dependencies[0])) {
-        for (var i in reqs) {
-
-
-
-            if (getValues(testList, "id").includes(Object.keys(reqs[i])[0])) {
-                //add check for version 
-                let j = {
-                    id: Object.keys(reqs[i])[0],
-                    version: getValues(reqs[i], "version")[0]
-                }
-
-
-                var listToSearch = getObjects(testList, "id", Object.keys(reqs[i])[0]);
-
-
-
-                if (!getValues(listToSearch, "version").includes(j.version)) {
-
-                    makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
-                }
-            }
-
-
-
-            if (!getValues(testList, "id").includes(Object.keys(reqs[i])[0]) && !getValues(testList, "version").includes(reqs[i].version)) {
-
-                makeTree(JSON.parse(getModuleWithVersion(Object.keys(reqs[i])[0], getValues(reqs[i], "version")[0])))
-            }
+function getAllDependencies(module, traversed) {
+    let dependencies = module.dependencies || [];
+    let allDependencies = dependencies.map(dependency => {
+      let dep = Object.entries(dependency)[0];
+      let dependencyName = dep[0];
+      let dependencyVersion = dep[1].version;
+      let dependencyModule = JSON.parse(getModuleWithVersion(dependencyName, dependencyVersion));
+      if (traversed.has(`${dependencyModule.id}:${dependencyModule.version}`)) {
+        return [];
+      }
+      traversed.add(`${dependencyModule.id}:${dependencyModule.version}`);
+      return getAllDependencies(dependencyModule, traversed);
+    });
+    return [module].concat(allDependencies.flat());
+  }
+// Recursively builds a list of a module and its dependencies
+function makeTree(node, list = []) {
+    // Get the list of module dependencies
+    const reqs = node.dependencies;
+  
+    // Create an object for the current module and add it to the list
+    const module = {
+      id: node.id,
+      version: node.version,
+    };
+    list.push(module);
+  
+    // Recursively process each dependency
+    if (reqs.length > 0) {
+      for (const req of reqs) {
+        // Check if the dependency is already in the list
+        const depId = Object.keys(req)[0];
+        const depVersion = getValues(req, 'version')[0];
+        const depInList = getObjects(list, 'id', depId)[0];
+  
+        // If the dependency is not already in the list, add it
+        if (!depInList) {
+          makeTree(JSON.parse(getModuleWithVersion(depId, depVersion)), list);
         }
+        // If the dependency is in the list but has a different version, add it as a separate item
+        else if (depInList.version !== depVersion) {
+          makeTree(JSON.parse(getModuleWithVersion(depId, depVersion)), list);
+        }
+      }
     }
-    return testList;
-}
+  
+    return list;
+  }
 
 
 function getTree(node) {
@@ -211,58 +210,66 @@ function groupBy(xs, key) {
 
 
 
-
-
-//return an array of values that match on a certain key
+// Returns an array of values that match a certain key
 function getValues(obj, key) {
-    var objects = [];
-
-    for (var i in obj) {
-        if (!obj.hasOwnProperty(i)) continue;
-        if (typeof obj[i] == 'object') {
-            objects = objects.concat(getValues(obj[i], key));
-        } else if (i == key) {
-            objects.push(obj[i]);
-        }
+    const values = [];
+  
+    for (const prop in obj) {
+      // Ignore inherited properties
+      if (!Object.prototype.hasOwnProperty.call(obj, prop)) {
+        continue;
+      }
+  
+      if (typeof obj[prop] === 'object') {
+        // Recursively get values for nested objects
+        values.push(...getValues(obj[prop], key));
+      } else if (prop === key) {
+        // Add the value to the array if the key matches
+        values.push(obj[prop]);
+      }
     }
+  
+    return values;
+  }
 
-    return objects;
-}
-
-//Returns true if object is empty 
+// Returns true if an object is empty, i.e., has no own properties
 function isEmpty(obj) {
-    for (var prop in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, prop)) {
-            return false;
-        }
+    // Check if the object has any own properties
+    for (const prop in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, prop)) {
+        // If the object has at least one own property, it is not empty
+        return false;
+      }
     }
-
+  
     return JSON.stringify(obj) === JSON.stringify({});
-}
+  }
 
 
 
-
-
-//returns module by its name and version from local module library
+// Returns a module as a JSON object based on its name and version from the local module library
 function getModuleWithVersion(modulename, version) {
 
-    //returns the json from a module based on the name
+    // Returns the JSON for a module based on its name and version
     function getModuleJSON(modulename, version) {
-        if (!modulename || !version) { console.log("No such version " + modulename + version); return getModuleByName(modulename) };
-        let startpath = path.join(__dirname, 'modules');
-        let fixedVersion = modulename + "-" + version;
-        var truepath = path.join(startpath, modulename, fixedVersion, 'modulemetadata.json');
-        return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
-            if (err) return console.log(err + "NO SUCH MODULE");
-            manifest = JSON.parse(data);
-        });
+      // If either `modulename` or `version` is falsy, log an error message and return the module with the same name.
+      if (!modulename || !version) {
+        console.log("No such version " + modulename + version);
+        return getModuleByName(modulename);
+      }
+      // Construct the file path for the module's `modulemetadata.json` file based on its name and version
+      const startpath = path.join(__dirname, 'modules');
+      const fixedVersion = modulename + "-" + version;
+      const truepath = path.join(startpath, modulename, fixedVersion, 'modulemetadata.json');
+      // Read the module metadata from the file system and parse it as JSON
+      return fileSystem.readFileSync(truepath, 'UTF-8', function (err, data) {
+        if (err) return console.log(err + "NO SUCH MODULE");
+        manifest = JSON.parse(data);
+      });
     }
-
-
+  
     return getModuleJSON(modulename, version);
-
-}
+  }
 
 
 //@return module with matching name as json object
@@ -339,5 +346,4 @@ function getObjects(obj, key, val) {
 
 
 exports.groupBy = groupBy;
-exports.getTree = getTree;
-exports.makeTree = makeTree;
+exports.getAllDependencies = getAllDependencies;
