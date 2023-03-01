@@ -236,13 +236,14 @@ const requestLogger = (request, response, next) => {
     console.log(`received ${request.method}: ${request.originalUrl}`);
     if (request.method == "POST") {
         // If client is sending a POST request, log sent data.
-        console.log(`body: ${JSON.stringify(request.body)}`);
+        console.log(`body: ${JSON.stringify(request.body, null, 2)}`);
     }
     next();
 }
 
 // Enable JSON-body parsing (NOTE: content-type by default has to be application/json).
 express.use(require("express").json());
+express.use(require("express").urlencoded());
 express.use(requestLogger);
 
 //////////

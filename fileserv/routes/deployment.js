@@ -30,16 +30,39 @@ router.get("/", async (request, response) => {
 });
 
 /**
- * POST a new deployment(TODO is that correct?) manifest to add to
- * orchestrator's database.
+ * POST a new deployment manifest to add to orchestrator's database.
+ * Currently accepts a POST-request with "json" field in the body which in turn
+ * corresponds to the actual deployment TODO Separate this function to a
+ * separate "/handle_form/deployment"-route.
  */
 router.post("/", async (request, response) => {
-    let data = request.body;
-    let deploymentName = data.id;
+    let data = request.body["json"] ?? null;
+    // TODO Move this handling to match the pattern below.
+    if (data === null) {
+        response
+            .status(400)
+            .send("Field 'json' containing the deployment not found in request")
+            .end();
+        return;
+    } else {
+        try {
+            data = JSON.parse(data);
+        } catch (error) {
+            response
+                .status(400)
+                .send(error.message)
+                .end();
+            return;
+        }
+    }
 
+    // TODO Deployment validation.
+
+    let deploymentName = data.name;
     let status = 200;
     let message = `Manifest ${deploymentName} added`;
 
+    // Ignore deployments with an already existing name.
     // TODO When would a new deployment not be accepted? Based on user credits??
     let doc = await getDb().deployment.findOne({ name: deploymentName });
     if (doc) {
@@ -50,7 +73,7 @@ router.post("/", async (request, response) => {
         // Add the new deployment to database.
         // TODO Only add what is allowed (e.g. _id should not come from POST).
         // TODO Add the whole body not just name.
-        let result = await getDb().deployment.insertOne({ name: deploymentName });
+        let result = await getDb().deployment.insertOne(data);
         if (!result.acknowledged) {
             console.log(`Failed adding the manifest: ${err}`);
             status = 500;
