@@ -27,19 +27,19 @@ services:
     # Mounting overwrites files/directories in image.
       - .:/app
   
-  # Import the other services from original. TODO Can these be just
-  # automatically "imported" from the parent compose file?
+  # Import the other services from original.
+  # TODO Remove these imports and just use the predefined/named network for all.
   adequate-webcam-laptop:
     extends:
-      file: docker-compose.yml
+      file: docker-compose.example.yml
       service: adequate-webcam-laptop
   lousy-webcam-laptop:
     extends:
-      file: docker-compose.yml
+      file: docker-compose.example.yml
       service: lousy-webcam-laptop
   low-power-temperature-sensor:
     extends:
-      file: docker-compose.yml
+      file: docker-compose.example.yml
       service: low-power-temperature-sensor
 
   mongo:
@@ -50,15 +50,3 @@ services:
 volumes:
   mongo-config:
   mongo-db:
-
-  device1-configs:
-  device1-modules:
-  device1-output:
-
-  device2-configs:
-  device2-modules:
-  device2-output:
-
-  device3-configs:
-  device3-modules:
-  device3-output:

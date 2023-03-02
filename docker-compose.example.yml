@@ -1,0 +1,117 @@
+version: '3.4'
+
+services:
+  # "Import" the orchestrator-stuff as is.
+  orchestrator-example:
+    extends:
+      file: ./docker-compose.yml
+      service: orchestrator
+    profiles:
+      - server
+
+  mongo:
+    extends:
+      file: ./docker-compose.yml
+      service: mongo
+    profiles:
+      - server
+
+
+  # TODO Set IOT-device hostnames to end with ".local."? Considered using `domainname`
+  # (see https://docs.docker.com/compose/compose-file/#domainname) but had no
+  # luck.
+  #
+  device-base:
+    profiles:
+      # NOTE: This makes it so that the service can be extended and the
+      # ::OVERRIDE::-marked settings overridden without starting this service
+      # during `docker compose up`. The "inherited" services need to be started
+      # on their own though (separate profile)...
+      - ABSTRACT_BASE_HACK_DO_NOT_USE
+    build:
+      context: ./flask-host/
+      dockerfile: .devcontainer/Dockerfile
+      target: run
+      # args:
+      #   - DEVICE_NAME='thingi' # ::OVERRIDE::
+      #   # TODO Are these needed now that using git submodules (earlier for
+      #   # pulling from gitlab in separate local clone?).
+      #   #- DEPLOY_USER=${DEPLOY_USER}
+      #   #- DEPLOY_TOKEN=${DEPLOY_TOKEN}
+    # ports:
+    #   # 5000 is the default Flask-port that is probably used.
+    #   - 0:5000 # ::OVERRIDE::
+    volumes:
+      - ./flask-host/host_app:/app/host_app:bind
+
+  adequate-webcam-laptop:
+    extends: device-base
+    profiles:
+      - device
+    build:
+      args:
+        - DEVICE_TYPE='webcam-laptop'
+        - DEVICE_NAME='adequate-webcam-laptop'
+    ports:
+      - 3001:5000
+    volumes:
+      - ./example/device1/configs:/app/configs
+      - ./example/device1/modules:/app/modules
+      - ./example/device1/output:/app/output
+    deploy:
+      # Simulate constrained memory. See
+      # https://docs.docker.com/config/containers/resource_constraints/
+      # https://docs.docker.com/compose/compose-file/compose-file-v3/#resources
+      resources:
+        limits:
+          cpus: '0.5'
+          # Minimum would be 6 megabytes '6M'.
+          memory: 8G
+
+
+  lousy-webcam-laptop:
+    extends: device-base
+    profiles:
+      - device
+    build:
+      args:
+        - DEVICE_TYPE='webcam-laptop'
+        - DEVICE_NAME='lousy-webcam-laptop'
+    ports:
+      - 3002:5000
+    volumes:
+      - ./example/device2/configs:/app/configs
+      - ./example/device2/modules:/app/modules
+      - ./example/device2/output:/app/output
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 8G
+
+
+  low-power-temperature-sensor:
+    extends: device-base
+    profiles:
+      - device
+    build:
+      args:
+        - DEVICE_TYPE='temperature-sensor'
+        - DEVICE_NAME='basic-temperature-sensor'
+    ports:
+      - 3003:5000
+    volumes:
+      - ./example/device3/configs:/app/configs
+      - ./example/device3/modules:/app/modules
+      - ./example/device3/output:/app/output
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          # NOTE: It seems that at <40M the container shuts down soon after
+          # startup with 'Exited(137)'
+          memory: 50M
+
+volumes:
+  mongo-config:
+  mongo-db:
