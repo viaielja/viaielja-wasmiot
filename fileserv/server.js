@@ -75,6 +75,10 @@ const routes = require("./routes");
  * https://www.mongodb.com/developer/languages/javascript/node-connect-mongodb/
  */
 async function initializeDatabase() {
+    // NOTE: The hostname here (before ":<port>") MUST MATCH THE HOSTNAME ON THE
+    // NETWORK for example with Docker Compose (i.e., do not name the
+    // mongo-service differently in the .yml -files. Or otherwise TODO pass the
+    // hostname from environment)
     const uri = `mongodb://${process.env.CONFIG_MONGODB_ADMINUSERNAME}:${process.env.CONFIG_MONGODB_ADMINPASSWORD}@mongo:27017/`;
     databaseClient = new MongoClient(uri);
     try {
