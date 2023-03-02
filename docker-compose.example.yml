@@ -4,13 +4,14 @@ services:
   # "Import" the orchestrator-stuff as is.
   orchestrator-example:
     extends:
-      file: ../docker-compose.yml
+      file: ./docker-compose.yml
       service: orchestrator
     profiles:
       - server
-  mongo-example:
+
+  mongo:
     extends:
-      file: ../docker-compose.yml
+      file: ./docker-compose.yml
       service: mongo
     profiles:
       - server
@@ -28,7 +29,7 @@ services:
       # on their own though (separate profile)...
       - ABSTRACT_BASE_HACK_DO_NOT_USE
     build:
-      context: ../flask-host/
+      context: ./flask-host/
       dockerfile: .devcontainer/Dockerfile
       target: run
       # args:
@@ -41,7 +42,7 @@ services:
     #   # 5000 is the default Flask-port that is probably used.
     #   - 0:5000 # ::OVERRIDE::
     volumes:
-      - ../flask-host/host_app:/app/host_app:bind
+      - ./flask-host/host_app:/app/host_app:bind
 
   adequate-webcam-laptop:
     extends: device-base
@@ -54,9 +55,9 @@ services:
     ports:
       - 3001:5000
     volumes:
-      - ./device1/configs:/app/configs
-      - ./device1/modules:/app/modules
-      - ./device1/output:/app/output
+      - ./example/device1/configs:/app/configs
+      - ./example/device1/modules:/app/modules
+      - ./example/device1/output:/app/output
     deploy:
       # Simulate constrained memory. See
       # https://docs.docker.com/config/containers/resource_constraints/
@@ -79,9 +80,9 @@ services:
     ports:
       - 3002:5000
     volumes:
-      - ./device2/configs:/app/configs
-      - ./device2/modules:/app/modules
-      - ./device2/output:/app/output
+      - ./example/device2/configs:/app/configs
+      - ./example/device2/modules:/app/modules
+      - ./example/device2/output:/app/output
     deploy:
       resources:
         limits:
@@ -100,9 +101,9 @@ services:
     ports:
       - 3003:5000
     volumes:
-      - ./device3/configs:/app/configs
-      - ./device3/modules:/app/modules
-      - ./device3/output:/app/output
+      - ./example/device3/configs:/app/configs
+      - ./example/device3/modules:/app/modules
+      - ./example/device3/output:/app/output
     deploy:
       resources:
         limits:
