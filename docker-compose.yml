@@ -30,3 +30,9 @@ services:
 volumes:
   mongo-config:
   mongo-db:
+
+networks:
+  # Network where orchestrator (which could in the future be separate from the
+  # "(web)server" and its routes?) lives in.
+  default:
+    name: wasmiot-net

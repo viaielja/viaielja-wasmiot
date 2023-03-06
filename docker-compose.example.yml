@@ -115,3 +115,7 @@ services:
 volumes:
   mongo-config:
   mongo-db:
+
+networks:
+  default:
+    name: wasmiot-net
