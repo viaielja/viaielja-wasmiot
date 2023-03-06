@@ -1,14 +1,15 @@
 const { Router } = require("express");
-const { getDb } = require("../server.js");
 const { ObjectId } = require("mongodb");
-const { MODULE_DIR } = require("../utils.js");
-const path = require("path");
-const multer = require("multer");
+
+const { getDb } = require("../server.js");
+const utils = require("../utils.js");
+
 
 const router = Router();
+
 // Set where the wasm-binaries will be saved into on the filesystem.
 // From: https://www.twilio.com/blog/handle-file-uploads-node-express
-const upload = multer({ dest: MODULE_DIR });
+const moduleUpload = require("multer")({ dest: utils.MODULE_DIR }).single("module");
 
 module.exports = { router };
 
@@ -40,27 +41,18 @@ router.get("/", async (request, response) => {
  * Read the Wasm-file from form-input and save it to filesystem. Insert its path
  * to database and respond with the URL that serves the newly added Wasm-file.
  */
-router.post("/", /*fieldValidationMiddleware,*/ upload.single("module"), async (request, response) => {
-    // Check that request contains a file upload.
-    if (!request.hasOwnProperty("file")) {
-        response.status(400);
-        console.log("Bad request; needs a file-input for the module field");
-        return;
-    }
-
-    const file = request.file.path;
-    let moduleId = (await getDb()
+router.post("/", moduleUpload, validateFileFormSubmission, utils.tempFormValidate, async (request, response) => {
+    const moduleId = (await getDb()
         .module
         .insertOne({
-            "humanReadableName": file.originalname,
-            "fileName": file.filename,
-            "path": file.path
+            "humanReadableName": request.file.originalname,
+            "fileName": request.file.filename,
+            "path": request.file.path
         }))
         .insertedId;
     // Wasm-files are identified by their database-id.
     response
-        .location(request.baseUrl + "/" + moduleId)
-        .send();
+        .send("Uploaded module with id: "+ moduleId);
 });
 
 /**
@@ -70,3 +62,19 @@ router.delete("/", /*authenticationMiddleware,*/ async (request, response) => {
     getDb().module.deleteMany({});
     response.status(202).send(); // Accepted.
 });
+
+/**
+ * Middleware to confirm existence of an incoming file from a user-submitted
+ * form (which apparently `multer` does not do itself...).
+ */
+function validateFileFormSubmission(request, response, next) {
+    if (request.method !== "POST") { next(); return; }
+
+    // Check that request contains a file upload.
+    if (!request.hasOwnProperty("file")) {
+        response.status(400).send("file-submission missing");
+        console.log("Bad request; needs a file-input for the module field");
+        return;
+    }
+    next();
+}

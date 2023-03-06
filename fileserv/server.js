@@ -8,11 +8,12 @@ const fileSystem = require('fs'),
 const { chdir } = require('process');
 
 const { MongoClient } = require("mongodb");
+const express = require("express");
 
 const bonjour = require('bonjour')();
-const express = require("express")();
+const expressApp = express();
 
-const { DEVICE_TYPE, DEVICE_DESC_ROUTE } = require("./utils");
+const { DEVICE_TYPE, DEVICE_DESC_ROUTE, tempFormValidate } = require("./utils");
 
 /**
  * Way to operate on the collections in database.
@@ -49,14 +50,27 @@ const PORT = 3000;
 
 ///////////
 // RUN MAIN
-server = express.listen(PORT, async () => {
-    // TODO Sometimes database is not ready for server operations. Consult
-    // the docker-compose tutorial?
+(async function main() {
+    console.log("Orchestrator starting...")
+
+    // Must wait for database before starting to listen for web-clients.
     await initializeDatabase();
     console.log(db);
+    // FIXME: The following print (i.e., calling stringify) would crash with
+    // 'TypeError: Converting circular structure to JSON'.
+    //console.log(`Database: ${JSON.stringify(db, null, 2)}`);
+
     bonjourBrowser = initializeMdns();
-    console.log(`Listening on port: ${PORT}`);
-});
+
+    server = expressApp.listen(PORT, async () => {
+        console.log(`Listening on port: ${PORT}`);
+    });
+})()
+    .then(_ => { console.log("Finished!"); })
+    .catch(e => {
+        console.log("Orchestrator failed to start: " + e);
+        shutDown();
+    });
 
 module.exports = {
     // From:
@@ -64,8 +78,8 @@ module.exports = {
     getDb: function() { return db; },
 };
 
-// NOTE: This needs to be here in order to initialize database before routes get
-// access to it...
+// NOTE: This needs to be placed after calling main in order to initialize
+// database before routes get access to it...
 const routes = require("./routes");
 
 
@@ -94,6 +108,8 @@ async function initializeDatabase() {
         console.error("FAILED CONNECTING TO DATABASE >>>");
         console.error(e);
         console.error("<<<");
+        // Propagate the exception to caller.
+        throw e;
     }
 }
 
@@ -230,14 +246,21 @@ function initializeMdns() {
 }
 
 
-///////////////////////////////////////////
-// MIDDLEWARES (Note: call-order matters!):
+//////////
+// ROUTES AND MIDDLEWARE (Note: call-order matters!):
 
 /**
- * Middleware to log all requests as needed.
+ * Middleware to log request methods.
  */
-const requestLogger = (request, response, next) => {
+const requestMethodLogger = (request, response, next) => {
     console.log(`received ${request.method}: ${request.originalUrl}`);
+    next();
+}
+
+/**
+ * Middleware to log POST-requests.
+ */
+const postLogger = (request, response, next) => {
     if (request.method == "POST") {
         // If client is sending a POST request, log sent data.
         console.log(`body: ${JSON.stringify(request.body, null, 2)}`);
@@ -245,23 +268,45 @@ const requestLogger = (request, response, next) => {
     next();
 }
 
-// Enable JSON-body parsing (NOTE: content-type by default has to be application/json).
-express.use(require("express").json());
-express.use(require("express").urlencoded());
-express.use(requestLogger);
+const jsonMw = express.json();
+const urlencodedExtendedMw = express.urlencoded({ extended: true });
 
-//////////
-// ROUTES:
+// Order the middleware so that for example POST-body is parsed before trying to
+// log it.
+// TODO: Do __SCHEMA__ validation for POSTs (checking for correct fields and
+// types etc.).
+// TODO: Can the more fine-grained authentication (i.e. on DELETEs and POSTs but
+// not on GETs) be done here?
 
-express.use("/file/device", routes.device);
-express.use("/file/module", routes.modules);
-express.use("/file/manifest", routes.deployment);
+expressApp.use(requestMethodLogger);
+
+expressApp.use(
+    "/file/device",
+    [jsonMw, urlencodedExtendedMw, postLogger, tempFormValidate, routes.device]
+);
+
+expressApp.use(
+    "/file/module",
+    [routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...
+);
+
+expressApp.use(
+    "/file/manifest",
+    [jsonMw, urlencodedExtendedMw, postLogger, tempFormValidate, routes.deployment]
+);
 
 /**
- * Direct to some "index-page" when bad URL used.
+ * Direct to a user-friendlier index-page.
  */
-express.all("/*", (_, response) => {
+expressApp.get("/", (_, response) => {
     response.sendFile(path.join(FRONT_END_DIR, "index.html"));
+});
+
+/**
+ * Direct to error-page when bad URL used.
+ */
+expressApp.all("/*", (_, response) => {
+    response.send("Bad URL").status(404);
 });
 
 ////////////
@@ -271,13 +316,23 @@ express.all("/*", (_, response) => {
 // TODO CTRL-C is apparently handled with SIGINT instead.
 
 process.on("SIGTERM", async () => {
-    server.close((err) => {
-        // Shutdown the mdns
-        if (err) {
-            console.log(`Errors from earlier 'close' event: ${err}`);
-        }
-        console.log("Closing server...");
-    });
+    shutDown();
+});
+
+/**
+ * Shut the server and associated services down.
+ * TODO: Might not be this easy to do...
+ */
+async function shutDown() {
+    if (server) {
+        server.close((err) => {
+            // Shutdown the mdns
+            if (err) {
+                console.log(`Errors from earlier 'close' event: ${err}`);
+            }
+            console.log("Closing server...");
+        });
+    }
 
     bonjour.destroy();
     console.log("Destroyed the mDNS instance.");
@@ -285,5 +340,5 @@ process.on("SIGTERM", async () => {
     await databaseClient.close();
     console.log("Closed database connection.");
 
-    console.log("Done!");
-});
+    console.log("Orchestrator shutdown finished.");
+}

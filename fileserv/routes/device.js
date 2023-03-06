@@ -1,7 +1,9 @@
-const { Router } = require("express");
+const express = require("express");
+
 const { getDb } = require("../server");
 
-const router = Router();
+
+const router = express.Router();
 
 module.exports = { router };
 

@@ -12,6 +12,15 @@
       display: flex;
       justify-content: space-around;
     }
+
+    #form-container {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #form-container > div {
+      margin-top: 15%;
+    }
   </style>
   <script>
     function addModuleRow(event) {
@@ -31,6 +40,7 @@
   <div>
     <div>
       <h2>Compose your application</h2>
+      <p>TODO: &lt;&lt; Cool graph-editor goes here &gt;&gt;</p>
       <form action="/file/deployment">
         <ol id="module-sequence-list">
             <li><input type="text"></li>
@@ -45,20 +55,37 @@
         <li><a href="/file/manifest">Deployments</a></li>
       </ul>
     </div>
-    <div>
-      <form id="deployment-form" action="/file/manifest" method="POST" enctype="application/json">
-        <fieldset>
-            <legend>Add a deployment</legend>
-            <div>
-                <label for="deployment-json">Deployment in JSON</label>
-                <textarea id="deployment-json" name="json" required></textarea>
-            </div>
-            <!--div>
-                <label>File (JSON)<input type="file" required/></label>
-            </div-->
-        </fieldset>
-        <input type="submit" value="Submit"/>
-      </form>
+    <div id="form-container">
+      <div>
+        <form id="module-form" action="/file/module" method="POST" enctype="multipart/form-data">
+          <fieldset>
+              <legend>Add a module</legend>
+              <div>
+                  <label for="module-json">Module metadata in JSON</label>
+                  <textarea id="module-json" name="json" required></textarea>
+              </div>
+              <div>
+                  <label>Wasm executable<input type="file" name="module" required/></label>
+              </div>
+          </fieldset>
+          <input type="submit" value="Submit"/>
+        </form>
+      </div>
+      <div>
+        <form id="deployment-form" action="/file/manifest" method="POST" enctype="application/json">
+          <fieldset>
+              <legend>Add a deployment</legend>
+              <div>
+                  <label for="deployment-json">Deployment in JSON</label>
+                  <textarea id="deployment-json" name="json" required></textarea>
+              </div>
+              <!--div>
+                  <label>File (JSON)<input type="file" required/></label>
+              </div-->
+          </fieldset>
+          <input type="submit" value="Submit"/>
+        </form>
+      </div>
     </div>
   </div>
 </body>
