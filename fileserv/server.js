@@ -49,14 +49,27 @@ const PORT = 3000;
 
 ///////////
 // RUN MAIN
-server = express.listen(PORT, async () => {
-    // TODO Sometimes database is not ready for server operations. Consult
-    // the docker-compose tutorial?
+(async function main() {
+    console.log("Orchestrator starting...")
+
+    // Must wait for database before starting to listen for web-clients.
     await initializeDatabase();
     console.log(db);
+    // FIXME: The following print (i.e., calling stringify) would crash with
+    // 'TypeError: Converting circular structure to JSON'.
+    //console.log(`Database: ${JSON.stringify(db, null, 2)}`);
+
     bonjourBrowser = initializeMdns();
-    console.log(`Listening on port: ${PORT}`);
-});
+
+    server = express.listen(PORT, async () => {
+        console.log(`Listening on port: ${PORT}`);
+    });
+})()
+    .then(_ => { console.log("Finished!"); })
+    .catch(e => {
+        console.log("Orchestrator failed to start: " + e);
+        shutDown();
+    });
 
 module.exports = {
     // From:
@@ -94,6 +107,8 @@ async function initializeDatabase() {
         console.error("FAILED CONNECTING TO DATABASE >>>");
         console.error(e);
         console.error("<<<");
+        // Propagate the exception to caller.
+        throw e;
     }
 }
 
@@ -271,13 +286,23 @@ express.all("/*", (_, response) => {
 // TODO CTRL-C is apparently handled with SIGINT instead.
 
 process.on("SIGTERM", async () => {
-    server.close((err) => {
-        // Shutdown the mdns
-        if (err) {
-            console.log(`Errors from earlier 'close' event: ${err}`);
-        }
-        console.log("Closing server...");
-    });
+    shutDown();
+});
+
+/**
+ * Shut the server and associated services down.
+ * TODO: Might not be this easy to do...
+ */
+async function shutDown() {
+    if (server) {
+        server.close((err) => {
+            // Shutdown the mdns
+            if (err) {
+                console.log(`Errors from earlier 'close' event: ${err}`);
+            }
+            console.log("Closing server...");
+        });
+    }
 
     bonjour.destroy();
     console.log("Destroyed the mDNS instance.");
@@ -285,5 +310,5 @@ process.on("SIGTERM", async () => {
     await databaseClient.close();
     console.log("Closed database connection.");
 
-    console.log("Done!");
-});
+    console.log("Orchestrator shutdown finished.");
+}
