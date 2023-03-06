@@ -8,11 +8,12 @@ const fileSystem = require('fs'),
 const { chdir } = require('process');
 
 const { MongoClient } = require("mongodb");
+const express = require("express");
 
 const bonjour = require('bonjour')();
-const express = require("express")();
+const expressApp = express();
 
-const { DEVICE_TYPE, DEVICE_DESC_ROUTE } = require("./utils");
+const { DEVICE_TYPE, DEVICE_DESC_ROUTE, tempFormValidate } = require("./utils");
 
 /**
  * Way to operate on the collections in database.
@@ -61,7 +62,7 @@ const PORT = 3000;
 
     bonjourBrowser = initializeMdns();
 
-    server = express.listen(PORT, async () => {
+    server = expressApp.listen(PORT, async () => {
         console.log(`Listening on port: ${PORT}`);
     });
 })()
@@ -77,8 +78,8 @@ module.exports = {
     getDb: function() { return db; },
 };
 
-// NOTE: This needs to be here in order to initialize database before routes get
-// access to it...
+// NOTE: This needs to be placed after calling main in order to initialize
+// database before routes get access to it...
 const routes = require("./routes");
 
 
@@ -245,14 +246,21 @@ function initializeMdns() {
 }
 
 
-///////////////////////////////////////////
-// MIDDLEWARES (Note: call-order matters!):
+//////////
+// ROUTES AND MIDDLEWARE (Note: call-order matters!):
 
 /**
- * Middleware to log all requests as needed.
+ * Middleware to log request methods.
  */
-const requestLogger = (request, response, next) => {
+const requestMethodLogger = (request, response, next) => {
     console.log(`received ${request.method}: ${request.originalUrl}`);
+    next();
+}
+
+/**
+ * Middleware to log POST-requests.
+ */
+const postLogger = (request, response, next) => {
     if (request.method == "POST") {
         // If client is sending a POST request, log sent data.
         console.log(`body: ${JSON.stringify(request.body, null, 2)}`);
@@ -260,23 +268,45 @@ const requestLogger = (request, response, next) => {
     next();
 }
 
-// Enable JSON-body parsing (NOTE: content-type by default has to be application/json).
-express.use(require("express").json());
-express.use(require("express").urlencoded());
-express.use(requestLogger);
+const jsonMw = express.json();
+const urlencodedExtendedMw = express.urlencoded({ extended: true });
 
-//////////
-// ROUTES:
+// Order the middleware so that for example POST-body is parsed before trying to
+// log it.
+// TODO: Do __SCHEMA__ validation for POSTs (checking for correct fields and
+// types etc.).
+// TODO: Can the more fine-grained authentication (i.e. on DELETEs and POSTs but
+// not on GETs) be done here?
 
-express.use("/file/device", routes.device);
-express.use("/file/module", routes.modules);
-express.use("/file/manifest", routes.deployment);
+expressApp.use(requestMethodLogger);
+
+expressApp.use(
+    "/file/device",
+    [jsonMw, urlencodedExtendedMw, postLogger, tempFormValidate, routes.device]
+);
+
+expressApp.use(
+    "/file/module",
+    [routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...
+);
+
+expressApp.use(
+    "/file/manifest",
+    [jsonMw, urlencodedExtendedMw, postLogger, tempFormValidate, routes.deployment]
+);
 
 /**
- * Direct to some "index-page" when bad URL used.
+ * Direct to a user-friendlier index-page.
  */
-express.all("/*", (_, response) => {
+expressApp.get("/", (_, response) => {
     response.sendFile(path.join(FRONT_END_DIR, "index.html"));
+});
+
+/**
+ * Direct to error-page when bad URL used.
+ */
+expressApp.all("/*", (_, response) => {
+    response.send("Bad URL").status(404);
 });
 
 ////////////

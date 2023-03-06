@@ -1,8 +1,10 @@
-const { Router } = require("express");
-const { getDb } = require("../server.js");
+const express = require("express");
 const { ObjectId } = require("mongodb");
 
-const router = Router();
+const { getDb } = require("../server.js");
+const utils = require("../utils.js");
+
+const router = express.Router();
 
 module.exports = { router };
 
@@ -31,32 +33,10 @@ router.get("/", async (request, response) => {
 
 /**
  * POST a new deployment manifest to add to orchestrator's database.
- * Currently accepts a POST-request with "json" field in the body which in turn
- * corresponds to the actual deployment TODO Separate this function to a
- * separate "/handle_form/deployment"-route.
+ * TODO Separate this function to a * separate "/handle_form/deployment"-route.
  */
 router.post("/", async (request, response) => {
-    let data = request.body["json"] ?? null;
-    // TODO Move this handling to match the pattern below.
-    if (data === null) {
-        response
-            .status(400)
-            .send("Field 'json' containing the deployment not found in request")
-            .end();
-        return;
-    } else {
-        try {
-            data = JSON.parse(data);
-        } catch (error) {
-            response
-                .status(400)
-                .send(error.message)
-                .end();
-            return;
-        }
-    }
-
-    // TODO Deployment validation.
+    let data = request.body;
 
     let deploymentName = data.name;
     let status = 200;
@@ -86,6 +66,5 @@ router.post("/", async (request, response) => {
         }
     }
 
-    // TODO Is calling 'end' really necessary?
-    response.status(status).send(message).end();
+    response.status(status).send(message);
 });
