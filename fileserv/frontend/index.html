@@ -57,7 +57,7 @@
     </div>
     <div id="form-container">
       <div>
-        <form id="module-form" action="/file/module" method="POST" enctype="application/json">
+        <form id="module-form" action="/file/module" method="POST" enctype="multipart/form-data">
           <fieldset>
               <legend>Add a module</legend>
               <div>
@@ -65,7 +65,7 @@
                   <textarea id="module-json" name="json" required></textarea>
               </div>
               <div>
-                  <label>Wasm executable<input type="file" required/></label>
+                  <label>Wasm executable<input type="file" name="module" required/></label>
               </div>
           </fieldset>
           <input type="submit" value="Submit"/>
