@@ -167,6 +167,9 @@ async function saveDeviceData(service) {
         try {
             let obj = {
                 name: service.name,
+                host: service.host,
+                port: service.port,
+                fqdn: service.fqdn,
             };
             let res = await db.device.insertOne(obj);
             newId = res.insertedId;
