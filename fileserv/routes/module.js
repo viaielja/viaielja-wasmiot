@@ -42,14 +42,16 @@ router.get("/", async (request, response) => {
  * to database and respond with the URL that serves the newly added Wasm-file.
  */
 router.post("/", moduleUpload, validateFileFormSubmission, utils.tempFormValidate, async (request, response) => {
+    // Add additional fields from the file-upload and save to database.
+    request.body["humanReadableName"] = request.file.originalname;
+    request.body["fileName"] = request.file.filename;
+    request.body["path"] = request.file.path;
+
     const moduleId = (await getDb()
-        .module
-        .insertOne({
-            "humanReadableName": request.file.originalname,
-            "fileName": request.file.filename,
-            "path": request.file.path
-        }))
-        .insertedId;
+            .module
+            .insertOne(request.body)
+        ).insertedId;
+
     // Wasm-files are identified by their database-id.
     response
         .send("Uploaded module with id: "+ moduleId);
