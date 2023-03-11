@@ -57,12 +57,22 @@
     </div>
     <div id="form-container">
       <div>
-        <form id="module-form" action="/file/module" method="POST" enctype="multipart/form-data">
+        <form id="module-form" action="/file/module/form-submit" method="POST" enctype="multipart/form-data">
           <fieldset>
               <legend>Add a module</legend>
               <div>
-                  <label for="module-json">Module metadata in JSON</label>
-                  <textarea id="module-json" name="json" required></textarea>
+                <div>
+                  <label for="mname">Name</label>
+                  <input id="mname" name="name" required type="text" value="">
+                </div>
+                <div>
+                  <label for="mexports">Exports</label>
+                  <input id="mexports" name="exports" required type="text" value="" placeholder="export1,export2,export3...">
+                </div>
+                <div>
+                  <label for="mrequirements">Supervisor requirements</label>
+                  <input id="mrequirements" name="requirements" type="text" value="", placeholder="req1,req2,req3...">
+                </div>
               </div>
               <div>
                   <label>Wasm executable<input type="file" name="module" required/></label>
@@ -72,16 +82,19 @@
         </form>
       </div>
       <div>
-        <form id="deployment-form" action="/file/manifest" method="POST" enctype="application/json">
+        <form id="deployment-form" action="/file/manifest/form-submit" method="POST" enctype="multipart/form-data">
           <fieldset>
               <legend>Add a deployment</legend>
               <div>
-                  <label for="deployment-json">Deployment in JSON</label>
-                  <textarea id="deployment-json" name="json" required></textarea>
+                <div>
+                  <label for="dname">Name</label>
+                  <input id="dname" name="name" required type="text" value="">
+                </div>
+                <div>
+                  <label for="dsequence">Procedure-call sequence</label>
+                  <input id="dsequence" name="sequence" required type="text" value="", placeholder="procI,procII,procIII...">
+                </div>
               </div>
-              <!--div>
-                  <label>File (JSON)<input type="file" required/></label>
-              </div-->
           </fieldset>
           <input type="submit" value="Submit"/>
         </form>
