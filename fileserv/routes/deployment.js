@@ -69,45 +69,55 @@ router.post("/", async (request, response) => {
 
             //TODO: Start searching for suitable packages using saved file.
             //startSearch();
+            // TODO: is await necessary if not needed to wait for execution
+            // here?
+            await deploy(actionId);
         }
     }
+
+    response.status(status).send(message);
+});
+
+/**
+ * Deploy application according to deployment with `actionId`.
+ * @param {*} actionId The database-id of deployment.
+ */
+async function deploy(actionId) {
+    let deployment = await getDb().deployment.findOne({ _id: ObjectId(actionId) });
 
     // NOTE: Temporary. 
     // 1. Search for modules with the interfaces described in deployment's
     // action sequence.
-    let matchingModules = [];
-    for (let interface of request.body["sequence"]) {
+    let selectedModules = [];
+    for (let interface of deployment.sequence) {
         let match = null;
-        for (let modulee of getDb().module.find()) {
-            if (modulee.interfaces.find(x => x === interface) !== undefined) {
+        let allModules = await getDb().module.find().toArray();
+        for (let modulee of allModules) {
+            if (modulee.exports.find(x => x === interface) !== undefined) {
                 match = modulee;
                 break;
             }
         }
         if (match === null) {
-            status = 400;
-            message = `Failed to satisfy interface '${JSON.stringify(interface)}'`;
-            console.log(message);
-            break;
+            console.log(`Failed to satisfy interface '${JSON.stringify(interface)}'`);
+            return;
         }
-        matchingModules.push(match);
+        selectedModules.push(match);
     }
     
     // 2. Search for devices that could run these modules.
     let selectedDevices = [];
-    for (let modulee in matchingModules) {
+    for (let modulee in selectedModules) {
         let match = null;
         for (let device in getDb().device) {
-            if (modulee.constraints.every(x => device.supervisorInterfaces.find(x))) {
+            if (modulee.runtimeRequirements.every(x => device.supervisorInterfaces.find(x))) {
                 match = device;
                 break;
             }
         }
         if (match === null) {
-            status = 400;
-            message = `Failed to satisfy module '${JSON.stringify(modulee, null, 2)}'`;
-            console.log(message);
-            break;
+            console.log(`Failed to satisfy module '${JSON.stringify(modulee, null, 2)}'`);
+            return;
         }
         selectedDevices.push(device);
     }
@@ -115,9 +125,9 @@ router.post("/", async (request, response) => {
     // 3. Send devices instructions for ...
 
     let length =
-        request.body["sequence"].length === selectedModules.length &&
-        selectedModules.length          === selectedDevices.length
-        ? request.body["sequence"].length
+        deployment.sequence.length === selectedModules.length &&
+        selectedModules.length     === selectedDevices.length
+        ? deployment.sequence.length
         : 0;
 
     // "Zip" the different parts and transform into a separate instructions for
@@ -125,7 +135,7 @@ router.post("/", async (request, response) => {
     for (let i = 0; i < length; i++) {
         let device = selectedDevices[i];
         let module = selectedModules[i];
-        let func = request.body["sequence"][i];
+        let func = deployment.sequence[i];
         
         // POST-making from example snippet at:
         // https://nodejs.org/api/http.html#httprequesturl-options-callback
@@ -165,6 +175,12 @@ router.post("/", async (request, response) => {
         request.write(instruction);
         request.end();
     }
+}
 
-    response.status(status).send(message);
+
+/**
+ * Handle form-submitting. Basically just convert the form to JSON and redirect.
+ */
+router.post("/form-submit", async (request, response) => {
+
 });
