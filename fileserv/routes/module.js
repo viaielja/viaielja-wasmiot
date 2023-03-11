@@ -9,7 +9,7 @@ const router = Router();
 
 // Set where the wasm-binaries will be saved into on the filesystem.
 // From: https://www.twilio.com/blog/handle-file-uploads-node-express
-const moduleUpload = require("multer")({ dest: utils.MODULE_DIR }).single("module");
+const fileUpload = require("multer")({ dest: utils.MODULE_DIR }).single("module");
 
 module.exports = { router };
 
@@ -41,7 +41,14 @@ router.get("/", async (request, response) => {
  * Read the Wasm-file from form-input and save it to filesystem. Insert its path
  * to database and respond with the URL that serves the newly added Wasm-file.
  */
-router.post("/", moduleUpload, validateFileFormSubmission, utils.tempFormValidate, async (request, response) => {
+router.post(
+    "/",
+    fileUpload,
+    validateFileFormSubmission,
+    utils.tempFormValidate,
+    validateModuleFields,
+    async (request, response) =>
+{
     // Add additional fields from the file-upload and save to database.
     request.body["humanReadableName"] = request.file.originalname;
     request.body["fileName"] = request.file.filename;
@@ -79,4 +86,18 @@ function validateFileFormSubmission(request, response, next) {
         return;
     }
     next();
+}
+
+/**
+ * Middleware to check fields on a module upload POST. NOTE: Designed to crash
+ * on failure because writing error messages would be too much work for little
+ * value at this stage...
+ */
+function validateModuleFields(request, response, next) {
+    if (request.body.exports.length > 0 && request.body.runtimeRequirements instanceof Array) {
+        next();
+    } else {
+        console.log("Failed to validate module data");
+        response.send("Module missing fields").status(400);
+    }
 }
