@@ -295,7 +295,7 @@ expressApp.use(
 
 expressApp.use(
     "/file/manifest",
-    [jsonMw, urlencodedExtendedMw, postLogger, tempFormValidate, routes.deployment]
+    [jsonMw, urlencodedExtendedMw, postLogger, routes.deployment]
 );
 
 /**

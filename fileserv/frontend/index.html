@@ -21,6 +21,14 @@
     #form-container > div {
       margin-top: 15%;
     }
+
+    .success {
+      background-color: cyan;
+    }
+
+    .error {
+      background-color: red;
+    }
   </style>
   <script>
     function addModuleRow(event) {
@@ -30,8 +38,46 @@
         item.appendChild(input);
         document.querySelector("#module-sequence-list").appendChild(item);
     }
+
+    function submitJson(url) {
+      function handleSubmit(formSubmitEvent) {
+        formSubmitEvent.preventDefault();
+        let json = {};
+        for (let input of formSubmitEvent.target.querySelectorAll("input[type=text]")) {
+          json[input.name] = input.value;
+        }
+        // Disable the form for the duration of the submission (provided it is
+        // inside a fieldset-element).
+        formSubmitEvent.target.querySelector("fieldset").disabled = true;
+        // Submit to backend that handles application/json.
+        fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(json)
+          })
+          .then(function(msg) {
+            // Enable the form and show success message
+            formSubmitEvent.target.querySelector("fieldset").disabled = true;
+            let successmsg = document.createElement("p");
+            successmsg.classList.add("success");
+            successmsg.textContent = msg;
+            document.querySelector("h1").appendChild(successmsg);
+          })
+          .catch(function(err) {
+            // Show an error message.
+            let errormsg = document.createElement("p");
+            errormsg.classList.add("error");
+            errormsg.textContent = err;
+            document.querySelector("h1").appendChild(errormsg);
+          });
+      }
+      return handleSubmit;
+    }
+
     window.onload = function() {
       document.querySelector("#add-module-row").addEventListener("click", addModuleRow);
+      document.querySelector("#module-form").addEventListener("submit", submitJson("/file/module"));
+      document.querySelector("#deployment-form").addEventListener("submit", submitJson("/file/manifest"));
     };
   </script>
 </head>
@@ -71,7 +117,7 @@
                 </div>
                 <div>
                   <label for="mrequirements">Supervisor requirements</label>
-                  <input id="mrequirements" name="requirements" type="text" value="", placeholder="req1,req2,req3...">
+                  <input id="mrequirements" name="requirements" type="text" value="" placeholder="req1,req2,req3...">
                 </div>
               </div>
               <div>
@@ -82,7 +128,7 @@
         </form>
       </div>
       <div>
-        <form id="deployment-form" action="/file/manifest/form-submit" method="POST" enctype="multipart/form-data">
+        <form id="deployment-form">
           <fieldset>
               <legend>Add a deployment</legend>
               <div>
@@ -92,7 +138,7 @@
                 </div>
                 <div>
                   <label for="dsequence">Procedure-call sequence</label>
-                  <input id="dsequence" name="sequence" required type="text" value="", placeholder="procI,procII,procIII...">
+                  <input id="dsequence" name="sequence" required type="text" value="" placeholder="procI,procII,procIII...">
                 </div>
               </div>
           </fieldset>

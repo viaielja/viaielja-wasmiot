@@ -176,11 +176,3 @@ async function deploy(actionId) {
         request.end();
     }
 }
-
-
-/**
- * Handle form-submitting. Basically just convert the form to JSON and redirect.
- */
-router.post("/form-submit", async (request, response) => {
-
-});
