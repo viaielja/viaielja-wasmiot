@@ -44,8 +44,16 @@
         formSubmitEvent.preventDefault();
         let json = {};
         for (let input of formSubmitEvent.target.querySelectorAll("input[type=text]")) {
-          json[input.name] = input.value;
+          // TODO: Parse list-inputs into the JSON.
+          // HACK: List-inputs are identified by a custom field and
+          // ','-characters delimit the values.
+          if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
+            json[input.name] = input.value.split(",");
+          } else {
+            json[input.name] = input.value;
+          }
         }
+
         // Disable the form for the duration of the submission (provided it is
         // inside a fieldset-element).
         formSubmitEvent.target.querySelector("fieldset").disabled = true;
@@ -55,12 +63,16 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(json)
           })
+          // TODO The backend should preferrably always respond with JSON as
+          // well (when, use the following).
+          //.then(function(response) { return response.json(); })
+          .then(function(response) { return response.text(); })
           .then(function(msg) {
             // Enable the form and show success message
-            formSubmitEvent.target.querySelector("fieldset").disabled = true;
+            formSubmitEvent.target.querySelector("fieldset").disabled = false;
             let successmsg = document.createElement("p");
             successmsg.classList.add("success");
-            successmsg.textContent = msg;
+            successmsg.textContent = JSON.stringify(msg);
             document.querySelector("h1").appendChild(successmsg);
           })
           .catch(function(err) {
@@ -103,7 +115,7 @@
     </div>
     <div id="form-container">
       <div>
-        <form id="module-form" action="/file/module/form-submit" method="POST" enctype="multipart/form-data">
+        <form id="module-form">
           <fieldset>
               <legend>Add a module</legend>
               <div>
@@ -113,11 +125,11 @@
                 </div>
                 <div>
                   <label for="mexports">Exports</label>
-                  <input id="mexports" name="exports" required type="text" value="" placeholder="export1,export2,export3...">
+                  <input id="mexports" name="exports" required type="text" value="" data-hacktype="array" placeholder="export1,export2,export3...">
                 </div>
                 <div>
                   <label for="mrequirements">Supervisor requirements</label>
-                  <input id="mrequirements" name="requirements" type="text" value="" placeholder="req1,req2,req3...">
+                  <input id="mrequirements" name="requirements" type="text" value="" data-hacktype="array" placeholder="req1,req2,req3...">
                 </div>
               </div>
               <div>
@@ -138,7 +150,7 @@
                 </div>
                 <div>
                   <label for="dsequence">Procedure-call sequence</label>
-                  <input id="dsequence" name="sequence" required type="text" value="" placeholder="procI,procII,procIII...">
+                  <input id="dsequence" name="sequence" required type="text" value="" data-hacktype="array" placeholder="procI,procII,procIII...">
                 </div>
               </div>
           </fieldset>
