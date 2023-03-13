@@ -31,12 +31,48 @@
     }
   </style>
   <script>
-    function addModuleRow(event) {
+    function addProcedureRow(listId) {
+      /**
+       * Constructor for the following HTML:
+       * <li id="dprocedure-select-list-0">
+       *   <label for="dprocedure-select-0">Select a procedure:</label>
+       *   <select id="dprocedure-select-0" name="proc0" required>
+       *     <option value="">Please select the next procedure:</option>
+       *   </select>
+       * </li>
+       */
+      function makeItem(id) {
+        let li = document.createElement("li");
+        li.id = `dprocedure-select-list-${id}`;
+        let select = document.createElement("select");
+        select.id = `dprocedure-select-${id}`;
+        select.name = `proc${id}`;
+        select.required = true;
+        let label = document.createElement("label");
+        label.for = select.id;
+        label.textContent = "Select a procedure:";
+        let option = document.createElement("option");
+        option.value = "";
+        option.textContent = "Please select the next procedure:";
+        select.appendChild(option);
+        li.appendChild(label);
+        li.appendChild(select);
+        return li;
+      }
+
+      /**
+       * Add a new row to the list-element with id `listId`.
+       */
+      function handleAddRow(event) {
         event.preventDefault();
-        let item = document.createElement("li");
-        let input = document.createElement("input", { type: "text"});
-        item.appendChild(input);
-        document.querySelector("#module-sequence-list").appendChild(item);
+
+        let parentList = document.querySelector(`#${listId}`);
+        let nextId = parentList.querySelectorAll("li").length;
+        let newListItem = makeItem(nextId);
+        parentList.appendChild(newListItem);
+      }
+
+      return handleAddRow;
     }
 
     function submitJson(url, successCallback) {
@@ -112,7 +148,7 @@
     }
 
     window.onload = function() {
-      document.querySelector("#add-module-row").addEventListener("click", addModuleRow);
+      document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
       document.querySelector("#module-form").addEventListener("submit", submitJson("/file/module", populateWasmFormModules));
       document.querySelector("#deployment-form").addEventListener("submit", submitJson("/file/manifest"));
       // Populate lists on load.
@@ -125,13 +161,26 @@
   <div>
     <div>
       <h2>Compose your application</h2>
-      <p>TODO: &lt;&lt; Cool graph-editor goes here &gt;&gt;</p>
-      <form action="/file/deployment">
-        <ol id="module-sequence-list">
-            <li><input type="text"></li>
-        </ol>
-        <button type="button" id="add-module-row">Add row</button>
-      </form>
+      <div>
+        <form id="deployment-form">
+          <fieldset>
+              <legend>Create a deployment</legend>
+              <div>
+                <div>
+                  <label for="dname">Name</label>
+                  <input id="dname" name="name" required type="text" value="">
+                </div>
+                <div>
+                  <p>Procedure-call sequence:</p>
+                  <ol id="dprocedure-sequence-list">
+                  </ol>
+                  <button type="button" id="dadd-procedure-row">Next</button>
+                </div>
+              </div>
+          </fieldset>
+          <input type="submit" value="Deploy!"/>
+        </form>
+      </div>
     </div>
     <div>
       <ul>
@@ -177,24 +226,6 @@
               <label for="wfile">Wasm executable</label>
               <input type="file" id="wfile" name="module" required>
             </div>
-          </fieldset>
-          <input type="submit" value="Submit"/>
-        </form>
-      </div>
-      <div>
-        <form id="deployment-form">
-          <fieldset>
-              <legend>Add a deployment</legend>
-              <div>
-                <div>
-                  <label for="dname">Name</label>
-                  <input id="dname" name="name" required type="text" value="">
-                </div>
-                <div>
-                  <label for="dsequence">Procedure-call sequence</label>
-                  <input id="dsequence" name="sequence" required type="text" value="" data-hacktype="array" placeholder="procI,procII,procIII...">
-                </div>
-              </div>
           </fieldset>
           <input type="submit" value="Submit"/>
         </form>
