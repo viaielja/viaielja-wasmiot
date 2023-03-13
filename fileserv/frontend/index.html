@@ -41,7 +41,7 @@
        *   </select>
        * </li>
        */
-      function makeItem(id) {
+      async function makeItem(id) {
         let li = document.createElement("li");
         li.id = `dprocedure-select-list-${id}`;
         let select = document.createElement("select");
@@ -54,7 +54,28 @@
         let option = document.createElement("option");
         option.value = "";
         option.textContent = "Please select the next procedure:";
+
+        // Add placeholder first.
         select.appendChild(option);
+        // Add all the different procedures (i.e., module exports) to be
+        // selectable.
+        // NOTE: Doing this way means quite a lot of requests that
+        // will probably not change in between...
+        // TODO: Add a /procedures -route to backend?
+        // TODO: Filter duplicates (the module where a proc comes from should be
+        // irrelevant(?)).
+        // TODO: Show proc inputs and outputs for checking compatibility?
+        let modulesResponse = await fetch("/file/module");
+        let modulesData = await modulesResponse.json();
+        for (let mod of modulesData) {
+          for (let exportt of mod.exports) {
+            let exportOption = document.createElement("option");
+            exportOption.value = exportt;
+            exportOption.textContent = exportt;
+            select.appendChild(exportOption);
+          }
+        }
+
         li.appendChild(label);
         li.appendChild(select);
         return li;
@@ -63,12 +84,12 @@
       /**
        * Add a new row to the list-element with id `listId`.
        */
-      function handleAddRow(event) {
+      async function handleAddRow(event) {
         event.preventDefault();
 
         let parentList = document.querySelector(`#${listId}`);
         let nextId = parentList.querySelectorAll("li").length;
-        let newListItem = makeItem(nextId);
+        let newListItem = await makeItem(nextId);
         parentList.appendChild(newListItem);
       }
 
@@ -88,6 +109,17 @@
           } else {
             json[input.name] = input.value;
           }
+        }
+
+        // HACK: Convert all <select> -elements under the form's <ol> into a
+        // single JSON-array.
+        // TODO: Make a separate "arrayHandle" function.
+        let ol = formSubmitEvent.target.querySelector("ol");
+        if (ol !== null && ol) {
+          json[ol.dataset.hackfield] =
+            // TODO: Does queryselectorall return the elements in the same
+            // order as "listed" on the page?
+            Array.from(ol.querySelectorAll("select")).map(x => x.selectedOptions[0].value);
         }
 
         // Disable the form for the duration of the submission (provided it is
@@ -128,7 +160,7 @@
       // selection.
       fetch("/file/module")
         .then((resp) => resp.json())
-        .then(function(json) {
+        .then(function(modulesData) {
           let selectElem = document.querySelector("#wmodule-select");
 
           // Remove previous ones first and replace with newly fetched ones.
@@ -138,7 +170,7 @@
             }
           }
 
-          for (let mod of json) {
+          for (let mod of modulesData) {
             let optionElem = document.createElement("option");
             optionElem.value = mod._id;
             optionElem.textContent = mod.name;
@@ -172,7 +204,7 @@
                 </div>
                 <div>
                   <p>Procedure-call sequence:</p>
-                  <ol id="dprocedure-sequence-list">
+                  <ol id="dprocedure-sequence-list" data-hackfield="sequence">
                   </ol>
                   <button type="button" id="dadd-procedure-row">Next</button>
                 </div>

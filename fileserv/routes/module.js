@@ -56,6 +56,7 @@ router.post("/", validateModuleFields, async (request, response) => {
 /**
  * Add the concrete Wasm-module to the server filesystem and references to it
  * into database-entry matching a module-ID (created with an earlier request).
+ * TODO Could the modules' exports be parsed from Wasm here?
  *
  * Regarding the use of PATCH https://restfulapi.net/http-methods/#patch says:
  * "-- the PATCH method is the correct choice for partially updating an existing

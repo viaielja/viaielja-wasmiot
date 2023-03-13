@@ -107,16 +107,17 @@ async function deploy(actionId) {
     
     // 2. Search for devices that could run these modules.
     let selectedDevices = [];
-    for (let modulee in selectedModules) {
+    for (let modulee of selectedModules) {
         let match = null;
-        for (let device in getDb().device) {
-            if (modulee.runtimeRequirements.every(x => device.supervisorInterfaces.find(x))) {
+        let allDevices = await getDb().device.find().toArray();
+        for (let device of allDevices) {
+            if (modulee.requirements.every(x => device.supervisorInterfaces.find(x))) {
                 match = device;
                 break;
             }
         }
         if (match === null) {
-            console.log(`Failed to satisfy module '${JSON.stringify(modulee, null, 2)}'`);
+            console.log(`Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`);
             return;
         }
         selectedDevices.push(device);
