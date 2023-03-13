@@ -39,7 +39,7 @@
         document.querySelector("#module-sequence-list").appendChild(item);
     }
 
-    function submitJson(url) {
+    function submitJson(url, successCallback) {
       function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault();
         let json = {};
@@ -74,6 +74,7 @@
             successmsg.classList.add("success");
             successmsg.textContent = JSON.stringify(msg);
             document.querySelector("h1").appendChild(successmsg);
+            if (successCallback) { successCallback() };
           })
           .catch(function(err) {
             // Show an error message.
@@ -86,10 +87,36 @@
       return handleSubmit;
     }
 
+    function populateWasmFormModules() {
+      // Get all current modules' ids and names and add them to the list for
+      // selection.
+      fetch("/file/module")
+        .then((resp) => resp.json())
+        .then(function(json) {
+          let selectElem = document.querySelector("#wmodule-select");
+
+          // Remove previous ones first and replace with newly fetched ones.
+          for (let option of selectElem.querySelectorAll("option")) {
+            if (option.value !== "") {
+              option.remove();
+            }
+          }
+
+          for (let mod of json) {
+            let optionElem = document.createElement("option");
+            optionElem.value = mod._id;
+            optionElem.textContent = mod.name;
+            selectElem.appendChild(optionElem);
+          }
+        });
+    }
+
     window.onload = function() {
       document.querySelector("#add-module-row").addEventListener("click", addModuleRow);
-      document.querySelector("#module-form").addEventListener("submit", submitJson("/file/module"));
+      document.querySelector("#module-form").addEventListener("submit", submitJson("/file/module", populateWasmFormModules));
       document.querySelector("#deployment-form").addEventListener("submit", submitJson("/file/manifest"));
+      // Populate lists on load.
+      populateWasmFormModules();
     };
   </script>
 </head>
@@ -117,24 +144,39 @@
       <div>
         <form id="module-form">
           <fieldset>
-              <legend>Add a module</legend>
+            <legend>Add a module</legend>
+            <div>
               <div>
-                <div>
-                  <label for="mname">Name</label>
-                  <input id="mname" name="name" required type="text" value="">
-                </div>
-                <div>
-                  <label for="mexports">Exports</label>
-                  <input id="mexports" name="exports" required type="text" value="" data-hacktype="array" placeholder="export1,export2,export3...">
-                </div>
-                <div>
-                  <label for="mrequirements">Supervisor requirements</label>
-                  <input id="mrequirements" name="requirements" type="text" value="" data-hacktype="array" placeholder="req1,req2,req3...">
-                </div>
+                <label for="mname">Name</label>
+                <input id="mname" name="name" required type="text" value="">
               </div>
               <div>
-                  <label>Wasm executable<input type="file" name="module" required/></label>
+                <label for="mexports">Exports</label>
+                <input id="mexports" name="exports" required type="text" value="" data-hacktype="array" placeholder="export1,export2,export3...">
               </div>
+              <div>
+                <label for="mrequirements">Supervisor requirements</label>
+                <input id="mrequirements" name="requirements" type="text" value="" data-hacktype="array" placeholder="req1,req2,req3...">
+              </div>
+            </div>
+          </fieldset>
+          <input type="submit" value="Submit"/>
+        </form>
+      </div>
+      <div>
+        <form id="wasm-form" action="/file/module/upload" method="POST" enctype="multipart/form-data">
+          <fieldset>
+            <legend>Upload WebAssembly file to a module</legend>
+            <div>
+              <label for="wmodule-select">Select the module:</label>
+              <select id="wmodule-select" name="id" required>
+                <option value="">Please select an existing module:</option>
+              </select>
+            </div>
+            <div>
+              <label for="wfile">Wasm executable</label>
+              <input type="file" id="wfile" name="module" required>
+            </div>
           </fieldset>
           <input type="submit" value="Submit"/>
         </form>

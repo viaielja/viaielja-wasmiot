@@ -290,7 +290,7 @@ expressApp.use(
 
 expressApp.use(
     "/file/module",
-    [routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...
+    [jsonMw, routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...
 );
 
 expressApp.use(
