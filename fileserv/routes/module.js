@@ -9,7 +9,7 @@ const router = Router();
 
 // Set where the wasm-binaries will be saved into on the filesystem.
 // From: https://www.twilio.com/blog/handle-file-uploads-node-express
-const moduleUpload = require("multer")({ dest: utils.MODULE_DIR }).single("module");
+const fileUpload = require("multer")({ dest: utils.MODULE_DIR }).single("module");
 
 module.exports = { router };
 
@@ -38,21 +38,56 @@ router.get("/", async (request, response) => {
 });
 
 /**
- * Read the Wasm-file from form-input and save it to filesystem. Insert its path
- * to database and respond with the URL that serves the newly added Wasm-file.
+ * Save metadata of a Wasm-module to database and leave information about the
+ * concrete file to be patched by another upload-request. This separates
+ * between requests with pure JSON or binary bodies.
  */
-router.post("/", moduleUpload, validateFileFormSubmission, utils.tempFormValidate, async (request, response) => {
+router.post("/", validateModuleFields, async (request, response) => {
     const moduleId = (await getDb()
-        .module
-        .insertOne({
-            "humanReadableName": request.file.originalname,
-            "fileName": request.file.filename,
-            "path": request.file.path
-        }))
-        .insertedId;
+            .module
+            .insertOne(request.body)
+        ).insertedId;
+
     // Wasm-files are identified by their database-id.
     response
         .send("Uploaded module with id: "+ moduleId);
+});
+
+/**
+ * Add the concrete Wasm-module to the server filesystem and references to it
+ * into database-entry matching a module-ID (created with an earlier request).
+ * TODO Could the modules' exports be parsed from Wasm here?
+ *
+ * Regarding the use of PATCH https://restfulapi.net/http-methods/#patch says:
+ * "-- the PATCH method is the correct choice for partially updating an existing
+ * resource, and you should only use PUT if you’re replacing a resource in its
+ * entirety."
+ * 
+ * IMO using PATCH would fit this, but as this route will technically _create_ a
+ * new resource (the file) (and the method is not supported with
+ * multipart/form-data at the frontend), use POST.
+ */
+router.post("/upload", fileUpload, validateFileFormSubmission, async (request, response) => {
+    // Add additional fields from the file-upload and save to database.
+    let filter = { _id: ObjectId(request.body.id) };
+    let update = {
+        $set: {
+            humanReadableName: request.file.originalname,
+            fileName: request.file.filename,
+            path: request.file.path,
+        }
+    };
+
+    let result = await getDb().module.updateOne(filter, update);
+    if (result.acknowledged) {
+        let msg = "Added Wasm-file to module";
+        console.log(msg + ": " + result.upsertedId);
+        response.send(msg);
+    } else {
+        let msg = "Failed adding Wasm-file to module";
+        console.log(msg + ". Tried adding: " + JSON.stringify(update, null, 2));
+        response.status(500).send(msg);
+    }
 });
 
 /**
@@ -77,4 +112,20 @@ function validateFileFormSubmission(request, response, next) {
         return;
     }
     next();
+}
+
+/**
+ * Middleware to check fields on a module upload POST. NOTE: Designed to crash
+ * on failure because writing error messages would be too much work for little
+ * value at this stage...
+ */
+function validateModuleFields(request, response, next) {
+    if (request.body.exports instanceof Array &&
+        request.body.exports.length > 0 &&
+        request.body.requirements instanceof Array) {
+        next();
+    } else {
+        console.log("Failed to validate module data");
+        response.send("Module missing fields").status(400);
+    }
 }

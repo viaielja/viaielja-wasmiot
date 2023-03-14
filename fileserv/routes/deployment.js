@@ -1,8 +1,11 @@
+const http = require('http');
+
 const express = require("express");
 const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
 const utils = require("../utils.js");
+
 
 const router = express.Router();
 
@@ -33,10 +36,13 @@ router.get("/", async (request, response) => {
 
 /**
  * POST a new deployment manifest to add to orchestrator's database.
- * TODO Separate this function to a * separate "/handle_form/deployment"-route.
+ * TODO Separate this function to a separate "/handle_form/deployment"-route.
  */
 router.post("/", async (request, response) => {
     let data = request.body;
+    // The id of the deployment _after_ added to database. Used to identify
+    // received POSTs on devices regarding this deployment.
+    let actionId = null;
 
     let deploymentName = data.name;
     let status = 200;
@@ -52,19 +58,122 @@ router.post("/", async (request, response) => {
     } else {
         // Add the new deployment to database.
         // TODO Only add what is allowed (e.g. _id should not come from POST).
-        // TODO Add the whole body not just name.
         let result = await getDb().deployment.insertOne(data);
         if (!result.acknowledged) {
             console.log(`Failed adding the manifest: ${err}`);
             status = 500;
             message = "Failed adding the manifest";
         } else {
+            actionId = result.insertedId;
             console.log(`Manifest added to database '${deploymentName}'`);
 
             //TODO: Start searching for suitable packages using saved file.
             //startSearch();
+            // TODO: is await necessary if not needed to wait for execution
+            // here?
+            await deploy(actionId);
         }
     }
 
     response.status(status).send(message);
 });
+
+/**
+ * Deploy application according to deployment with `actionId`.
+ * @param {*} actionId The database-id of deployment.
+ */
+async function deploy(actionId) {
+    let deployment = await getDb().deployment.findOne({ _id: ObjectId(actionId) });
+
+    // NOTE: Temporary. 
+    // 1. Search for modules with the interfaces described in deployment's
+    // action sequence.
+    let selectedModules = [];
+    for (let interface of deployment.sequence) {
+        let match = null;
+        let allModules = await getDb().module.find().toArray();
+        for (let modulee of allModules) {
+            if (modulee.exports.find(x => x === interface) !== undefined) {
+                match = modulee;
+                break;
+            }
+        }
+        if (match === null) {
+            console.log(`Failed to satisfy interface '${JSON.stringify(interface)}'`);
+            return;
+        }
+        selectedModules.push(match);
+    }
+    
+    // 2. Search for devices that could run these modules.
+    let selectedDevices = [];
+    for (let modulee of selectedModules) {
+        let match = null;
+        let allDevices = await getDb().device.find().toArray();
+        for (let device of allDevices) {
+            if (modulee.requirements.every(x => device.supervisorInterfaces.find(x))) {
+                match = device;
+                break;
+            }
+        }
+        if (match === null) {
+            console.log(`Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`);
+            return;
+        }
+        selectedDevices.push(device);
+    }
+
+    // 3. Send devices instructions for ...
+
+    let length =
+        deployment.sequence.length === selectedModules.length &&
+        selectedModules.length     === selectedDevices.length
+        ? deployment.sequence.length
+        : 0;
+
+    // "Zip" the different parts and transform into a separate instructions for
+    // devices.
+    for (let i = 0; i < length; i++) {
+        let device = selectedDevices[i];
+        let module = selectedModules[i];
+        let func = deployment.sequence[i];
+        
+        // POST-making from example snippet at:
+        // https://nodejs.org/api/http.html#httprequesturl-options-callback
+        let instruction = JSON.stringify({
+            // ... 3.1. Waiting for POST,
+            actionId: actionId,
+            moduleId: module._id,
+            // 3.2. Running a module (function),
+            moduleFunc: func,
+            // 3.3. POSTing the result to the next device.
+            // TODO Where/how does the call-chain end?
+            outputTo: selectedDevices[i + 1] ?? null,
+        });
+
+        let deviceEndpoint = "/action";
+        let request = http.request(
+            {
+                method: "POST",
+                protocol: "http:",
+                host: device.host,
+                port: device.port,
+                path: deviceEndpoint,
+                headers: {
+                    "Content-type": "application/json",
+                    "Content-length": Buffer.byteLength(instruction),
+                }
+            },
+            (response) => {
+                console.log(`Deployment: Device '${device.name}' responded ${response.statusCode}`);
+            }
+        );
+        request.on("error", e => {
+            console.log(`Error while posting to device '${device.name}': ${JSON.stringify(e, null, 2)}`);
+            
+        })
+
+        request.write(instruction);
+        request.end();
+    }
+}

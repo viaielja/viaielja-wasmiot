@@ -167,6 +167,9 @@ async function saveDeviceData(service) {
         try {
             let obj = {
                 name: service.name,
+                host: service.host,
+                port: service.port,
+                fqdn: service.fqdn,
             };
             let res = await db.device.insertOne(obj);
             newId = res.insertedId;
@@ -287,12 +290,12 @@ expressApp.use(
 
 expressApp.use(
     "/file/module",
-    [routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...
+    [jsonMw, routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...
 );
 
 expressApp.use(
     "/file/manifest",
-    [jsonMw, urlencodedExtendedMw, postLogger, tempFormValidate, routes.deployment]
+    [jsonMw, urlencodedExtendedMw, postLogger, routes.deployment]
 );
 
 /**

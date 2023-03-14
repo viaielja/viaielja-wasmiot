@@ -21,17 +21,170 @@
     #form-container > div {
       margin-top: 15%;
     }
+
+    .success {
+      background-color: cyan;
+    }
+
+    .error {
+      background-color: red;
+    }
   </style>
   <script>
-    function addModuleRow(event) {
+    function addProcedureRow(listId) {
+      /**
+       * Constructor for the following HTML:
+       * <li id="dprocedure-select-list-0">
+       *   <label for="dprocedure-select-0">Select a procedure:</label>
+       *   <select id="dprocedure-select-0" name="proc0" required>
+       *     <option value="">Please select the next procedure:</option>
+       *   </select>
+       * </li>
+       */
+      async function makeItem(id) {
+        let li = document.createElement("li");
+        li.id = `dprocedure-select-list-${id}`;
+        let select = document.createElement("select");
+        select.id = `dprocedure-select-${id}`;
+        select.name = `proc${id}`;
+        select.required = true;
+        let label = document.createElement("label");
+        label.for = select.id;
+        label.textContent = "Select a procedure:";
+        let option = document.createElement("option");
+        option.value = "";
+        option.textContent = "Please select the next procedure:";
+
+        // Add placeholder first.
+        select.appendChild(option);
+        // Add all the different procedures (i.e., module exports) to be
+        // selectable.
+        // NOTE: Doing this way means quite a lot of requests that
+        // will probably not change in between...
+        // TODO: Add a /procedures -route to backend?
+        // TODO: Filter duplicates (the module where a proc comes from should be
+        // irrelevant(?)).
+        // TODO: Show proc inputs and outputs for checking compatibility?
+        let modulesResponse = await fetch("/file/module");
+        let modulesData = await modulesResponse.json();
+        for (let mod of modulesData) {
+          for (let exportt of mod.exports) {
+            let exportOption = document.createElement("option");
+            exportOption.value = exportt;
+            exportOption.textContent = exportt;
+            select.appendChild(exportOption);
+          }
+        }
+
+        li.appendChild(label);
+        li.appendChild(select);
+        return li;
+      }
+
+      /**
+       * Add a new row to the list-element with id `listId`.
+       */
+      async function handleAddRow(event) {
         event.preventDefault();
-        let item = document.createElement("li");
-        let input = document.createElement("input", { type: "text"});
-        item.appendChild(input);
-        document.querySelector("#module-sequence-list").appendChild(item);
+
+        let parentList = document.querySelector(`#${listId}`);
+        let nextId = parentList.querySelectorAll("li").length;
+        let newListItem = await makeItem(nextId);
+        parentList.appendChild(newListItem);
+      }
+
+      return handleAddRow;
     }
+
+    function submitJson(url, successCallback) {
+      function handleSubmit(formSubmitEvent) {
+        formSubmitEvent.preventDefault();
+        let json = {};
+        for (let input of formSubmitEvent.target.querySelectorAll("input[type=text]")) {
+          // TODO: Parse list-inputs into the JSON.
+          // HACK: List-inputs are identified by a custom field and
+          // ','-characters delimit the values.
+          if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
+            json[input.name] = input.value.split(",");
+          } else {
+            json[input.name] = input.value;
+          }
+        }
+
+        // HACK: Convert all <select> -elements under the form's <ol> into a
+        // single JSON-array.
+        // TODO: Make a separate "arrayHandle" function.
+        let ol = formSubmitEvent.target.querySelector("ol");
+        if (ol !== null && ol) {
+          json[ol.dataset.hackfield] =
+            // TODO: Does queryselectorall return the elements in the same
+            // order as "listed" on the page?
+            Array.from(ol.querySelectorAll("select")).map(x => x.selectedOptions[0].value);
+        }
+
+        // Disable the form for the duration of the submission (provided it is
+        // inside a fieldset-element).
+        formSubmitEvent.target.querySelector("fieldset").disabled = true;
+        // Submit to backend that handles application/json.
+        fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(json)
+          })
+          // TODO The backend should preferrably always respond with JSON as
+          // well (when, use the following).
+          //.then(function(response) { return response.json(); })
+          .then(function(response) { return response.text(); })
+          .then(function(msg) {
+            // Enable the form and show success message
+            formSubmitEvent.target.querySelector("fieldset").disabled = false;
+            let successmsg = document.createElement("p");
+            successmsg.classList.add("success");
+            successmsg.textContent = JSON.stringify(msg);
+            document.querySelector("h1").appendChild(successmsg);
+            if (successCallback) { successCallback() };
+          })
+          .catch(function(err) {
+            // Show an error message.
+            let errormsg = document.createElement("p");
+            errormsg.classList.add("error");
+            errormsg.textContent = err;
+            document.querySelector("h1").appendChild(errormsg);
+          });
+      }
+      return handleSubmit;
+    }
+
+    function populateWasmFormModules() {
+      // Get all current modules' ids and names and add them to the list for
+      // selection.
+      fetch("/file/module")
+        .then((resp) => resp.json())
+        .then(function(modulesData) {
+          let selectElem = document.querySelector("#wmodule-select");
+
+          // Remove previous ones first and replace with newly fetched ones.
+          for (let option of selectElem.querySelectorAll("option")) {
+            if (option.value !== "") {
+              option.remove();
+            }
+          }
+
+          for (let mod of modulesData) {
+            let optionElem = document.createElement("option");
+            optionElem.value = mod._id;
+            optionElem.textContent = mod.name;
+            selectElem.appendChild(optionElem);
+          }
+        });
+    }
+
     window.onload = function() {
-      document.querySelector("#add-module-row").addEventListener("click", addModuleRow);
+      document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
+      document.querySelector("#module-form").addEventListener("submit", submitJson("/file/module", populateWasmFormModules));
+      document.querySelector("#deployment-form").addEventListener("submit", submitJson("/file/manifest"));
+      // Populate lists on load.
+      populateWasmFormModules();
     };
   </script>
 </head>
@@ -40,13 +193,26 @@
   <div>
     <div>
       <h2>Compose your application</h2>
-      <p>TODO: &lt;&lt; Cool graph-editor goes here &gt;&gt;</p>
-      <form action="/file/deployment">
-        <ol id="module-sequence-list">
-            <li><input type="text"></li>
-        </ol>
-        <button type="button" id="add-module-row">Add row</button>
-      </form>
+      <div>
+        <form id="deployment-form">
+          <fieldset>
+              <legend>Create a deployment</legend>
+              <div>
+                <div>
+                  <label for="dname">Name</label>
+                  <input id="dname" name="name" required type="text" value="">
+                </div>
+                <div>
+                  <p>Procedure-call sequence:</p>
+                  <ol id="dprocedure-sequence-list" data-hackfield="sequence">
+                  </ol>
+                  <button type="button" id="dadd-procedure-row">Next</button>
+                </div>
+              </div>
+          </fieldset>
+          <input type="submit" value="Deploy!"/>
+        </form>
+      </div>
     </div>
     <div>
       <ul>
@@ -57,31 +223,41 @@
     </div>
     <div id="form-container">
       <div>
-        <form id="module-form" action="/file/module" method="POST" enctype="multipart/form-data">
+        <form id="module-form">
           <fieldset>
-              <legend>Add a module</legend>
+            <legend>Add a module</legend>
+            <div>
               <div>
-                  <label for="module-json">Module metadata in JSON</label>
-                  <textarea id="module-json" name="json" required></textarea>
+                <label for="mname">Name</label>
+                <input id="mname" name="name" required type="text" value="">
               </div>
               <div>
-                  <label>Wasm executable<input type="file" name="module" required/></label>
+                <label for="mexports">Exports</label>
+                <input id="mexports" name="exports" required type="text" value="" data-hacktype="array" placeholder="export1,export2,export3...">
               </div>
+              <div>
+                <label for="mrequirements">Supervisor requirements</label>
+                <input id="mrequirements" name="requirements" type="text" value="" data-hacktype="array" placeholder="req1,req2,req3...">
+              </div>
+            </div>
           </fieldset>
           <input type="submit" value="Submit"/>
         </form>
       </div>
       <div>
-        <form id="deployment-form" action="/file/manifest" method="POST" enctype="application/json">
+        <form id="wasm-form" action="/file/module/upload" method="POST" enctype="multipart/form-data">
           <fieldset>
-              <legend>Add a deployment</legend>
-              <div>
-                  <label for="deployment-json">Deployment in JSON</label>
-                  <textarea id="deployment-json" name="json" required></textarea>
-              </div>
-              <!--div>
-                  <label>File (JSON)<input type="file" required/></label>
-              </div-->
+            <legend>Upload WebAssembly file to a module</legend>
+            <div>
+              <label for="wmodule-select">Select the module:</label>
+              <select id="wmodule-select" name="id" required>
+                <option value="">Please select an existing module:</option>
+              </select>
+            </div>
+            <div>
+              <label for="wfile">Wasm executable</label>
+              <input type="file" id="wfile" name="module" required>
+            </div>
           </fieldset>
           <input type="submit" value="Submit"/>
         </form>
