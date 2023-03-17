@@ -20,12 +20,31 @@ router.get("/:moduleId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
     let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
     if (doc) {
-        // TODO Only respond with the binary, not JSON.
+        console.log("Sending metadata of module: " + doc.humanReadableName);
         response.json(doc);
     } else {
-        let errmsg = `Failed querying for deployment id: ${request.params.moduleId}`;
+        let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
         console.log(errmsg);
         response.status(400).send(errmsg);
+    }
+});
+
+/**
+ * Serve the WebAssembly binary matching requested module ID.
+ */
+router.get("/:moduleId/wasm", async (request, response) => {
+    let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
+    if (doc) {
+        console.log("Sending Wasm-file: " + doc.path);
+        // TODO: Should force to use the application/wasm media type like
+        // suggested(?) here:
+        // https://webassembly.github.io/spec/web-api/#mediaType
+        // The resp.sendFile(f) uses application/octet-stream by default.
+        response.sendFile(doc.path);
+    } else {
+        let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
+        console.log(errmsg);
+        response.status(400).json({ err: errmsg });
     }
 });
 
