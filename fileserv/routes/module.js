@@ -62,6 +62,15 @@ router.get("/", async (request, response) => {
  * between requests with pure JSON or binary bodies.
  */
 router.post("/", validateModuleFields, async (request, response) => {
+    // Prevent using the same name twice for a module.
+    let exists = (await getDb().module.findOne({ name: request.body.name }));
+    if (exists) {
+        console.log(`Tried to write module with existing name: '${request.body.name}'`);
+        let errmsg = `Module of name ' ${request.body.name}' already exists`;
+        response.status(400).json({ err: errmsg });
+        return;
+    }
+
     const moduleId = (await getDb()
             .module
             .insertOne(request.body)
