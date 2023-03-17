@@ -152,10 +152,12 @@ async function saveDeviceData(service) {
     // Check for duplicate service
     let device_doc = await db.device.findOne({ name: service.name });
 
-    // Check if all the required information has been received earlier.
+    // Check if __all__ the required information has been received earlier.
+    // NOTE: This is not a check to prevent further actions if device already
+    // simply exists in database.
     if (device_doc !== null
         && device_doc.hasOwnProperty("description") && device_doc.description !== null
-        && device_doc.hasOwnProperty("platform") && device_doc.platform !== null
+        && device_doc.description.hasOwnProperty("platform") && device_doc.description.platform !== null
     ) {
         console.log(`The device named '${device_doc.name}' is already in the database!`);
         return;

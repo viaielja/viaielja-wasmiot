@@ -20,12 +20,31 @@ router.get("/:moduleId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
     let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
     if (doc) {
-        // TODO Only respond with the binary, not JSON.
+        console.log("Sending metadata of module: " + doc.humanReadableName);
         response.json(doc);
     } else {
-        let errmsg = `Failed querying for deployment id: ${request.params.moduleId}`;
+        let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
         console.log(errmsg);
         response.status(400).send(errmsg);
+    }
+});
+
+/**
+ * Serve the WebAssembly binary matching requested module ID.
+ */
+router.get("/:moduleId/wasm", async (request, response) => {
+    let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
+    if (doc) {
+        console.log("Sending Wasm-file from file-path: " + doc.path);
+        // TODO: Should force to use the application/wasm media type like
+        // suggested(?) here:
+        // https://webassembly.github.io/spec/web-api/#mediaType
+        // The resp.sendFile(f) uses application/octet-stream by default.
+        response.sendFile(doc.path);
+    } else {
+        let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
+        console.log(errmsg);
+        response.status(400).json({ err: errmsg });
     }
 });
 
@@ -43,6 +62,15 @@ router.get("/", async (request, response) => {
  * between requests with pure JSON or binary bodies.
  */
 router.post("/", validateModuleFields, async (request, response) => {
+    // Prevent using the same name twice for a module.
+    let exists = (await getDb().module.findOne({ name: request.body.name }));
+    if (exists) {
+        console.log(`Tried to write module with existing name: '${request.body.name}'`);
+        let errmsg = `Module of name ' ${request.body.name}' already exists`;
+        response.status(400).json({ err: errmsg });
+        return;
+    }
+
     const moduleId = (await getDb()
             .module
             .insertOne(request.body)

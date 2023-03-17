@@ -71,7 +71,7 @@
           for (let exportt of mod.exports) {
             let exportOption = document.createElement("option");
             exportOption.value = exportt;
-            exportOption.textContent = exportt;
+            exportOption.textContent = mod.name + ":" + exportt;
             select.appendChild(exportOption);
           }
         }
@@ -105,7 +105,7 @@
           // HACK: List-inputs are identified by a custom field and
           // ','-characters delimit the values.
           if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
-            json[input.name] = input.value.split(",");
+            json[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
           } else {
             json[input.name] = input.value;
           }
