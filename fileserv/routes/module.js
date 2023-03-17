@@ -35,7 +35,7 @@ router.get("/:moduleId", async (request, response) => {
 router.get("/:moduleId/wasm", async (request, response) => {
     let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
     if (doc) {
-        console.log("Sending Wasm-file: " + doc.path);
+        console.log("Sending Wasm-file from file-path: " + doc.path);
         // TODO: Should force to use the application/wasm media type like
         // suggested(?) here:
         // https://webassembly.github.io/spec/web-api/#mediaType
