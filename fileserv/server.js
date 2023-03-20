@@ -62,6 +62,7 @@ const PORT = 3000;
 
     bonjourBrowser = initializeMdns();
 
+    express.static.mime.define({"application/wasm": ["wasm"]});
     server = expressApp.listen(PORT, async () => {
         console.log(`Listening on port: ${PORT}`);
     });
@@ -227,7 +228,7 @@ function initializeMdns() {
             "fqdn": service.fqdn,
             "host": service.host,
         };
-        console.log(`Found '${service.name}'! ${JSON.stringify(serviceInfo, null, 2)}`);
+        console.log(`Found '${service.name}'! `, serviceInfo);
         saveDeviceData(service);
     }
 

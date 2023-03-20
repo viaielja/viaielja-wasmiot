@@ -40,7 +40,8 @@ router.get("/:moduleId/wasm", async (request, response) => {
         // suggested(?) here:
         // https://webassembly.github.io/spec/web-api/#mediaType
         // The resp.sendFile(f) uses application/octet-stream by default.
-        response.sendFile(doc.path);
+        let options = { headers: { 'Content-Type': 'application/wasm' } };
+        response.sendFile(doc.path, options);
     } else {
         let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
         console.log(errmsg);
