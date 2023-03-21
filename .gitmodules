@@ -1,3 +1,3 @@
-[submodule "flask-host"]
-	path = flask-host
-	url = git@gitlab.jyu.fi:wasmiot/flask-host.git
+[submodule "wasmiot-supervisor"]
+	path = wasmiot-supervisor
+	url = git@github.com:LiquidAI-project/wasmiot-supervisor.git
