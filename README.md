@@ -1,141 +1,92 @@
 # vilin_projekti
 
-## Orchestrator
-Running orchestrator and its database only:
-```
-docker compose up --build
-```
+## Description
+This project (under development) is to contain package managing and
+orchestrating logic for WebAssembly-based microservices.
 
-OR you can use the VSCode GUI:
-1. Right click `docker-compose.yml` file from explorer
-2. Select "Compose Up - Select Services"
-3. Select "profiles"
-4. Do not select "ABSTRACT_BASE_HACK_DO_NOT_USE"
-5. Click "OK"
+### Features
+- Package manager
+- Deployment managing
+- Device scanning
+- RESTful API
+- Web GUI
 
-## Devices
-You can test how orchestrator interacts with devices by running the containers
-in the same compose (TODO Define common network for testing any new container)
-for example by clicking the _⏵ button_ on Docker Desktop GUI.
+## Installation
+Clone the project and its submodules and use `docker compose` to build and start the server.
 
-Also running the simulated devices with one command:
-```
-docker compose --profile device up --build
-```
-### Adding new devices to Docker compose
-When adding a brand new device to your local Docker compose -simulation, you
-have to (in addition to the entries into `.yml`) add its config-files into its
-Docker-volume after running.
-
-This can be achieved for example with (replace `<service name>`,
-`<device type>`, `<config type>` and `<your container>`):
+Using Windows 10 you could do the following:
 ```powershell
-<# First run the container. #>
-docker compose up <device name> --build -d;
-<# Then copy the needed description into it. #>
-docker cp `
-./client/files/<your device type>.<config type>-description.json `
-<your container>:/app/configs/device-description.json
-```
-
-
-
-## Setup
-
-### TL;DR
-
-Tested on Windows 10:
-```powershell
-git clone git@gitlab.jyu.fi:wasmiot/wasmiot-orchestrator.git
+git clone git@github.com:LiquidAI-project/wasmiot-orchestrator.git
 cd .\wasmiot-orchestrator\
-git clone git@gitlab.jyu.fi:wasmiot/flask-host.git
+<# Clone submodule separately in order to work around access issues on Windows. #>
+git clone git@github.com:LiquidAI-project/wasmiot-supervisor.git
 git submodule init
 git submodule update
 docker compose up
 ```
 
 ### Supervisor (git submodule)
-The supervisor is a _git submodule_ so clone and update it following the command's documentation: https://git-scm.com/book/en/v2/Git-Tools-Submodules
+The supervisor is a _git submodule_ so you should clone and work on it
+by following the command's documentation:
+https://git-scm.com/book/en/v2/Git-Tools-Submodules
 
-For example cloning would go like this:
+__On Windows__ the submodule-related commands like `git submodule update` or
+`git pull --recurse-submodule` might complain about unauthorized access. Some
+workarounds to these issues are to:
+- use `git` from WSL
+- clone submodule separately (Based on a [similar situation on Stack
+  Overflow](https://stackoverflow.com/questions/60850933/git-submodule-update-permission-denied))
+
+## Usage
+
+### Orchestrator
+Orchestrator is a NodeJS server using a MongoDB database.
+
+Running these containers can be done with the command:
 ```
-git clone git@gitlab.jyu.fi:wasmiot/wasmiot-orchestrator.git
-git submodule init
-git submodule update
+docker compose up --build
 ```
 
-The command `git submodule update` might complain on Windows with unauthorized
-access to which some workarounds are:
-- Start using WSL2 (the [Remote
-  Development](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack)
-  VSCode extension might be useful/required).
-- Based on a [similar situation on Stack
-  Overflow](https://stackoverflow.com/questions/60850933/git-submodule-update-permission-denied),
-  it seems that updates should start working as normal after the submodule is
-  first __manually cloned__ into its directory.
+Another way is to open the project directory on VSCode and follow these instructions:
+1. Right click `docker-compose.yml` on the file explorer
+2. Select "Compose Up - Select Services"
+3. Select "profiles"
+4. Do not select "ABSTRACT_BASE_HACK_DO_NOT_USE"
+5. Click "OK"
 
-The supervisor also needs the following (if using docker, then compose should handle all these):
-  - a `configs` directory at its root containing files:
-    - `remote_functions.json`
-    - `modules.json`
-  - Some environment variables TODO which?
+### Devices
+You can test how the orchestrator interacts with the
+[supervisor](/wasmiot-supervisor)-controlled devices by running the
+containers under profile `device` described in `docker-compose.example.yml`.
+
+All of these pretend-devices can be run at once with the command:
+```
+docker compose -f ./docker-compose.example.yml --profile device up --build
+```
+
+#### Adding new devices to Docker compose
+When adding a brand new device to your local Docker compose simulation, you have
+to (in addition to entries into the compose file) add a directory for
+config-files into this project's [`example`](/example). From here the
+config-directories are to be mounted into the devices' containers.
 
 ---
 
-## Debugging
-For debugging, the devcontainer should work quite well with just using VSCode
-like you would locally.
+### Devcontainer usage
 
-### Things that __have__ to be done
-Manually run `npm install` after getting inside the container (TODO: This might be
-because of bind mounting with the current project directory structure?).
-Note that this will also result in a _local_ `node_modules` directory in all
-its glory.
+First time opening the devcontainer in VSCode you need to manually run `npm
+install` to install the dependencies. Note that this will also result in a
+_local_ `node_modules` directory in all its glory.
+TODO: Install the dependencies _globally_ into the docker image so that mounting
+source code does not overwrite `node_modules` directory.
 
-### Things that __might__ have to be done
-In VSCode, opening the project in devcontainer might fail. Somehow it helped 
-to locally run `docker compose -f .\docker-compose.debug.server.yml up` and
-after this the devcontainer should start opening fine.
+#### Debugging
+For debugging, the devcontainer should work quite well and you can just use
+VSCode like you would locally for debugging Javascript.
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.jyu.fi/wasmiot/vilin_projekti.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.jyu.fi/wasmiot/vilin_projekti/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+NOTE that opening the project in devcontainer has sometimes been failing. A
+workaround could be to first __locally__ run `docker compose -f .\docker-compose.debug.server.yml up`
+and after this the devcontainer should start opening fine.
 
 ***
 
@@ -149,20 +100,11 @@ Every project is different, so consider which of these sections apply to yours. 
 ## Name
 Choose a self-explaining name for your project.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
 ## Badges
 On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
 ## Visuals
 Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
 ## Support
 Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
