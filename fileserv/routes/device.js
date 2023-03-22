@@ -17,6 +17,15 @@ router.get("/", async (request, response) => {
 });
 
 /**
+ * NOTE TEMPORARY route to easily delete all devices from database (in case of
+ * hostname-changes etc.)
+ */
+router.get("/deleteall", async (request, response) => {
+    await getDb().device.deleteMany({});
+    response.send("deleted all");
+});
+
+/**
  * POST a new device's architecture information (i.e., device description) to
  * add to orchestrator's database.
  */
