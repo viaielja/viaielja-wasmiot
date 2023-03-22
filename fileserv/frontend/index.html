@@ -96,31 +96,14 @@
       return handleAddRow;
     }
 
-    function submitJson(url, successCallback) {
+    /**
+     * Return a handler that submits JSON contained in a textarea-element of the
+     * event target to the url.
+     */
+    function submitJsonTextarea(url, successCallback) {
       function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault();
-        let json = {};
-        for (let input of formSubmitEvent.target.querySelectorAll("input[type=text]")) {
-          // TODO: Parse list-inputs into the JSON.
-          // HACK: List-inputs are identified by a custom field and
-          // ','-characters delimit the values.
-          if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
-            json[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
-          } else {
-            json[input.name] = input.value;
-          }
-        }
-
-        // HACK: Convert all <select> -elements under the form's <ol> into a
-        // single JSON-array.
-        // TODO: Make a separate "arrayHandle" function.
-        let ol = formSubmitEvent.target.querySelector("ol");
-        if (ol !== null && ol) {
-          json[ol.dataset.hackfield] =
-            // TODO: Does queryselectorall return the elements in the same
-            // order as "listed" on the page?
-            Array.from(ol.querySelectorAll("select")).map(x => x.selectedOptions[0].value);
-        }
+        let json = formSubmitEvent.target.querySelector("textarea").value;
 
         // Disable the form for the duration of the submission (provided it is
         // inside a fieldset-element).
@@ -129,7 +112,7 @@
         fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(json)
+            body: json
           })
           // TODO The backend should preferrably always respond with JSON as
           // well (when, use the following).
@@ -153,6 +136,37 @@
           });
       }
       return handleSubmit;
+    }
+
+    function formToObject(form) {
+      let json = {};
+      for (let input of form.querySelectorAll("input[type=text]")) {
+          // TODO: Parse list-inputs into the JSON.
+          // HACK: List-inputs are identified by a custom field and
+          // ','-characters delimit the values.
+          if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
+            json[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
+          } else {
+            json[input.name] = input.value;
+          }
+        }
+
+        // HACK: Convert all <select> -elements under the form's <ol> into a
+        // single JSON-array.
+        // TODO: Make a separate "arrayHandle" function.
+        let ol = form.querySelector("ol");
+        if (ol !== null && ol) {
+          json[ol.dataset.hackfield] =
+            // TODO: Does queryselectorall return the elements in the same
+            // order as "listed" on the page?
+            Array.from(ol.querySelectorAll("select")).map(x => x.selectedOptions[0].value);
+        }
+
+        return json;
+    }
+
+    function populateWithJson(sourceForm, targetTextArea) {
+      targetTextArea.value = JSON.stringify(formToObject(sourceForm), null, 2);
     }
 
     function populateWasmFormModules() {
@@ -181,9 +195,14 @@
 
     window.onload = function() {
       document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
-      document.querySelector("#module-form").addEventListener("submit", submitJson("/file/module", populateWasmFormModules));
-      document.querySelector("#deployment-form").addEventListener("submit", submitJson("/file/manifest"));
-      // Populate lists on load.
+
+      document.querySelector("#module-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#module-json-form").querySelector("textarea")); });
+      document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
+
+      document.querySelector("#deployment-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#deployment-json-form").querySelector("textarea")); });
+      document.querySelector("#deployment-json-form").addEventListener("submit", submitJsonTextarea("/file/manifest"));
+
+      // Populate lists on page load.
       populateWasmFormModules();
     };
   </script>
@@ -193,25 +212,40 @@
   <div>
     <div>
       <h2>Compose your application</h2>
-      <div>
-        <form id="deployment-form">
-          <fieldset>
-              <legend>Create a deployment</legend>
-              <div>
+      <div id="form-container">
+        <div>
+          <form id="deployment-form">
+            <fieldset>
+                <legend>Create a deployment</legend>
                 <div>
-                  <label for="dname">Name</label>
-                  <input id="dname" name="name" required type="text" value="">
+                  <div>
+                    <label for="dname">Name</label>
+                    <input id="dname" name="name" required type="text" value="">
+                  </div>
+                  <div>
+                    <p>Procedure-call sequence:</p>
+                    <ol id="dprocedure-sequence-list" data-hackfield="sequence">
+                    </ol>
+                    <button type="button" id="dadd-procedure-row">Next</button>
+                  </div>
                 </div>
+            </fieldset>
+            <input type="submit" value="To JSON"/>
+          </form>
+        </div>
+        <div>
+          <form id="deployment-json-form">
+            <fieldset>
+                <legend>Submit a deployment in JSON</legend>
                 <div>
-                  <p>Procedure-call sequence:</p>
-                  <ol id="dprocedure-sequence-list" data-hackfield="sequence">
-                  </ol>
-                  <button type="button" id="dadd-procedure-row">Next</button>
+                  <div>
+                    <textarea id="djjson" name="json" required>{}</textarea>
+                  </div>
                 </div>
-              </div>
-          </fieldset>
-          <input type="submit" value="Deploy!"/>
-        </form>
+            </fieldset>
+            <input type="submit" value="Deploy!"/>
+          </form>
+        </div>
       </div>
     </div>
     <div>
@@ -225,7 +259,7 @@
       <div>
         <form id="module-form">
           <fieldset>
-            <legend>Add a module</legend>
+            <legend>Fill-in metadata for a new module</legend>
             <div>
               <div>
                 <label for="mname">Name</label>
@@ -240,6 +274,19 @@
                 <input id="mrequirements" name="requirements" type="text" value="" data-hacktype="array" placeholder="req1,req2,req3...">
               </div>
             </div>
+          </fieldset>
+          <input type="submit" value="To JSON"/>
+        </form>
+      </div>
+      <div>
+        <form id="module-json-form">
+          <fieldset>
+              <legend>Submit a module in JSON</legend>
+              <div>
+                <div>
+                  <textarea id="mjjson" name="json" required>{}</textarea>
+                </div>
+              </div>
           </fieldset>
           <input type="submit" value="Submit"/>
         </form>
