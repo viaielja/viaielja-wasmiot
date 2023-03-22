@@ -63,7 +63,7 @@ router.get("/", async (request, response) => {
  * concrete file to be patched by another upload-request. This separates
  * between requests with pure JSON or binary bodies.
  */
-router.post("/", validateModuleFields, async (request, response) => {
+router.post("/", async (request, response) => {
     // Prevent using the same name twice for a module.
     let exists = (await getDb().module.findOne({ name: request.body.name }));
     if (exists) {
@@ -174,20 +174,4 @@ function validateFileFormSubmission(request, response, next) {
         return;
     }
     next();
-}
-
-/**
- * Middleware to check fields on a module upload POST. NOTE: Designed to crash
- * on failure because writing error messages would be too much work for little
- * value at this stage...
- */
-function validateModuleFields(request, response, next) {
-    if (request.body.exports instanceof Array &&
-        request.body.exports.length > 0 &&
-        request.body.requirements instanceof Array) {
-        next();
-    } else {
-        console.log("Failed to validate module data");
-        response.send("Module missing fields").status(400);
-    }
 }
