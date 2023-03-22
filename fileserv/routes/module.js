@@ -1,3 +1,4 @@
+const { readFile } = require("node:fs");
 const { Router } = require("express");
 const { ObjectId } = require("mongodb");
 
@@ -97,26 +98,58 @@ router.post("/", validateModuleFields, async (request, response) => {
  * multipart/form-data at the frontend), use POST.
  */
 router.post("/upload", fileUpload, validateFileFormSubmission, async (request, response) => {
-    // Add additional fields from the file-upload and save to database.
     let filter = { _id: ObjectId(request.body.id) };
-    let update = {
-        $set: {
-            humanReadableName: request.file.originalname,
-            fileName: request.file.filename,
-            path: request.file.path,
+
+    /**
+     * Helper to update fields in callbacks.
+     * @param {*} fields The database fields to update on the module.
+     */
+    async function update(fields) {
+        let result = await getDb().module.updateOne(filter, { $set: fields });
+        if (result.acknowledged) {
+            let msg = `Updated module '${request.file.originalName}' with data: ${JSON.stringify(fields, null, 2)}`;
+            console.log(result.upsertedId + ": " + msg);
+            response.send(msg);
+        } else {
+            let msg = "Failed adding Wasm-file to module";
+            console.log(msg + ". Tried adding data: " + JSON.stringify(fields, null, 2));
+            response.status(500).send(msg);
         }
+    }
+
+    // Add additional fields initially from the file-upload and save to
+    // database.
+    let fields = {
+        humanReadableName: request.file.originalname,
+        fileName: request.file.filename,
+        path: request.file.path,
     };
 
-    let result = await getDb().module.updateOne(filter, update);
-    if (result.acknowledged) {
-        let msg = "Added Wasm-file to module";
-        console.log(msg + ": " + result.upsertedId);
-        response.send(msg);
-    } else {
-        let msg = "Failed adding Wasm-file to module";
-        console.log(msg + ". Tried adding: " + JSON.stringify(update, null, 2));
-        response.status(500).send(msg);
-    }
+    // Get the exports and imports directly from the Wasm-binary itself.
+    readFile(request.file.path, function (err, data) {
+        if (err) {
+            console.log("couldn't read Wasm binary from file ", request.file.path, err);
+            return;
+        };
+
+        WebAssembly.compile(data)
+            .then(function(wasmModule) {
+                let importData = WebAssembly.Module.imports(wasmModule)
+                    // Just get the names of functions(?) for now.
+                    .filter(x => x.kind === "function")
+                    .map(x => x.name);
+                let exportData =  WebAssembly.Module.exports(wasmModule)
+                    // Just get the names of functions(?) for now.
+                    .filter(x => x.kind === "function")
+                    .map(x => x.name);
+
+                fields.requirements = importData;
+                fields.exports = exportData;
+
+                // Now actually update the database-document.
+                update(fields);
+            });
+    });
 });
 
 /**
