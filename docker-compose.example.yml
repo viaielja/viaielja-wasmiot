@@ -29,7 +29,7 @@ services:
       # on their own though (separate profile)...
       - ABSTRACT_BASE_HACK_DO_NOT_USE
     build:
-      context: ./flask-host/
+      context: ./wasmiot-supervisor
       dockerfile: .devcontainer/Dockerfile
       target: run
       # args:
@@ -42,7 +42,7 @@ services:
     #   # 5000 is the default Flask-port that is probably used.
     #   - 0:5000 # ::OVERRIDE::
     volumes:
-      - ./flask-host/host_app:/app/host_app:bind
+      - ./wasmiot-supervisor/host_app:/app/host_app:bind
 
   adequate-webcam-laptop:
     extends: device-base
