@@ -2,6 +2,8 @@ FROM "mcr.microsoft.com/devcontainers/javascript-node:0-18" AS base
 
 WORKDIR /app
 
+################################################################################
+
 FROM base AS compose
 
 # Install dependencies first in order to not rebuild every time code changes.
@@ -10,7 +12,9 @@ RUN npm install
 
 COPY . /app
 
-FROM base AS server-debug
+################################################################################
+
+FROM base AS devcontainer
 
 # Install dependencies first in order to not rebuild every time code changes.
 # FIXME This does not work while simultaneously bind-mounting the project root.

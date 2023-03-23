@@ -5,7 +5,7 @@
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	//"image": "mcr.microsoft.csm/devcontainers/javascript-node:0-18"
 	"dockerComposeFile": "../docker-compose.debug.server.yml",
-	"service": "orchestrator-devcontainer",
+	"service": "orchestrator",
 	"workspaceFolder": "/app",
 
 	//"remoteUser": "vscode",

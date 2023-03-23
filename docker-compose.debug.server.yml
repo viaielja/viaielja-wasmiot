@@ -1,7 +1,7 @@
 version: '3.4'
 
 services:
-  orchestrator-devcontainer:
+  orchestrator:
     # Continue from the original (i.e., docker-compose.yml). See:
     # https://docs.docker.com/compose/extends/
     extends:
@@ -12,7 +12,7 @@ services:
       # just `fileserv`.
       context: .
       dockerfile: ./fileserv/Dockerfile
-      target: server-debug
+      target: devcontainer
     # VSCode + Docker Compose debugging config from:
     # https://tech.indy.fr/2022/06/10/how-to-use-vscode-debugger-with-multiple-docker-services/
     # and https://code.visualstudio.com/docs/containers/docker-compose
@@ -26,21 +26,6 @@ services:
     # Mount source code on host to the container in corresponding location. NOTE
     # Mounting overwrites files/directories in image.
       - .:/app
-  
-  # Import the other services from original.
-  # TODO Remove these imports and just use the predefined/named network for all.
-  adequate-webcam-laptop:
-    extends:
-      file: docker-compose.example.yml
-      service: adequate-webcam-laptop
-  lousy-webcam-laptop:
-    extends:
-      file: docker-compose.example.yml
-      service: lousy-webcam-laptop
-  low-power-temperature-sensor:
-    extends:
-      file: docker-compose.example.yml
-      service: low-power-temperature-sensor
 
   mongo:
     extends:
