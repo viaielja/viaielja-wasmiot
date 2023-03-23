@@ -74,8 +74,14 @@ config-directories are to be mounted into the devices' containers.
 
 ### Devcontainer usage
 
-First time opening the devcontainer in VSCode you need to manually run `npm
-install` to install the dependencies. Note that this will also result in a
+As they both are set to the same Docker network, working simultaneously with
+supervisor can be done by running __two__ VSCode instances: first one opened in
+the orchestrator's and second one in the supervisor's devcontainer.
+
+The first time you open the orchestrator's devcontainer in VSCode you need to
+manually run
+ `npm install` to install the dependencies. Note that this will
+also result in a
 _local_ `node_modules` directory in all its glory.
 TODO: Install the dependencies _globally_ into the docker image so that mounting
 source code does not overwrite `node_modules` directory.
@@ -85,7 +91,7 @@ For debugging, the devcontainer should work quite well and you can just use
 VSCode like you would locally for debugging Javascript.
 
 NOTE that opening the project in devcontainer has sometimes been failing. A
-workaround could be to first __locally__ run `docker compose -f .\docker-compose.debug.server.yml up`
+workaround could be to first __locally__ run `docker compose -f .\docker-compose.devcontainer.yml up`
 and after this the devcontainer should start opening fine.
 
 ***
