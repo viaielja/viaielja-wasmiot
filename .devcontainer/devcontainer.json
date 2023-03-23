@@ -4,7 +4,7 @@
 	"name": "Node.js",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	//"image": "mcr.microsoft.csm/devcontainers/javascript-node:0-18"
-	"dockerComposeFile": "../docker-compose.debug.server.yml",
+	"dockerComposeFile": "../docker-compose.devcontainer.yml",
 	"service": "orchestrator",
 	"workspaceFolder": "/app",
 
