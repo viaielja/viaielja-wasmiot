@@ -1,10 +1,10 @@
 FROM "mcr.microsoft.com/devcontainers/javascript-node:0-18" AS base
 
-WORKDIR /app
-
 ################################################################################
 
 FROM base AS compose
+
+WORKDIR /app
 
 # Install dependencies first in order to not rebuild every time code changes.
 COPY ./package.json /app/package.json
@@ -16,14 +16,20 @@ COPY . /app
 
 FROM base AS devcontainer
 
-# Install dependencies first in order to not rebuild every time code changes.
-# FIXME This does not work while simultaneously bind-mounting the project root.
-COPY ./fileserv/package.json /app/fileserv/package.json
-RUN npm install ./fileserv
-COPY ./client/package.json /app/client/package.json
-RUN npm install ./client
 
 # Install nodemon (https://nodemon.io/) for automatic reloads on code changes.
 RUN npm install -g nodemon
+
+# Install dependencies to the directory of a fake package.
+COPY ./fileserv/package.json /fake_package/package.json
+WORKDIR /fake_package
+RUN npm install
+
+# Set NodeJS to search for dependencies from the path where they were just
+# installed into. See:
+# https://nodejs.org/api/modules.html#modules_loading_from_the_global_folders
+ENV NODE_PATH=/fake_package/node_modules
+
+WORKDIR /app
 
 COPY . /app
