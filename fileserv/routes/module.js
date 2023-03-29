@@ -107,7 +107,7 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
     async function update(fields) {
         let result = await getDb().module.updateOne(filter, { $set: fields });
         if (result.acknowledged) {
-            let msg = `Updated module '${request.file.originalName}' with data: ${JSON.stringify(fields, null, 2)}`;
+            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(fields, null, 2)}`;
             console.log(result.upsertedId + ": " + msg);
             response.send(msg);
         } else {
