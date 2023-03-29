@@ -191,6 +191,12 @@ async function deploy(deploymentId, packageBaseUrl) {
         deploymentsToDevices[device._id].instructions.push(instruction);
     }
 
+    // Add the composed deployment structure to database for inspecting later.
+    getDb().deployment.updateOne(
+        { _id: deployment._id },
+        { $set: { fullManifest: deploymentsToDevices } },
+    );
+
     // Make the requests on each device.
     // POST-making from example snippet at:
     // https://nodejs.org/api/http.html#httprequesturl-options-callback
