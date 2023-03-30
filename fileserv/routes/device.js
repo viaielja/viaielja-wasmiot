@@ -20,9 +20,11 @@ router.get("/", async (request, response) => {
  * NOTE TEMPORARY route to easily delete all devices from database (in case of
  * hostname-changes etc.)
  */
-router.get("/deleteall", async (request, response) => {
-    await getDb().device.deleteMany({});
-    response.send("deleted all");
+router.delete("/", (request, response) => {
+    getDb().device.deleteMany({}).then(_ => {
+        // NOTE: This is sync right? So 202 "accepted" does not really make sense?
+        response.status(202).json({ success: "deleting all devices" });
+    });
 });
 
 /**
