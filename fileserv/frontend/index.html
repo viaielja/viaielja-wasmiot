@@ -23,10 +23,12 @@
     }
 
     .success {
+      width: 100%;
       background-color: cyan;
     }
 
     .error {
+      width: 100%;
       background-color: red;
     }
   </style>
@@ -67,12 +69,22 @@
         // TODO: Show proc inputs and outputs for checking compatibility?
         let modulesResponse = await fetch("/file/module");
         let modulesData = await modulesResponse.json();
-        for (let mod of modulesData) {
-          for (let exportt of mod.exports) {
-            let exportOption = document.createElement("option");
-            exportOption.value = exportt;
-            exportOption.textContent = mod.name + ":" + exportt;
-            select.appendChild(exportOption);
+        let devicesResponse = await fetch("/file/device");
+        let devicesData = await devicesResponse.json();
+
+        // HACK HACK HACK Add empty ones in front for letting orchestrator decide.
+        // TODO: Allow 
+        for (let device of [{_id: "", name:""}].concat(devicesData)) {
+          for (let mod of modulesData) {
+            for (let exportt of mod.exports) {
+              let exportOption = document.createElement("option");
+              // FIXME HACK: This way the server can parse requested resources
+              // from <device>:<module>:<func> but prevents ':' characters in
+              // names (and is dumb).
+              exportOption.value = `${device._id}:${mod._id}:${exportt}`;
+              exportOption.textContent = device.name + ":" + mod.name + ":" + exportt;
+              select.appendChild(exportOption);
+            }
           }
         }
 
@@ -193,22 +205,65 @@
         });
     }
 
+    /**
+     * Set the status bar to success if result.success or error if result.error
+     */
+    function setStatus(result) {
+      let elem = document.querySelector("#status");
+      elem.classList.remove("error");
+      elem.classList.remove("success");
+
+      if (result.success) {
+        msg = result.success;
+        classs = "success";
+      } else {
+        // Empty the message if result is malformed.
+        msg = result.err ?? ("RESPONSE RESULT MALFORMED: " + JSON.stringify(result));
+        // Default the style to error.
+        classs = "error"
+      }
+      elem.textContent = msg;
+      elem.classList.add(classs);
+    }
+
     window.onload = function() {
-      document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
+      // Module forms:
+
+      // Populate lists on page load.
+      populateWasmFormModules();
 
       document.querySelector("#module-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#module-json-form").querySelector("textarea")); });
       document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
 
+      // Deployment forms:
+      document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
+
       document.querySelector("#deployment-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#deployment-json-form").querySelector("textarea")); });
       document.querySelector("#deployment-json-form").addEventListener("submit", submitJsonTextarea("/file/manifest"));
 
-      // Populate lists on page load.
-      populateWasmFormModules();
+      // Database listings:
+
+      document.querySelector("#module-deleteall-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        fetch("/file/module", { method: "DELETE" })
+          .then(resp => resp.json())
+          .then(setStatus);
+      });
+
+      document.querySelector("#device-deleteall-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        fetch("/file/device", { method: "DELETE" })
+          .then(resp => resp.json())
+          .then(setStatus);
+      });
     };
   </script>
 </head>
 <body>
   <h1>WasmIoT - Orchestrator</h1>
+  <div>
+    <h1 id="status"></h1>
+  </div>
   <div>
     <div>
       <h2>Compose your application</h2>
@@ -253,12 +308,17 @@
         <li> 
           <a href="/file/device">Devices</a>
           <div>
-            <form action="/file/device/deleteall/" method="GET">
-              <input type="submit" value="DELETE ALL DEVICES"/>
-            </form>
+          <form id="device-deleteall-form">
+            <input type="submit" value="DELETE ALL DEVICES"/>
+          </form>
           </div>
         </li>
-        <li><a href="/file/module">Modules</a></li>
+        <li>
+          <a href="/file/module">Modules</a>
+          <form id="module-deleteall-form">
+            <input type="submit" value="DELETE ALL MODULES"/>
+          </form>
+        </li>
         <li><a href="/file/manifest">Deployments</a></li>
       </ul>
     </div>

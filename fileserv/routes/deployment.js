@@ -56,6 +56,9 @@ router.post("/", async (request, response) => {
         status = 400;
         message = `Manifest already exists for deployment ${deploymentName}`;
     } else {
+        // TODO: Confirm here that deployment is indeed possible and logical?
+        // When/where else could the user know the status?
+
         // Add the new deployment to database.
         // TODO Only add what is allowed (e.g. _id should not come from POST).
         let result = await getDb().deployment.insertOne(data);
@@ -90,45 +93,56 @@ router.post("/", async (request, response) => {
 async function deploy(deploymentId, packageBaseUrl) {
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(deploymentId) });
 
-    // NOTE: Temporary. 
-    // 1. Search for modules with the interfaces described in deployment's
-    // action sequence.
     let selectedModules = [];
-    for (let interface of deployment.sequence) {
-        let match = null;
-        let allModules = await getDb().module.find().toArray();
-        for (let modulee of allModules) {
-            if (modulee.exports.find(x => x === interface) !== undefined) {
-                match = modulee;
-                break;
-            }
-        }
-        if (match === null) {
-            console.log(`Failed to satisfy interface '${JSON.stringify(interface)}'`);
-            return;
-        }
-        selectedModules.push(match);
-    }
-    
-    // 2. Search for devices that could run these modules.
     let selectedDevices = [];
-    for (let modulee of selectedModules) {
-        let match = null;
-        let allDevices = await getDb().device.find().toArray();
-        for (let device of allDevices) {
-            if (modulee.requirements.length === 0 ||
-                modulee.requirements
-                    .every(x => device.description.supervisorInterfaces.find(y => y == x))
-            ) {
-                match = device;
-                break;
+
+                                        // STRING-DELIMITER HACK See /frontend/index.js.
+    for (let [device, moduleId, func] of Array.from(deployment.sequence).map(x => x.split(":"))) {
+        let module = null;
+        if (moduleId != "") {
+            module = await getDb().module.findOne({ _id: ObjectId(moduleId) })
+            selectedModules.push(module);
+        } else {
+            // TODO Selecting the module automatically is useless, as they can
+            // only do what their exports allow? Meaning that the if-clause will
+            // ALWAYS hit (on valid requests).
+            // NOTE: Temporary. 
+            // 1. Search for a module with the interface/func in its exports.
+            let allModules = await getDb().module.find().toArray();
+            for (let modulee of allModules) {
+                if (modulee.exports.find(x => x === func) !== undefined) {
+                    module = modulee;
+                    break;
+                }
             }
+            if (match === null) {
+                console.log(`Failed to find function '${JSON.stringify(func)}' from existing modules`);
+                return;
+            }
+            selectedModules.push(module);
         }
-        if (match === null) {
-            console.log(`Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`);
-            return;
+    
+        if (device != "") {
+            selectedDevices.push(await getDb().device.findOne({ _id: ObjectId(device) }));
+        } else {
+            // 2. Search for a device that could run the module.
+            let match = null;
+            let allDevices = await getDb().device.find().toArray();
+            for (let device of allDevices) {
+                if (module.requirements.length === 0 ||
+                    module.requirements
+                        .every(x => device.description.supervisorInterfaces.find(y => y == x))
+                ) {
+                    match = device;
+                    break;
+                }
+            }
+            if (match === null) {
+                console.log(`Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`);
+                return;
+            }
+            selectedDevices.push(match);
         }
-        selectedDevices.push(match);
     }
 
     // 3. Send devices instructions for ...
@@ -164,7 +178,8 @@ async function deploy(deploymentId, packageBaseUrl) {
     for (let i = 0; i < length; i++) {
         let device = selectedDevices[i];
         let module = selectedModules[i];
-        let func = deployment.sequence[i];
+        // DELIMITER HACK
+        let func = deployment.sequence[i].split(":")[2];
         
         let instruction = {
             // ... 3.1. Waiting for an incoming POST with certain identifier
