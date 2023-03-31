@@ -52,7 +52,7 @@ router.post("/", async (request, response) => {
     // TODO When would a new deployment not be accepted? Based on user credits??
     let doc = await getDb().deployment.findOne({ name: deploymentName });
     if (doc) {
-        console.log(`Tried to write existing manifest: ${JSON.stringify(doc)}`);
+        console.log(`Tried to write existing manifest '${doc.name}' ID ${doc._id}`);
         status = 400;
         message = `Manifest already exists for deployment ${deploymentName}`;
     } else {
@@ -96,41 +96,35 @@ async function deploy(deploymentId, packageBaseUrl) {
     let selectedModules = [];
     let selectedDevices = [];
 
-                                        // STRING-DELIMITER HACK See /frontend/index.js.
-    for (let [device, moduleId, func] of Array.from(deployment.sequence).map(x => x.split(":"))) {
-        let module = null;
-        if (moduleId != "") {
-            module = await getDb().module.findOne({ _id: ObjectId(moduleId) })
-            selectedModules.push(module);
+    // Iterate all the items in the request's sequence and fill in the given
+    // modules and devices or choose most suitable ones.
+    for (let [device, moduleId, func]
+        of Array.from(deployment.sequence)
+            .map(x => [x.device, x.module, x.func])
+    ) {
+        // Selecting the module automatically is useless, as they can
+        // only do what their exports allow. So a well formed request should
+        // always contain the module-id as well...
+
+        // ...but still, (1.) do a validity-check that the requested module indeed
+        // contains the func.
+        let modulee = await getDb().module.findOne({ _id: ObjectId(moduleId) })
+        if (modulee.exports.find(x => x === func) !== undefined) {
+            selectedModules.push(modulee);
         } else {
-            // TODO Selecting the module automatically is useless, as they can
-            // only do what their exports allow? Meaning that the if-clause will
-            // ALWAYS hit (on valid requests).
-            // NOTE: Temporary. 
-            // 1. Search for a module with the interface/func in its exports.
-            let allModules = await getDb().module.find().toArray();
-            for (let modulee of allModules) {
-                if (modulee.exports.find(x => x === func) !== undefined) {
-                    module = modulee;
-                    break;
-                }
-            }
-            if (match === null) {
-                console.log(`Failed to find function '${JSON.stringify(func)}' from existing modules`);
-                return;
-            }
-            selectedModules.push(module);
-        }
-    
-        if (device != "") {
+            console.log(`Failed to find function '${func}' from requested module:`, modulee);
+            return;
+        }    
+
+        if (device !== null) {
             selectedDevices.push(await getDb().device.findOne({ _id: ObjectId(device) }));
         } else {
             // 2. Search for a device that could run the module.
             let match = null;
             let allDevices = await getDb().device.find().toArray();
             for (let device of allDevices) {
-                if (module.requirements.length === 0 ||
-                    module.requirements
+                if (modulee.requirements.length === 0 ||
+                    modulee.requirements
                         .every(x => device.description.supervisorInterfaces.find(y => y == x))
                 ) {
                     match = device;
@@ -168,8 +162,11 @@ async function deploy(deploymentId, packageBaseUrl) {
         selectedModules.length     === selectedDevices.length
         ? deployment.sequence.length
         : 0;
+    // Assert.
     if (length === 0) {
-        console.log(`Error on deployment: mismatch length between deployment ${deployment.sequence.length}, modules ${selectedModules.length} and devices ${selectedDevices.length}`);
+        console.log(
+            `Error on deployment: mismatch length between deployment (${deployment.sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`
+        );
         return;
     }
 
@@ -178,8 +175,7 @@ async function deploy(deploymentId, packageBaseUrl) {
     for (let i = 0; i < length; i++) {
         let device = selectedDevices[i];
         let module = selectedModules[i];
-        // DELIMITER HACK
-        let func = deployment.sequence[i].split(":")[2];
+        let func = deployment.sequence[i]["func"];
         
         let instruction = {
             // ... 3.1. Waiting for an incoming POST with certain identifier

@@ -39,7 +39,13 @@
        * <li id="dprocedure-select-list-0">
        *   <label for="dprocedure-select-0">Select a procedure:</label>
        *   <select id="dprocedure-select-0" name="proc0" required>
-       *     <option value="">Please select the next procedure:</option>
+       *     <option value="">
+       *       Please select the next procedure:
+       *     </option>
+       *     <option value="{'device':<did0>,'module':<mid0>,'func':<fname0>}">
+       *      [dName] [mName] [fName]
+       *     </option>
+       *     ...
        *   </select>
        * </li>
        */
@@ -63,26 +69,28 @@
         // selectable.
         // NOTE: Doing this way means quite a lot of requests that
         // will probably not change in between...
-        // TODO: Add a /procedures -route to backend?
-        // TODO: Filter duplicates (the module where a proc comes from should be
-        // irrelevant(?)).
         // TODO: Show proc inputs and outputs for checking compatibility?
         let modulesResponse = await fetch("/file/module");
         let modulesData = await modulesResponse.json();
         let devicesResponse = await fetch("/file/device");
         let devicesData = await devicesResponse.json();
 
-        // HACK HACK HACK Add empty ones in front for letting orchestrator decide.
-        // TODO: Allow 
-        for (let device of [{_id: "", name:""}].concat(devicesData)) {
+        // The null here means that selecting the device is left for orchestrator to decide.
+        let anyDevice = { _id: null, name: "any device" };
+        for (let device of [anyDevice].concat(devicesData)) {
           for (let mod of modulesData) {
             for (let exportt of mod.exports) {
               let exportOption = document.createElement("option");
-              // FIXME HACK: This way the server can parse requested resources
-              // from <device>:<module>:<func> but prevents ':' characters in
-              // names (and is dumb).
-              exportOption.value = `${device._id}:${mod._id}:${exportt}`;
-              exportOption.textContent = device.name + ":" + mod.name + ":" + exportt;
+
+              // Add data to the option element for parsing later and sending to the deploy-endpoint.
+              let optionData = { "device": device._id, "module": mod._id, "func": exportt };
+              // Saving value as a serialized JSON string, but could there be a
+              // non-string solution?
+              exportOption.value = JSON.stringify(optionData);
+              // Make something that a human could understand from the interface.
+              // TODO/FIXME?: XSS galore?
+              exportOption.textContent = `Use ${device.name} for ${mod.name}:${exportt}`;
+
               select.appendChild(exportOption);
             }
           }
@@ -131,56 +139,67 @@
           //.then(function(response) { return response.json(); })
           .then(function(response) { return response.text(); })
           .then(function(msg) {
-            // Enable the form and show success message
+            // Re-enable the form and show success message
             formSubmitEvent.target.querySelector("fieldset").disabled = false;
-            let successmsg = document.createElement("p");
-            successmsg.classList.add("success");
-            successmsg.textContent = JSON.stringify(msg);
-            document.querySelector("h1").appendChild(successmsg);
+            setStatus({success: msg});
             if (successCallback) { successCallback() };
           })
           .catch(function(err) {
             // Show an error message.
-            let errormsg = document.createElement("p");
-            errormsg.classList.add("error");
-            errormsg.textContent = err;
-            document.querySelector("h1").appendChild(errormsg);
+            setStatus({error: err});
           });
       }
       return handleSubmit;
     }
 
+    /**
+     * Using HTMLElement.dataset (See:
+     * https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/dataset),
+     * create a Javascript object from the fields i.e.:
+     * - text-inputs become 'key:string-value' pairs,
+     * - 1-dimensional ordered lists become lists of objects (based on the
+     * serialized JSON in their items' value-fields). Note: The key that then
+     * corresponds to this list in the result object must be found in the
+     * HTML-elements field attribute 'data-json-key'!
+     */
     function formToObject(form) {
-      let json = {};
+      let obj = {};
       for (let input of form.querySelectorAll("input[type=text]")) {
-          // TODO: Parse list-inputs into the JSON.
           // HACK: List-inputs are identified by a custom field and
           // ','-characters delimit the values.
           if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
-            json[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
+            obj[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
           } else {
-            json[input.name] = input.value;
+            obj[input.name] = input.value;
           }
         }
 
-        // HACK: Convert all <select> -elements under the form's <ol> into a
-        // single JSON-array.
         // TODO: Make a separate "arrayHandle" function.
         let ol = form.querySelector("ol");
         if (ol !== null && ol) {
-          json[ol.dataset.hackfield] =
+          obj[ol.dataset.jsonKey] =
             // TODO: Does queryselectorall return the elements in the same
             // order as "listed" on the page?
-            Array.from(ol.querySelectorAll("select")).map(x => x.selectedOptions[0].value);
+            Array.from(ol.querySelectorAll("select"))
+              // Parse the JSON-string hidden inside option.
+              .map(x => JSON.parse(x.selectedOptions[0].value));
         }
 
-        return json;
+        return obj;
     }
 
+    /**
+     * Transform the sourceForm's contents into JSON and put into the
+     * targetTextArea.
+     */
     function populateWithJson(sourceForm, targetTextArea) {
       targetTextArea.value = JSON.stringify(formToObject(sourceForm), null, 2);
     }
 
+    /**
+     * Update the form that is used to upload a Wasm-binary with the current
+     * selection of modules recorded in database.
+     */
     function populateWasmFormModules() {
       // Get all current modules' ids and names and add them to the list for
       // selection.
@@ -209,9 +228,9 @@
      * Set the status bar to success if result.success or error if result.error
      */
     function setStatus(result) {
-      let elem = document.querySelector("#status");
-      elem.classList.remove("error");
-      elem.classList.remove("success");
+      let focusBar = document.querySelector("#status");
+      focusBar.classList.remove("error");
+      focusBar.classList.remove("success");
 
       if (result.success) {
         msg = result.success;
@@ -222,8 +241,10 @@
         // Default the style to error.
         classs = "error"
       }
-      elem.textContent = msg;
-      elem.classList.add(classs);
+      focusBar.textContent = msg;
+      focusBar.classList.add(classs);
+      // Scroll into view.
+      focusBar.focus();
     }
 
     window.onload = function() {
@@ -279,7 +300,7 @@
                   </div>
                   <div>
                     <p>Procedure-call sequence:</p>
-                    <ol id="dprocedure-sequence-list" data-hackfield="sequence">
+                    <ol id="dprocedure-sequence-list" data-json-key="sequence">
                     </ol>
                     <button type="button" id="dadd-procedure-row">Next</button>
                   </div>
