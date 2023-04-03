@@ -176,7 +176,7 @@ async function saveDeviceData(service) {
             };
             let res = await db.device.insertOne(obj);
             newId = res.insertedId;
-            console.log(`Added new device: ${JSON.stringify(obj, null, 2)}`)
+            console.log("Added new device: ", obj);
         } catch (e) {
             console.error(e.message);
         }
@@ -184,15 +184,9 @@ async function saveDeviceData(service) {
         newId = device_doc._id;
     }
 
-    // FIXME This is due to flask-host self-defining its address into ending
-    // with ".local.", and is not a great way to handle it.
-    let host = service.host.endsWith(".local")
-        ? service.host.substring(0, service.host.indexOf(".local"))
-        : service.host;
+    let requestOptions = { host: service.addresses[0], port: service.port, path: DEVICE_DESC_ROUTE };
 
-    let requestOptions = { host: host, port: service.port, path: DEVICE_DESC_ROUTE };
-
-    console.log(`Querying service's description(s) via HTTP... ${JSON.stringify(requestOptions)}`);
+    console.log("Querying service's description(s) via HTTP... ", requestOptions);
 
     // The returned description should follow the common schema for WasmIoT TODO
     // Perform validation.
@@ -274,6 +268,8 @@ const postLogger = (request, response, next) => {
     next();
 }
 
+// TODO: Gracefully handle malformed JSON POSTs (atm echoes the full error to
+// _client_ because of NODE_ENV=development mode?)
 const jsonMw = express.json();
 const urlencodedExtendedMw = express.urlencoded({ extended: true });
 
