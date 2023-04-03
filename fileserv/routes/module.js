@@ -155,9 +155,10 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
 /**
  * Delete all the modules from database (for debugging purposes).
  */
-router.delete("/", /*authenticationMiddleware,*/ async (request, response) => {
-    getDb().module.deleteMany({});
-    response.status(202).send(); // Accepted.
+router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
+    getDb().module.deleteMany({}).then(_ => {
+        response.status(202).json({ success: "deleting all modules" }); // Accepted.
+    });
 });
 
 /**
