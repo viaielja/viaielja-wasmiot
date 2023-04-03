@@ -117,7 +117,7 @@ async function initializeDatabase() {
 /**
  * Query device __for 'data'-events__ and if fails, remove from mDNS-cache.
  * NOTE: This is for device introduction and not for general queries!
- * @param {*} options Options to use in the GET request including the URL.
+ * @param {*} options Options to use in the GET request of `http.get` including the URL.
  * @param {*} callback What to do with the data when request ends.
  */
 function queryDeviceData(options, callback) {
@@ -127,7 +127,7 @@ function queryDeviceData(options, callback) {
             // failed to answer to HTTP-GET.
             console.log(`Service at '${options.host}${options.path}' failed to respond: Status ${res.statusCode}`);
 
-            let service = bonjourBrowser.services.find(x => x.host == `${options.host}.local`);
+            let service = bonjourBrowser.services.find(x => x.host === options.host);
             if (service) {
                 // FIXME/TODO Bonjour keeps the device saved, but it should forget it
                 // here because the device is not functional.
@@ -147,11 +147,11 @@ function queryDeviceData(options, callback) {
 /**
  * Query information like WoT-description and platform info to be saved into the
  * database from the device.
- * @param {*} service The service object discovered via mDNS.
+ * @param {*} serviceData Object containing needed data of the device discovered via mDNS.
  */
-async function saveDeviceData(service) {
+async function saveDeviceData(serviceData) {
     // Check for duplicate service
-    let device_doc = await db.device.findOne({ name: service.name });
+    let device_doc = await db.device.findOne({ name: serviceData.name });
 
     // Check if __all__ the required information has been received earlier.
     // NOTE: This is not a check to prevent further actions if device already
@@ -168,15 +168,9 @@ async function saveDeviceData(service) {
     let newId;
     if (device_doc === null) {
         try {
-            let obj = {
-                name: service.name,
-                host: service.host,
-                port: service.port,
-                fqdn: service.fqdn,
-            };
-            let res = await db.device.insertOne(obj);
+            let res = await db.device.insertOne(serviceData);
             newId = res.insertedId;
-            console.log("Added new device: ", obj);
+            console.log("Added new device: ", serviceData);
         } catch (e) {
             console.error(e.message);
         }
@@ -184,7 +178,7 @@ async function saveDeviceData(service) {
         newId = device_doc._id;
     }
 
-    let requestOptions = { host: service.addresses[0], port: service.port, path: DEVICE_DESC_ROUTE };
+    let requestOptions = { host: serviceData.addresses[0], port: serviceData.port, path: DEVICE_DESC_ROUTE };
 
     console.log("Querying service's description(s) via HTTP... ", requestOptions);
 
@@ -202,7 +196,7 @@ async function saveDeviceData(service) {
             // Create the field if missing.
             { upsert: true }
         );
-        console.log(`Adding device description for '${service.name}'`);
+        console.log(`Adding device description for '${serviceData.name}'`);
     });
 }
 
@@ -216,13 +210,7 @@ function initializeMdns() {
         // TODO/FIXME: A device is no longer "found" on mDNS after this but the
         // description-query-chain might fail ending up with nothing but nulls
         // in the database...
-        let serviceInfo = {
-            "addresses": service.addresses,
-            "name": service.name,
-            "fqdn": service.fqdn,
-            "host": service.host,
-        };
-        console.log(`Found '${service.name}'! `, serviceInfo);
+        console.log(`Found '${service.name}'! `, service);
         saveDeviceData(service);
     }
 
@@ -234,13 +222,13 @@ function initializeMdns() {
     // Browse for all http services TODO browse for http services under the
     // wasmiot-domain instead?
     let queryOptions = { type: DEVICE_TYPE };
-    let browser = bonjour.find(queryOptions, onFound);
-
+    let browser = bonjour.find(queryOptions);
+    browser.on("up", onFound);
     browser.on("down", onDown);
 
     // Bonjour/mDNS sends the queries on its own; no need to send updates
     // manually.
-    console.log(`mDNS initialized; searching for hosts with ${JSON.stringify(queryOptions)}`);
+    console.log("mDNS initialized; searching for hosts with ", queryOptions);
 
     return browser;
 }

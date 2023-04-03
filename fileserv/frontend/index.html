@@ -134,19 +134,18 @@
             headers: { "Content-Type": "application/json" },
             body: json
           })
-          // TODO The backend should preferrably always respond with JSON as
-          // well (when, use the following).
-          //.then(function(response) { return response.json(); })
-          .then(function(response) { return response.text(); })
-          .then(function(msg) {
+          // TODO The backend should preferrably always respond with JSON but
+          // does not currently always do so...
+          .then(function(response) { return response.json(); })
+          .then(function(result) {
             // Re-enable the form and show success message
             formSubmitEvent.target.querySelector("fieldset").disabled = false;
-            setStatus({success: msg});
+            setStatus(result);
             if (successCallback) { successCallback() };
           })
-          .catch(function(err) {
+          .catch(function(result) {
             // Show an error message.
-            setStatus({error: err});
+            setStatus(result);
           });
       }
       return handleSubmit;

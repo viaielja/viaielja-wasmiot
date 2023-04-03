@@ -46,7 +46,7 @@ router.post("/", async (request, response) => {
 
     let deploymentName = data.name;
     let status = 200;
-    let message = `Manifest ${deploymentName} added`;
+    let errorMsg = null;
 
     // Ignore deployments with an already existing name.
     // TODO When would a new deployment not be accepted? Based on user credits??
@@ -54,7 +54,7 @@ router.post("/", async (request, response) => {
     if (doc) {
         console.log(`Tried to write existing manifest '${doc.name}' ID ${doc._id}`);
         status = 400;
-        message = `Manifest already exists for deployment ${deploymentName}`;
+        errorMsg = `Manifest already exists for deployment ${deploymentName}`;
     } else {
         // TODO: Confirm here that deployment is indeed possible and logical?
         // When/where else could the user know the status?
@@ -65,7 +65,7 @@ router.post("/", async (request, response) => {
         if (!result.acknowledged) {
             console.log(`Failed adding the manifest: ${err}`);
             status = 500;
-            message = "Failed adding the manifest";
+            errorMsg = "Failed adding the manifest";
         } else {
             actionId = result.insertedId;
             console.log(`Manifest added to database '${deploymentName}'`);
@@ -79,7 +79,12 @@ router.post("/", async (request, response) => {
         }
     }
 
-    response.status(status).send(message);
+    response
+        .status(status)
+        .json({
+            success: errorMsg ? null : `Manifest ${deploymentName} added`,
+            err: errorMsg
+        });
 });
 
 /**
@@ -98,7 +103,7 @@ async function deploy(deploymentId, packageBaseUrl) {
 
     // Iterate all the items in the request's sequence and fill in the given
     // modules and devices or choose most suitable ones.
-    for (let [device, moduleId, func]
+    for (let [deviceId, moduleId, func]
         of Array.from(deployment.sequence)
             .map(x => [x.device, x.module, x.func])
     ) {
@@ -109,15 +114,25 @@ async function deploy(deploymentId, packageBaseUrl) {
         // ...but still, (1.) do a validity-check that the requested module indeed
         // contains the func.
         let modulee = await getDb().module.findOne({ _id: ObjectId(moduleId) })
-        if (modulee.exports.find(x => x === func) !== undefined) {
-            selectedModules.push(modulee);
+        if (modulee !== null) {
+            if (modulee.exports.find(x => x === func) !== undefined) {
+                selectedModules.push(modulee);
+            } else {
+                console.log(`Failed to find function '${func}' from requested module:`, modulee);
+                return;
+            }    
         } else {
-            console.log(`Failed to find function '${func}' from requested module:`, modulee);
+            console.log(`Failed to find module matching the received module ID ${moduleId}`);
             return;
-        }    
-
-        if (device !== null) {
-            selectedDevices.push(await getDb().device.findOne({ _id: ObjectId(device) }));
+        }
+        if (deviceId !== null) {
+            let dbDevice = await getDb().device.findOne({ _id: ObjectId(deviceId) });
+            if (dbDevice !== null) {
+                selectedDevices.push(dbDevice);
+            } else {
+                console.log(`Failed to find device matching the received device ID ${moduleId}`);
+                return;
+            }
         } else {
             // 2. Search for a device that could run the module.
             let match = null;
@@ -139,6 +154,21 @@ async function deploy(deploymentId, packageBaseUrl) {
         }
     }
 
+    // Check that length of all the different lists matches (i.e., for every
+    // item in deployment sequence found exactly one module and device).
+    let length =
+        deployment.sequence.length === selectedModules.length &&
+        selectedModules.length     === selectedDevices.length
+        ? deployment.sequence.length
+        : 0;
+    // Assert.
+    if (length === 0) {
+        console.log(
+            `Error on deployment: mismatch length between deployment (${deployment.sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`
+        );
+        return;
+    }
+
     // 3. Send devices instructions for ...
 
     // Make a mapping of devices and their instructions in order to bulk-send
@@ -153,21 +183,6 @@ async function deploy(deploymentId, packageBaseUrl) {
             // The device's metadata fetched earlier.
             device: device,
         };
-    }
-
-    // Check that length of all the different lists matches (i.e., for every
-    // item in deployment sequence found exactly one module and device).
-    let length =
-        deployment.sequence.length === selectedModules.length &&
-        selectedModules.length     === selectedDevices.length
-        ? deployment.sequence.length
-        : 0;
-    // Assert.
-    if (length === 0) {
-        console.log(
-            `Error on deployment: mismatch length between deployment (${deployment.sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`
-        );
-        return;
     }
 
     // Create and collect together the instructions and to which devices to send
@@ -217,8 +232,7 @@ async function deploy(deploymentId, packageBaseUrl) {
         let requestOptions = {
             method: "POST",
             protocol: "http:",
-            // FIXME: .local suffix removing hack.
-            host: deployment.device.host.substring(0, deployment.device.host.indexOf(".local")),
+            host: deployment.device.addresses[0],
             port: deployment.device.port,
             path: "/deploy",
             headers: {
