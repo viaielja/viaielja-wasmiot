@@ -79,8 +79,7 @@ router.post("/", async (request, response) => {
         ).insertedId;
 
     // Wasm-files are identified by their database-id.
-    response
-        .send("Uploaded module with id: "+ moduleId);
+    response.status(201).json({ success: "Uploaded module with id: "+ moduleId });
 });
 
 /**
@@ -107,13 +106,13 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
     async function update(fields) {
         let result = await getDb().module.updateOne(filter, { $set: fields });
         if (result.acknowledged) {
-            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(fields, null, 2)}`;
+            let msg = `Updated module '${result.upsertedId}' with data: ${JSON.stringify(fields, null, 2)}`;
             console.log(result.upsertedId + ": " + msg);
-            response.send(msg);
+            response.json({ success: msg });
         } else {
             let msg = "Failed adding Wasm-file to module";
             console.log(msg + ". Tried adding data: " + JSON.stringify(fields, null, 2));
-            response.status(500).send(msg);
+            response.status(500).json({ err: msg });
         }
     }
 
