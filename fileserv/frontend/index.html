@@ -152,10 +152,58 @@
     }
 
     /**
+     * Return a handler that submits (POST) a form with the
+     * 'enctype="multipart/form-data"' to the url. Used for uploading files
+     * along with some metadata that the server needs.
+     * 
+     * See:
+     * https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#uploading_a_file
+     */
+    function submitFile(url) {
+      function handleSubmit(formSubmitEvent) {
+        formSubmitEvent.preventDefault()
+        let formData = new FormData();
+        // NOTE: only one (1) file is sent.
+        let fileField = formSubmitEvent.target.querySelector("input[type=file]");
+
+        // Add the metadata found in the form.
+        // NOTE: Forms more complicated than containing text inputs or
+        // hierarchical/deeper than one are not handled.
+        for (let [key, value] of Object.entries(formToObject(formSubmitEvent.target))) {
+          switch (typeof(value))
+          {
+            case "string":
+              formData.append(key, value);
+              break;
+            default:
+              alert("Submitting the type '" + typeof(value) + "'' is not currently supported!")
+              return;
+          }
+        }
+
+        // Add the actual file.
+        formData.append(fileField.name, fileField.files[0]);
+
+        fetch(url, { method: "POST", body: formData })
+          .then(result => {
+            setStatus(result);
+          })
+          .catch(result => {
+            setStatus(result)
+          });
+      }
+      // Build up the request.
+      // POST.
+      // action="/file/module/upload" method="POST" enctype="multipart/form-data"
+      return handleSubmit;
+    }
+
+    /**
      * Using HTMLElement.dataset (See:
      * https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/dataset),
      * create a Javascript object from the fields i.e.:
      * - text-inputs become 'key:string-value' pairs,
+     * - select elements' selected options become 'key:string-value' pairs,
      * - 1-dimensional ordered lists become lists of objects (based on the
      * serialized JSON in their items' value-fields). Note: The key that then
      * corresponds to this list in the result object must be found in the
@@ -163,28 +211,40 @@
      */
     function formToObject(form) {
       let obj = {};
+      
+      // Text inputs.
       for (let input of form.querySelectorAll("input[type=text]")) {
-          // HACK: List-inputs are identified by a custom field and
-          // ','-characters delimit the values.
-          if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
-            obj[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
-          } else {
-            obj[input.name] = input.value;
-          }
+        // HACK: List-inputs are identified by a custom field and
+        // ','-characters delimit the values.
+        if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
+          obj[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
+        } else {
+          obj[input.name] = input.value;
         }
+      }
+      
+      // Select elements immediately under this form NOTE: the ":scope" selector
+      // (See: https://developer.mozilla.org/en-US/docs/Web/CSS/:scope) might
+      // be better?. HACK: Getting all under div (which currently excludes
+      // items under ol).
+      for (let select of document.querySelectorAll(`#${form.getAttribute("id")} div > select`)) {
+        obj[select.name] = select.selectedOptions[0].value;
+      }
 
-        // TODO: Make a separate "arrayHandle" function.
-        let ol = form.querySelector("ol");
-        if (ol !== null && ol) {
-          obj[ol.dataset.jsonKey] =
-            // TODO: Does queryselectorall return the elements in the same
-            // order as "listed" on the page?
-            Array.from(ol.querySelectorAll("select"))
-              // Parse the JSON-string hidden inside option.
-              .map(x => JSON.parse(x.selectedOptions[0].value));
-        }
+      // TODO: Make a separate "arrayHandle" function.
+      // TODO: Use formdata directly? See:
+      // https://developer.mozilla.org/en-US/docs/Web/API/FormData/getAll#examples
+      let ol = form.querySelector("ol");
+      if (ol !== null && ol) {
+        obj[ol.dataset.jsonKey] =
+          // TODO: Does queryselectorall return the elements in the same
+          // order as "listed" on the page?
+          Array.from(ol.querySelectorAll("select"))
+            // Parse the JSON-string hidden inside option.
+            .map(x => JSON.parse(x.selectedOptions[0].value));
+      }
 
-        return obj;
+      return obj;
     }
 
     /**
@@ -254,6 +314,7 @@
 
       document.querySelector("#module-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#module-json-form").querySelector("textarea")); });
       document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
+      document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/upload"));
 
       // Deployment forms:
       document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
@@ -371,7 +432,7 @@
         </form>
       </div>
       <div>
-        <form id="wasm-form" action="/file/module/upload" method="POST" enctype="multipart/form-data">
+        <form id="wasm-form">
           <fieldset>
             <legend>Upload WebAssembly file to a module</legend>
             <div>
