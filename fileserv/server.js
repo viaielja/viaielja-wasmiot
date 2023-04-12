@@ -121,27 +121,36 @@ async function initializeDatabase() {
  * @param {*} callback What to do with the data when request ends.
  */
 function queryDeviceData(options, callback) {
+    /**
+     * Find and forget the service in question whose advertised host failed to
+     * answer to HTTP-GET.
+     */
+    function handleError(responseOrHttpGetError) {
+        let statusMsg = responseOrHttpGetError.statusCode ? ": Status" + responseOrHttpGetError.statusCode: ".";
+        console.log(`Service at '${options.host}${options.path}' failed to respond${statusMsg}`);
+
+        let faultyServices = bonjourBrowser.services.filter(service => service.addresses.includes(options.host));
+        if (faultyServices.length > 0) {
+            // FIXME/TODO Bonjour keeps the device saved, but it should forget it
+            // here because the device is not functional. Current library does
+            // not seem to support removing the found service...
+            console.log("UNIMPLEMENTED/TODO: Should forget the faulty devices: ", faultyServices);
+        } else {
+            console.log(`Did not find any devices with advertised IP ${options.host} in currently known mDNS devices`);
+        }
+        return null;
+    }
+
     http.get(options, (res) => {
         if (res.statusCode !== 200) {
-            // Find and forget the service in question that's advertised host
-            // failed to answer to HTTP-GET.
-            console.log(`Service at '${options.host}${options.path}' failed to respond: Status ${res.statusCode}`);
-
-            let service = bonjourBrowser.services.find(x => x.host === options.host);
-            if (service) {
-                // FIXME/TODO Bonjour keeps the device saved, but it should forget it
-                // here because the device is not functional.
-                console.log("UNIMPLEMENTED/TODO: Should forget the faulty device " + service.host);
-            } else {
-                console.log(`Did not find ${options.host} in currently known mDNS devices`);
-            }
-            return null;
+            handleError(res);
         } else {
             let rawData = '';
             res.on('data', (chunk) => { rawData += chunk; });
             res.on('end', () => callback(rawData));
         }
-    });
+    })
+    .on("error", handleError);
 }
 
 /**
