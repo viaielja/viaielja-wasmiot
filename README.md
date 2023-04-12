@@ -80,7 +80,7 @@ the orchestrator's and second one in the supervisor's devcontainer.
 
 #### Debugging
 For debugging, the devcontainer should work quite well and you can just use
-VSCode like you would locally for debugging Javascript.
+VSCode like you would locally for debugging JavaScript (using the JavaScript Debug Terminal).
 
 NOTE that opening the project in devcontainer has sometimes been failing. A
 workaround could be to first __locally__ run `docker compose -f .\docker-compose.devcontainer.yml up`
