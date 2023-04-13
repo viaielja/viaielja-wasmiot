@@ -126,7 +126,7 @@ function queryDeviceData(options, callback) {
      * answer to HTTP-GET.
      */
     function handleError(responseOrHttpGetError) {
-        let statusMsg = responseOrHttpGetError.statusCode ? ": Status" + responseOrHttpGetError.statusCode: ".";
+        let statusMsg = responseOrHttpGetError.statusCode ? ": Status " + responseOrHttpGetError.statusCode: ".";
         console.log(`Service at '${options.host}${options.path}' failed to respond${statusMsg}`);
 
         let faultyServices = bonjourBrowser.services.filter(service => service.addresses.includes(options.host));
@@ -194,7 +194,13 @@ async function saveDeviceData(serviceData) {
     // The returned description should follow the common schema for WasmIoT TODO
     // Perform validation.
     queryDeviceData(requestOptions, (data) => {
-        let deviceDescription = JSON.parse(data);
+        let deviceDescription;
+        try {
+            deviceDescription = JSON.parse(data);
+        } catch (error) {
+            console.log("Error - description JSON is malformed: ", error)
+            return;
+        }
 
         // Save description in database. TODO Use some standard way to
         // interact with descriptions (validations, operation,
@@ -225,6 +231,7 @@ function initializeMdns() {
 
     function onDown(service) {
         // Remove service from database once it leaves/"says goodbye".
+        console.log("Service emitted 'goodbye' :", service);
         db.device.deleteOne({ name: service.name });
     }
 
@@ -311,12 +318,10 @@ expressApp.all("/*", (_, response) => {
 ////////////
 // SHUTDOWN:
 
-// Handle CTRL-C gracefully; from https://stackoverflow.com/questions/43003870/how-do-i-shut-down-my-express-server-gracefully-when-its-process-is-killed
-// TODO CTRL-C is apparently handled with SIGINT instead.
-
-process.on("SIGTERM", async () => {
-    shutDown();
-});
+process.on("SIGTERM", shutDown);
+// Handle CTRL-C gracefully; from
+// https://stackoverflow.com/questions/43003870/how-do-i-shut-down-my-express-server-gracefully-when-its-process-is-killed
+process.on("SIGINT", shutDown);
 
 /**
  * Shut the server and associated services down.
