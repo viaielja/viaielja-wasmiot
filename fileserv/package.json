@@ -9,7 +9,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "bonjour": "^3.5.0",
+    "bonjour-service": "^1.1.1",
     "deptrace": "^0.2.4",
     "express": "^4.18.2",
     "mongodb": "^4.13.0",

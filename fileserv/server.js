@@ -2,18 +2,18 @@
  * Initialize server, database, mDNS and routes as needed. TODO How to access database in the routes?
  */
 
-const fileSystem = require('fs'),
-    path = require('path'),
-    http = require('http');
+const path = require('path');
 const { chdir } = require('process');
 
 const { MongoClient } = require("mongodb");
 const express = require("express");
 
-const bonjour = require('bonjour')();
+const discovery = require("./src/deviceDiscovery");
+const { tempFormValidate, DEVICE_TYPE } = require("./utils");
+
+
 const expressApp = express();
 
-const { DEVICE_TYPE, DEVICE_DESC_ROUTE, tempFormValidate } = require("./utils");
 
 /**
  * Way to operate on the collections in database.
@@ -30,9 +30,9 @@ let db = {
 let server;
 
 /**
- * Browser to use for example for listing or unpublishing services found by mDNS.
+ * Thing to use for searching and listing services found (by mDNS).
  */
-let bonjourBrowser;
+let deviceDiscovery;
 
 /**
  * For initializations and closing the database connection on shutdown.
@@ -60,7 +60,8 @@ const PORT = 3000;
     // 'TypeError: Converting circular structure to JSON'.
     //console.log(`Database: ${JSON.stringify(db, null, 2)}`);
 
-    bonjourBrowser = initializeMdns();
+    deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, db.device);
+    deviceDiscovery.run();
 
     express.static.mime.define({"application/wasm": ["wasm"]});
     server = expressApp.listen(PORT, async () => {
@@ -69,7 +70,7 @@ const PORT = 3000;
 })()
     .then(_ => { console.log("Finished!"); })
     .catch(e => {
-        console.log("Orchestrator failed to start: " + e);
+        console.log("Orchestrator failed to start: ", e);
         shutDown();
     });
 
@@ -113,142 +114,6 @@ async function initializeDatabase() {
         throw e;
     }
 }
-
-/**
- * Query device __for 'data'-events__ and if fails, remove from mDNS-cache.
- * NOTE: This is for device introduction and not for general queries!
- * @param {*} options Options to use in the GET request of `http.get` including the URL.
- * @param {*} callback What to do with the data when request ends.
- */
-function queryDeviceData(options, callback) {
-    /**
-     * Find and forget the service in question whose advertised host failed to
-     * answer to HTTP-GET.
-     */
-    function handleError(responseOrHttpGetError) {
-        let statusMsg = responseOrHttpGetError.statusCode ? ": Status " + responseOrHttpGetError.statusCode: ".";
-        console.log(`Service at '${options.host}${options.path}' failed to respond${statusMsg}`);
-
-        let faultyServices = bonjourBrowser.services.filter(service => service.addresses.includes(options.host));
-        if (faultyServices.length > 0) {
-            // FIXME/TODO Bonjour keeps the device saved, but it should forget it
-            // here because the device is not functional. Current library does
-            // not seem to support removing the found service...
-            console.log("UNIMPLEMENTED/TODO: Should forget the faulty devices: ", faultyServices);
-        } else {
-            console.log(`Did not find any devices with advertised IP ${options.host} in currently known mDNS devices`);
-        }
-        return null;
-    }
-
-    http.get(options, (res) => {
-        if (res.statusCode !== 200) {
-            handleError(res);
-        } else {
-            let rawData = '';
-            res.on('data', (chunk) => { rawData += chunk; });
-            res.on('end', () => callback(rawData));
-        }
-    })
-    .on("error", handleError);
-}
-
-/**
- * Query information like WoT-description and platform info to be saved into the
- * database from the device.
- * @param {*} serviceData Object containing needed data of the device discovered via mDNS.
- */
-async function saveDeviceData(serviceData) {
-    // Check for duplicate service
-    let device_doc = await db.device.findOne({ name: serviceData.name });
-
-    // Check if __all__ the required information has been received earlier.
-    // NOTE: This is not a check to prevent further actions if device already
-    // simply exists in database.
-    if (device_doc !== null
-        && device_doc.hasOwnProperty("description") && device_doc.description !== null
-        && device_doc.description.hasOwnProperty("platform") && device_doc.description.platform !== null
-    ) {
-        console.log(`The device named '${device_doc.name}' is already in the database!`);
-        return;
-    }
-
-    // Insert or get new device into database for updating in GET-callbacks.
-    let newId;
-    if (device_doc === null) {
-        try {
-            let res = await db.device.insertOne(serviceData);
-            newId = res.insertedId;
-            console.log("Added new device: ", serviceData);
-        } catch (e) {
-            console.error(e.message);
-        }
-    } else {
-        newId = device_doc._id;
-    }
-
-    let requestOptions = { host: serviceData.addresses[0], port: serviceData.port, path: DEVICE_DESC_ROUTE };
-
-    console.log("Querying service's description(s) via HTTP... ", requestOptions);
-
-    // The returned description should follow the common schema for WasmIoT TODO
-    // Perform validation.
-    queryDeviceData(requestOptions, (data) => {
-        let deviceDescription;
-        try {
-            deviceDescription = JSON.parse(data);
-        } catch (error) {
-            console.log("Error - description JSON is malformed: ", error)
-            return;
-        }
-
-        // Save description in database. TODO Use some standard way to
-        // interact with descriptions (validations, operation,
-        // contentType, security etc)?.
-        db.device.updateOne(
-            { _id: newId },
-            { $set: { description: deviceDescription } },
-            // Create the field if missing.
-            { upsert: true }
-        );
-        console.log(`Adding device description for '${serviceData.name}'`);
-    });
-}
-
-/**
- * Start querying for IoT-devices and add their descriptions to database as
- * needed. Also set event listeners for browser TODO and services?.
- * @return The resulting Bonjour browser.
- */
-function initializeMdns() {
-    async function onFound(service) {
-        // TODO/FIXME: A device is no longer "found" on mDNS after this but the
-        // description-query-chain might fail ending up with nothing but nulls
-        // in the database...
-        console.log(`Found '${service.name}'! `, service);
-        saveDeviceData(service);
-    }
-
-    function onDown(service) {
-        // Remove service from database once it leaves/"says goodbye".
-        console.log("Service emitted 'goodbye' :", service);
-        db.device.deleteOne({ name: service.name });
-    }
-
-    // Browse for all http services TODO browse for http services under the
-    // wasmiot-domain instead?
-    let queryOptions = { type: DEVICE_TYPE };
-    let browser = bonjour.find(queryOptions);
-    browser.on("up", onFound);
-    browser.on("down", onDown);
-
-    // Bonjour/mDNS sends the queries on its own; no need to send updates
-    // manually.
-    console.log("mDNS initialized; searching for hosts with ", queryOptions);
-
-    return browser;
-}
-
 
 //////////
 // ROUTES AND MIDDLEWARE (Note: call-order matters!):
@@ -338,11 +203,12 @@ async function shutDown() {
         });
     }
 
-    bonjour.destroy();
+    deviceDiscovery.destroy();
     console.log("Destroyed the mDNS instance.");
 
     await databaseClient.close();
     console.log("Closed database connection.");
 
     console.log("Orchestrator shutdown finished.");
+    process.exit();
 }
