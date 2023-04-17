@@ -158,12 +158,17 @@ expressApp.use(
 
 expressApp.use(
     "/file/module",
-    [jsonMw, routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...
+    [jsonMw, routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...EDIT: Nice comment, very clear, you dumbass.
 );
 
 expressApp.use(
     "/file/manifest",
     [jsonMw, urlencodedExtendedMw, postLogger, routes.deployment]
+);
+
+expressApp.use(
+    "/execute",
+    [jsonMw, postLogger, routes.execution]
 );
 
 /**
