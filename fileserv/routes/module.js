@@ -102,17 +102,18 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
     /**
      * Helper to update fields in callbacks.
      * @param {*} fields The database fields to update on the module.
+     * @returns {*} [ status: status, { err: error | undefined, success: success | undefined } ]
      */
     async function update(fields) {
         let result = await getDb().module.updateOne(filter, { $set: fields });
         if (result.acknowledged) {
-            let msg = `Updated module '${result.upsertedId}' with data: ${JSON.stringify(fields, null, 2)}`;
-            console.log(result.upsertedId + ": " + msg);
-            response.json({ success: msg });
+            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(fields, null, 2)}`;
+            console.log(request.body.id + ": " + msg);
+            return [ 200, { success: msg } ];
         } else {
             let msg = "Failed adding Wasm-file to module";
             console.log(msg + ". Tried adding data: " + JSON.stringify(fields, null, 2));
-            response.status(500).json({ err: msg });
+            return [ 500, { err: msg } ];
         }
     }
 
@@ -128,11 +129,13 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
     readFile(request.file.path, function (err, data) {
         if (err) {
             console.log("couldn't read Wasm binary from file ", request.file.path, err);
+            // TODO: Should this really be considered server-side error (500)?
+            response.status(500).json({err: `Bad Wasm file: ${err}`});
             return;
         };
 
         WebAssembly.compile(data)
-            .then(function(wasmModule) {
+            .then(async function(wasmModule) {
                 let importData = WebAssembly.Module.imports(wasmModule)
                     // Just get the names of functions(?) for now.
                     .filter(x => x.kind === "function")
@@ -146,7 +149,12 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
                 fields.exports = exportData;
 
                 // Now actually update the database-document.
-                update(fields);
+                let updateRes = await update(fields);
+                response.status(updateRes[0]).json(updateRes[1]);
+            })
+            .catch((err) => {
+                console.log("failed compiling Wasm");
+                response.status(500).json({err: `couldn't compile Wasm: ${err}`});
             });
     });
 });

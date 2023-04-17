@@ -82,8 +82,9 @@ router.post("/", async (request, response) => {
     response
         .status(status)
         .json({
+            deploymentId: actionId,
             success: errorMsg ? null : `Manifest ${deploymentName} added`,
-            err: errorMsg
+            err: errorMsg,
         });
 });
 

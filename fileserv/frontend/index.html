@@ -138,10 +138,12 @@
           // does not currently always do so...
           .then(function(response) { return response.json(); })
           .then(function(result) {
-            // Re-enable the form and show success message
-            formSubmitEvent.target.querySelector("fieldset").disabled = false;
+            if (result.success) {
+              // Re-enable the form and show success message
+              formSubmitEvent.target.querySelector("fieldset").disabled = false;
+              if (successCallback) { successCallback(result) };
+            }
             setStatus(result);
-            if (successCallback) { successCallback() };
           })
           .catch(function(result) {
             // Show an error message.
@@ -185,9 +187,12 @@
         formData.append(fileField.name, fileField.files[0]);
 
         fetch(url, { method: "POST", body: formData })
+          .then((resp) => resp.json())
           .then(result => {
             setStatus(result);
           })
+          // TODO: This never happens with fetch(), does it? (unless explicitly
+          // coded throwing an error).
           .catch(result => {
             setStatus(result)
           });
@@ -290,13 +295,12 @@
       let focusBar = document.querySelector("#status");
       focusBar.classList.remove("error");
       focusBar.classList.remove("success");
-
       if (result.success) {
         msg = result.success;
         classs = "success";
       } else {
         // Empty the message if result is malformed.
-        msg = result.err ?? ("RESPONSE RESULT MALFORMED: " + JSON.stringify(result));
+        msg = result.err ?? ("RESPONSE MISSING FIELD `err`: " + JSON.stringify(result));
         // Default the style to error.
         classs = "error"
       }
@@ -320,7 +324,30 @@
       document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
 
       document.querySelector("#deployment-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#deployment-json-form").querySelector("textarea")); });
-      document.querySelector("#deployment-json-form").addEventListener("submit", submitJsonTextarea("/file/manifest"));
+      document.querySelector("#deployment-json-form")
+        .addEventListener(
+          "submit",
+          submitJsonTextarea(
+            "/file/manifest",
+            (deploymentResult) => {
+              // Execute the deployment immediately (or waiting for a couple
+              // seconds for letting the orchestrator time to send modules to
+              // devices etc) TODO: This is a placeholder; should allow user to
+              // control when and what.
+              if (deploymentResult.success) {
+                setTimeout(() => {
+                    fetch(`/execute/${deploymentResult.deploymentId}`, { method:
+                    "POST" })
+                      .then(resp => resp.json())
+                      .then(setStatus);
+                  },
+                  3000
+                );
+              }
+              setStatus(deploymentResult);
+            }
+          )
+        );
 
       // Database listings:
 
