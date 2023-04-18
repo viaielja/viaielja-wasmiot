@@ -13,12 +13,12 @@
       justify-content: space-around;
     }
 
-    #form-container {
+    .form-container {
       display: flex;
       flex-direction: column;
     }
 
-    #form-container > div {
+    .form-container > div {
       margin-top: 15%;
     }
 
@@ -287,6 +287,35 @@
           }
         });
     }
+  
+    /**
+     * Update the form that is used to request deployment execution with the
+     * current selection of deployments recorded in database. TODO: Generalize
+     * with same module-upload-selections func.
+     */
+    function populateExecutionFormDeployments() {
+      // Get all current deployments' ids and names and add them to the list for
+      // selection.
+      fetch("/file/manifest")
+        .then((resp) => resp.json())
+        .then(function(deploymentsData) {
+          let selectElem = document.querySelector("#edeployment-select");
+
+          // Remove previous ones first and replace with newly fetched ones.
+          for (let option of selectElem.querySelectorAll("option")) {
+            if (option.value !== "") {
+              option.remove();
+            }
+          }
+
+          for (let deployment of deploymentsData) {
+            let optionElem = document.createElement("option");
+            optionElem.value = deployment._id;
+            optionElem.textContent = deployment.name;
+            selectElem.appendChild(optionElem);
+          }
+        });
+    }
 
     /**
      * Set the status bar to success if result.success or error if result.error
@@ -315,38 +344,52 @@
 
       // Populate lists on page load.
       populateWasmFormModules();
+      populateExecutionFormDeployments();
 
       document.querySelector("#module-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#module-json-form").querySelector("textarea")); });
       document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
       document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/upload"));
 
       // Deployment forms:
-      document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
 
-      document.querySelector("#deployment-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#deployment-json-form").querySelector("textarea")); });
-      document.querySelector("#deployment-json-form")
+      document
+        .querySelector("#dadd-procedure-row")
+        .addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
+
+      // Transform form into JSON and paste into textarea.
+      document
+        .querySelector("#deployment-form")
         .addEventListener(
           "submit",
-          submitJsonTextarea(
-            "/file/manifest",
-            (deploymentResult) => {
-              // Execute the deployment immediately (or waiting for a couple
-              // seconds for letting the orchestrator time to send modules to
-              // devices etc) TODO: This is a placeholder; should allow user to
-              // control when and what.
-              if (deploymentResult.success) {
-                setTimeout(() => {
-                    fetch(`/execute/${deploymentResult.deploymentId}`, { method:
-                    "POST" })
-                      .then(resp => resp.json())
-                      .then(setStatus);
-                  },
-                  3000
-                );
-              }
-              setStatus(deploymentResult);
-            }
-          )
+          (event) => {
+            event.preventDefault();
+            populateWithJson(
+              event.target,
+              document
+                .querySelector("#deployment-json-form")
+                .querySelector("textarea")
+            );
+          }
+        );
+
+      // POST the JSON found in textarea to the server.
+      document
+        .querySelector("#deployment-json-form")
+        .addEventListener("submit", submitJsonTextarea("/file/manifest"));
+
+      // Execution forms:
+
+      document
+        .querySelector("#execution-form")
+        .addEventListener(
+          "submit",
+          (event) => {
+            event.preventDefault();
+            let deploymentId = formToObject(event.target).id;
+            fetch(`/execute/${deploymentId}`, { method: "POST" })
+              .then(resp => resp.json())
+              .then(setStatus);
+          }
         );
 
       // Database listings:
@@ -390,7 +433,7 @@
   <div>
     <div>
       <h2>Compose your application</h2>
-      <div id="form-container">
+      <div class="form-container">
         <div>
           <form id="deployment-form">
             <fieldset>
@@ -417,11 +460,32 @@
                 <legend>Submit a deployment in JSON</legend>
                 <div>
                   <div>
-                    <textarea id="djjson" name="json" required>{}</textarea>
+                    <textarea id="djson" name="json" required>{}</textarea>
                   </div>
                 </div>
             </fieldset>
             <input type="submit" value="Deploy!"/>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h2>Execute your application</h2>
+      <div class="form-container">
+        <div>
+          <form id="execution-form">
+            <fieldset>
+                <legend>Execute</legend>
+                <div>
+                  <div>
+                  <label for="edeployment-select">Select the deployment:</label>
+                    <select id="edeployment-select" name="id" required>
+                      <option value="">Please select a deployment:</option>
+                    </select>
+                  </div>
+                </div>
+            </fieldset>
+            <input type="submit" value="Execute!"/>
           </form>
         </div>
       </div>
@@ -450,7 +514,7 @@
         <li><a href="/file/manifest">Deployments</a></li>
       </ul>
     </div>
-    <div id="form-container">
+    <div class="form-container">
       <div>
         <form id="module-form">
           <fieldset>
