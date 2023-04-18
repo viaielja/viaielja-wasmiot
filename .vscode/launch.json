@@ -1,4 +1,5 @@
 {
+    "version": "0.2.0",
     "configurations": [
         {
             "name": "Docker Node.js Launch",
@@ -11,12 +12,15 @@
                 "localRoot": "${workspaceFolder}/fileserv"
             }
         },
+        // For debugging server.
         {
             "type": "node",
-            "request": "attach",
-            "name": "Docker: Debug server",
-            "remoteRoot": "/app",
-            "port": 9229
+            // For explanation see:
+            // https://code.visualstudio.com/Docs/editor/debugging#_launch-versus-attach-configurations
+            "request": "launch",
+            "name": "Run orchestrator",
+            "program": "${workspaceFolder}/fileserv/server.js",
+            "cwd": "${workspaceFolder}/fileserv"
         }
     ]
 }
