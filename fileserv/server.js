@@ -9,7 +9,7 @@ const { MongoClient } = require("mongodb");
 const express = require("express");
 
 const discovery = require("./src/deviceDiscovery");
-const { tempFormValidate, DEVICE_TYPE } = require("./utils");
+const { DEVICE_TYPE } = require("./utils");
 
 
 const expressApp = express();
@@ -60,8 +60,7 @@ const PORT = 3000;
     // 'TypeError: Converting circular structure to JSON'.
     //console.log(`Database: ${JSON.stringify(db, null, 2)}`);
 
-    deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, db.device);
-    deviceDiscovery.run();
+    initAndRunDeviceDiscovery();
 
     express.static.mime.define({"application/wasm": ["wasm"]});
     server = expressApp.listen(PORT, async () => {
@@ -78,12 +77,22 @@ module.exports = {
     // From:
     // https://stackoverflow.com/questions/24621940/how-to-properly-reuse-connection-to-mongodb-across-nodejs-application-and-module
     getDb: function() { return db; },
+    /**
+     * Reset device discovery so that devices already discovered and running
+     * will be discovered again. TODO: Is this a problem more with the server or
+     * the mDNS library?
+     * 
+     * NOTE: Throws if re-initializing fails.
+     */
+    resetDeviceDiscovery: function() {
+        deviceDiscovery.destroy();
+        initAndRunDeviceDiscovery();
+    }
 };
 
 // NOTE: This needs to be placed after calling main in order to initialize
 // database before routes get access to it...
 const routes = require("./routes");
-
 
 
 /**
@@ -115,6 +124,32 @@ async function initializeDatabase() {
     }
 }
 
+
+/**
+ * Create a new device discovery instance and run it.
+ * 
+ * NOTE: Throws if fails.
+ */
+function initAndRunDeviceDiscovery() {
+    try {
+        deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, db.device);
+    } catch(e) {
+        console.log("Device discovery initialization failed: ", e);
+        throw e;
+    }
+    deviceDiscovery.run();
+}
+
+
+/**
+ * Destroy the device discovery instance. This is basically just to log it
+ * whenever its done without having it originate from the instance itself.
+ */
+function destroyDeviceDiscovery() {
+    deviceDiscovery.destroy();
+    console.log("Destroyed the mDNS instance.");
+
+}
 //////////
 // ROUTES AND MIDDLEWARE (Note: call-order matters!):
 
@@ -153,7 +188,7 @@ expressApp.use(requestMethodLogger);
 
 expressApp.use(
     "/file/device",
-    [jsonMw, urlencodedExtendedMw, postLogger, tempFormValidate, routes.device]
+    [jsonMw, urlencodedExtendedMw, postLogger, routes.device]
 );
 
 expressApp.use(
@@ -208,11 +243,10 @@ async function shutDown() {
         });
     }
 
-    deviceDiscovery.destroy();
-    console.log("Destroyed the mDNS instance.");
-
     await databaseClient.close();
     console.log("Closed database connection.");
+
+    destroyDeviceDiscovery();
 
     console.log("Orchestrator shutdown finished.");
     process.exit();

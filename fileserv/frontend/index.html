@@ -364,6 +364,21 @@
           .then(resp => resp.json())
           .then(setStatus);
       });
+      
+      // Device discovery:
+
+      document.querySelector("#device-discovery-reset-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        fetch("/file/device/discovery/reset",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Send nothing.
+            body: "{}",
+          })
+          .then(resp => resp.json())
+          .then(setStatus);
+      });
     };
   </script>
 </head>
@@ -416,9 +431,14 @@
         <li> 
           <a href="/file/device">Devices</a>
           <div>
-          <form id="device-deleteall-form">
-            <input type="submit" value="DELETE ALL DEVICES"/>
-          </form>
+            <form id="device-deleteall-form">
+              <input type="submit" value="DELETE ALL DEVICES"/>
+            </form>
+          </div>
+          <div>
+            <form id="device-discovery-reset-form">
+              <input type="submit" value="RESET DEVICE DISCOVERY"/>
+            </form>
           </div>
         </li>
         <li>

@@ -8,7 +8,8 @@ import manifest from './devicedescription.json' assert { type:  "json" } //hard-
 
 
 /*
-sends a fetch POST request to a server containing manifest in the body
+* NOTE: THIS IS OUTDATED REGARDING THE __ORCHESTRATOR__!!
+* sends a fetch POST request to a server containing manifest in the body
 */
 (async function postFile() {
     const rawResponse = await fetch('http://localhost:3000/file/device', {

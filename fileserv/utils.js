@@ -18,7 +18,6 @@ const DEVICE_TYPE = "webthing";
 
 module.exports = {
     respondWithFile,
-    tempFormValidate,
     callDeviceFunc,
     FILE_ROOT,
     MODULE_DIR,
@@ -42,35 +41,6 @@ function reducer(dependency, version) {
     }
     else return null;
 
-}
-
-/**
- * Set the request.body to json parsed from a single text-field in the
- * __actual__ request body.
- * NOTE: THIS IS A TEMPORARY UTILITY.
- * @returns Parsed JSON-data from the stupid form.
- */
-function tempFormValidate(request, response, next) {
-    if (request.method !== "POST") { next(); return; }
-
-    let data = request.body["json"] ?? null;
-    if (data === null) {
-        response
-            .status(400)
-            .send("Field 'json' containing the deployment not found in request");
-        return;
-    } else {
-        try {
-            data = JSON.parse(data);
-        } catch (error) {
-            response
-                .status(400)
-                .send(error.message);
-            return;
-        }
-    }
-    request.body = data;
-    next();
 }
 
 /**
