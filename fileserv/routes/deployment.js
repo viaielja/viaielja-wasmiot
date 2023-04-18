@@ -72,10 +72,11 @@ router.post("/", async (request, response) => {
 
             //TODO: Start searching for suitable packages using saved file.
             //startSearch();
-            // TODO: is await necessary if not needed to wait for execution
-            // here?
             // TODO: Put package-manager hostname to a constant or other global.
-            await deploy(actionId, require("os").hostname() + ":3000");
+            let err = await deploy(actionId, require("os").hostname() + ":3000");
+            if (err) {
+                errorMsg = "Failed constructing manifest for deployment: " + err;
+            }
         }
     }
 
@@ -95,6 +96,8 @@ router.post("/", async (request, response) => {
  * devices to pull modules from. TODO Define "base" in this context. Currently
  * just called in the post("/")-route with the "localhost:3000" equivalent part
  * but could be e.g. a function taking in a module-ID that constructs the actual URL.
+ * @returns An error message or null if building the manifest was successfull
+ * (TODO/NOTE: Does not include checks for sending the deployments to devices).
  */
 async function deploy(deploymentId, packageBaseUrl) {
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(deploymentId) });
@@ -148,8 +151,7 @@ async function deploy(deploymentId, packageBaseUrl) {
                 }
             }
             if (match === null) {
-                console.log(`Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`);
-                return;
+                return `Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`;
             }
             selectedDevices.push(match);
         }
@@ -164,10 +166,15 @@ async function deploy(deploymentId, packageBaseUrl) {
         : 0;
     // Assert.
     if (length === 0) {
-        console.log(
-            `Error on deployment: mismatch length between deployment (${deployment.sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`
-        );
-        return;
+        return `Error on deployment: mismatch length between deployment (${deployment.sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`;
+    }
+
+    // Now that the devices that will be used have been selected, prepare to
+    // update the deployment sequence's devices in database with the ones
+    // selected (handles possibly 'null' devices).
+    let updatedSequence = Array.from(deployment.sequence);
+    for (let i in updatedSequence) {
+        updatedSequence[i].device = selectedDevices[i]._id;
     }
 
     // 3. Send devices instructions for ...
@@ -218,10 +225,12 @@ async function deploy(deploymentId, packageBaseUrl) {
         deploymentsToDevices[device._id].instructions.push(instruction);
     }
 
-    // Add the composed deployment structure to database for inspecting later.
+    // Do all database updates at once here.
+    // Add the composed deployment structure to database for inspecting it later
+    // (i.e. during execution or from user interface).
     getDb().deployment.updateOne(
         { _id: deployment._id },
-        { $set: { fullManifest: deploymentsToDevices } },
+        { $set: { fullManifest: deploymentsToDevices, sequence: updatedSequence } },
     );
 
     // Make the requests on each device.
@@ -249,11 +258,13 @@ async function deploy(deploymentId, packageBaseUrl) {
             }
         );
         request.on("error", e => {
-            console.log(`Error while posting to device '${JSON.stringify(deployment.device, null, 2)}': ${JSON.stringify(e, null, 2)}`);
+            console.log(`Error while posting to device '${JSON.stringify(deployment.device, null, 2)}': `, e);
             
         })
 
         request.write(deploymentJson);
         request.end();
     }
+
+    return null;
 }
