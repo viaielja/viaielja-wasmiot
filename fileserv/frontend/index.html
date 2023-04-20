@@ -33,6 +33,28 @@
     }
   </style>
   <script>
+    async function generateModuleFuncInputForm(event) {
+      let deploymentId = event.target.value;
+      let deployment = await fetch(`/file/manifest/${deploymentId}`)
+        .then(response => response.json())
+        .catch(setStatus);
+      
+      // TODO: This is configured only for executing the fibonacci function atm
+      // and should ideally be automated to construct the needed fields from any
+      // Wasm-func's description...
+      let formTopDiv = document.querySelector("#execution-form fieldset > div");
+      let inputFieldDiv = document.createElement("div");
+      let inputFieldLabel = document.createElement("label");
+      inputFieldLabel.textContent = "Iteration count for fibonacci sequence";
+      let inputField = document.createElement("input");
+      inputField.type = "number";
+      inputField.defaultValue = "7";
+      inputField.name = "iterations";
+      inputFieldLabel.appendChild(inputField);
+      inputFieldDiv.appendChild(inputFieldLabel);
+      formTopDiv.appendChild(inputFieldDiv);
+    }
+
     function addProcedureRow(listId) {
       /**
        * Constructor for the following HTML:
@@ -207,7 +229,7 @@
      * Using HTMLElement.dataset (See:
      * https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/dataset),
      * create a Javascript object from the fields i.e.:
-     * - text-inputs become 'key:string-value' pairs,
+     * - text and number -inputs become 'key:string-value' pairs,
      * - select elements' selected options become 'key:string-value' pairs,
      * - 1-dimensional ordered lists become lists of objects (based on the
      * serialized JSON in their items' value-fields). Note: The key that then
@@ -217,8 +239,12 @@
     function formToObject(form) {
       let obj = {};
       
+      let inputs = [
+        ...form.querySelectorAll("input[type=text]"),
+        ...form.querySelectorAll("input[type=number]"),
+      ];
       // Text inputs.
-      for (let input of form.querySelectorAll("input[type=text]")) {
+      for (let input of inputs) {
         // HACK: List-inputs are identified by a custom field and
         // ','-characters delimit the values.
         if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
@@ -314,6 +340,23 @@
             optionElem.textContent = deployment.name;
             selectElem.appendChild(optionElem);
           }
+
+          // Now that the selection is populated, add events to generate a form
+          // for giving inputs that will eventually be fed into the initial func
+          // of the execution sequence.
+          for (option of document.querySelectorAll("#edeployment-select option")) {
+            option.addEventListener("click", function(event) {
+              // Remove all other children immediately under the form's "inputs area"
+              // except for the deployment selector.
+              let divsExpectFirst =
+                document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
+              for (div of divsExpectFirst) {
+                div.remove();
+              }
+
+              generateModuleFuncInputForm(event);
+            });
+          }
         });
     }
 
@@ -345,6 +388,8 @@
       // Populate lists on page load.
       populateWasmFormModules();
       populateExecutionFormDeployments();
+
+      // Module forms:
 
       document.querySelector("#module-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#module-json-form").querySelector("textarea")); });
       document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
@@ -385,8 +430,12 @@
           "submit",
           (event) => {
             event.preventDefault();
-            let deploymentId = formToObject(event.target).id;
-            fetch(`/execute/${deploymentId}`, { method: "POST" })
+            let deploymentObj = formToObject(event.target);
+            fetch(`/execute/${deploymentObj.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(deploymentObj)
+              })
               .then(resp => resp.json())
               .then(setStatus);
           }
@@ -475,15 +524,16 @@
         <div>
           <form id="execution-form">
             <fieldset>
-                <legend>Execute</legend>
+              <legend>Execute</legend>
+              <div>
                 <div>
-                  <div>
                   <label for="edeployment-select">Select the deployment:</label>
                     <select id="edeployment-select" name="id" required>
                       <option value="">Please select a deployment:</option>
                     </select>
-                  </div>
                 </div>
+                <!-- Generate here the needed form-fields according to (Thing?) Description -->
+              </div>
             </fieldset>
             <input type="submit" value="Execute!"/>
           </form>

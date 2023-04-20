@@ -29,30 +29,27 @@ router.post("/:deploymentId", async (request, response) => {
     let funcName = deployment.sequence[0].func;
 
     // 2. prepare given data for sending to device.
-    // TODO: First input (if any) should probably have been saved at deployment time.
-    // TODO: Will there be horribly complex endianness problems from using raw bytes?
-    // The input is raw bytes so that supervisor gets a generic way to pass
-    // different types to Wasm functions.
-    let input = new Uint8Array(1);
-    // Test value for executing fibonacci sequence.
-    input[0] = 7;
+    // TODO: This is hardcoded for running the fibonacci function, but should
+    // be generalized for basically anything (interface/API descriptions needed
+    // for both supervisor's routes and Wasm-funcs)...
+    let input = request.body.iterations;
 
     // 3. post data to the first device and return its reaction response.
     // TODO: Could device sometimes want to answer back with the execution result?
     utils.callDeviceFuncSingleIntegerArgument(
-        deploymentId=deployment,
-        device={ address: deviceAddress, port: devicePort },
-        funcData={ name: funcName, module: module },
-        input=7,
-        onResponse=function(jsonResponse) {
-            console.log(`Execution: Device '${device.address}' responded`,jsonResponse);
+        deployment,
+        { address: deviceAddress, port: devicePort },
+        { name: funcName, module: module },
+        input,
+        function(jsonResponse) {
+            console.log(`Execution: Device '${deviceAddress}' responded`, jsonResponse);
             response.json(jsonResponse);
         },
-        onError=function(err) {
+        function(err) {
             console.log(`Error while posting to device '${deviceAddress}':`, err);
             // TODO: What is correct status code here (technically device
             // could have failed, not orchestrator)?
-            response.status(500).json({err: err});
+            response.status(500).json({err: `${err}`});
         }
     );
 });

@@ -49,7 +49,7 @@ function reducer(dependency, version) {
 /**
  * Send a message to device to start executing a function related to a
  * deployment with input being a single integer.
- * @param {*} deploymentId 
+ * @param {*} deployment 
  * @param {*} device 
  * @param {*} funcData 
  * @param {*} inputInt 
@@ -57,7 +57,7 @@ function reducer(dependency, version) {
  * @param {*} onError 
  */
 function callDeviceFuncSingleIntegerArgument(
-    deploymentId,
+    deployment,
     device,
     funcData,
     inputInt,
@@ -75,7 +75,7 @@ function callDeviceFuncSingleIntegerArgument(
 /**
  * Send a message to device to start executing a function related to a
  * deployment with input being a "raw" byte-buffer.
- * @param {*} deploymentId Identifier of the deployment.
+ * @param {*} deployment Object containing information about the deployment.
  * @param {*} device Object with `address` and `port` where to send.
  * @param {*} funcData Object with the Wasm-function's `name` and identifier of its `module` on the device.
  * @param {*} input `Buffer` or `Uint8Array` (see:
@@ -90,7 +90,7 @@ function callDeviceFuncSingleIntegerArgument(
  * for non-http?
   */
 function callDeviceFuncRaw(
-    deploymentId,
+    deployment,
     device,
     funcData,
     input,
