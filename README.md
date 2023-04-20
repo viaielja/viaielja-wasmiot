@@ -86,6 +86,25 @@ NOTE that opening the project in devcontainer has sometimes been failing. A
 workaround could be to first __locally__ run `docker compose -f .\docker-compose.devcontainer.yml up`
 and after this the devcontainer should start opening fine.
 
+### Running the orchestrator in a separate environment than the supervisor
+
+This assumes that both the orchestrator and the supervisor are in the same local network and thus can send HTTP requests to each other.
+
+- Create and configure environmental variable file:
+
+    ```bash
+    cp .env.example .env
+    # edit appropriate values to .env
+    ```
+
+- Start the orchestrator:
+
+    ```bash
+    docker compose -f docker-compose.vm.yml up --build
+    ```
+
+- The discovery and deployment with a supervisor instance running in a separate device has only been tested when the supervisor has been started locally as a Python application. See the [Supervisor repository](https://github.com/LiquidAI-project/wasmiot-supervisor) for installation instructions.
+
 ***
 
 # Editing this README
