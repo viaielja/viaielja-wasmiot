@@ -1,0 +1,57 @@
+version: '3.4'
+
+services:
+  orchestrator:
+    build:
+      context: ./fileserv
+      dockerfile: ./Dockerfile
+      target: compose
+    ports:
+      - ${PUBLIC_PORT:-3000}:3000
+    command: nodejs ./server.js
+    environment:
+      CONFIG_MONGODB_HOST: ${MONGO_HOST:-mongo}
+      CONFIG_MONGODB_PORT: ${MONGO_PORT:-27017}
+      CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USERNAME}
+      CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD}
+      CONFIG_PUBLIC_HOST: ${PUBLIC_HOST:-http://orchestrator}
+      CONFIG_PUBLIC_PORT: ${PUBLIC_PORT:-3000}
+
+  mongo:
+    image: mongo:4.4.20
+    restart: unless-stopped
+    # TODO Add volumes for db.
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    command: mongod --port ${MONGO_PORT:-27017}
+    volumes:
+      - mongo-config:/DATA/CONFIGDB
+      - mongo-db:/DATA/DB
+
+  mdns-reflector:
+    image: flungo/avahi
+    restart: unless-stopped
+    environment:
+      REFLECTOR_ENABLE_REFLECTOR: "yes"
+    networks:
+      - default
+      - physical
+
+volumes:
+  mongo-config:
+  mongo-db:
+
+networks:
+  # Network for orchestrator and MongoDB
+  default:
+    name: wasmiot-net
+  physical:
+    name: physical
+    driver: macvlan
+    driver_opts:
+      parent: ${NETWORK_INTERFACE:-eth0}
+    ipam:
+      config:
+        - subnet: "${NETWORK_IP_BASE:-192.168.1}.0/24"
+          gateway: "${NETWORK_IP_BASE:-192.168.1}.1"
