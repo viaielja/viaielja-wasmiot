@@ -39,16 +39,14 @@ router.post("/:deploymentId", async (request, response) => {
 
     // 3. post data to the first device and return its reaction response.
     // TODO: Could device sometimes want to answer back with the execution result?
-    utils.callDeviceFunc(
+    utils.callDeviceFuncSingleIntegerArgument(
         deploymentId=deployment,
         device={ address: deviceAddress, port: devicePort },
         funcData={ name: funcName, module: module },
-        input=input,
-        onResponse=function(execResponse) {
-            console.log(`Execution: Device '${device.address}' responded ${execResponse.statusCode}`);
-            response.json({
-                success: `Device at ${deviceAddress}:${devicePort} accepted input to ${module.name}:${funcName}!`
-            });
+        input=7,
+        onResponse=function(jsonResponse) {
+            console.log(`Execution: Device '${device.address}' responded`,jsonResponse);
+            response.json(jsonResponse);
         },
         onError=function(err) {
             console.log(`Error while posting to device '${deviceAddress}':`, err);
