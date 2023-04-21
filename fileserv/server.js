@@ -14,6 +14,7 @@ const bonjour = require('bonjour')();
 const expressApp = express();
 
 const { DEVICE_TYPE, DEVICE_DESC_ROUTE, tempFormValidate } = require("./utils");
+const { MONGO_URI } = require("./constants.js");
 
 /**
  * Way to operate on the collections in database.
@@ -94,10 +95,9 @@ async function initializeDatabase() {
     // NETWORK for example with Docker Compose (i.e., do not name the
     // mongo-service differently in the .yml -files. Or otherwise TODO pass the
     // hostname from environment)
-    const uri = `mongodb://${process.env.CONFIG_MONGODB_ADMINUSERNAME}:${process.env.CONFIG_MONGODB_ADMINPASSWORD}@mongo:27017/`;
-    databaseClient = new MongoClient(uri);
+    databaseClient = new MongoClient(MONGO_URI);
     try {
-        const orchDb = await (await databaseClient.connect()).db();
+        const orchDb = (await databaseClient.connect()).db();
         // Create references to the needed collections.
         db.module = orchDb.collection("module");
         db.device = orchDb.collection("device");
@@ -312,7 +312,7 @@ expressApp.get("/", (_, response) => {
  * Direct to error-page when bad URL used.
  */
 expressApp.all("/*", (_, response) => {
-    response.send("Bad URL").status(404);
+    response.status(404).send({ err: "Bad URL" });
 });
 
 ////////////
