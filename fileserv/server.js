@@ -9,13 +9,10 @@ const { MongoClient } = require("mongodb");
 const express = require("express");
 
 const discovery = require("./src/deviceDiscovery");
-const { DEVICE_TYPE } = require("./utils");
+const { MONGO_URI, PUBLIC_PORT, DEVICE_TYPE, FRONT_END_DIR } = require("./constants.js");
 
 
 const expressApp = express();
-
-const { DEVICE_TYPE, DEVICE_DESC_ROUTE, tempFormValidate } = require("./utils");
-const { MONGO_URI } = require("./constants.js");
 
 /**
  * Way to operate on the collections in database.
@@ -46,10 +43,6 @@ let databaseClient;
 // versions (16 vs 18).
 chdir(__dirname);
 
-const FRONT_END_DIR = path.join(__dirname, "frontend");
-
-const PORT = 3000;
-
 ///////////
 // RUN MAIN
 (async function main() {
@@ -65,8 +58,8 @@ const PORT = 3000;
     initAndRunDeviceDiscovery();
 
     express.static.mime.define({"application/wasm": ["wasm"]});
-    server = expressApp.listen(PORT, async () => {
-        console.log(`Listening on port: ${PORT}`);
+    server = expressApp.listen(PUBLIC_PORT, async () => {
+        console.log(`Listening on port: ${PUBLIC_PORT}`);
     });
 })()
     .then(_ => { console.log("Finished!"); })

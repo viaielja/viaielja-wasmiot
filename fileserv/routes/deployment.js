@@ -4,7 +4,6 @@ const express = require("express");
 const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
-const utils = require("../utils.js");
 const { PUBLIC_BASE_URI } = require("../constants.js");
 
 

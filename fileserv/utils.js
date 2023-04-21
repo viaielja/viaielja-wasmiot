@@ -1,33 +1,10 @@
-const { type } = require('os');
 const path = require('path');
-const url = require("url");
-
-
-/////////////
-// CONSTANTS:
-const FILE_ROOT = path.join(__dirname, "files");
-const MODULE_DIR = path.join(__dirname, "files", "wasm");
-const MANIFEST_DIR = "manifest";
-// TODO: Use dot after "local" or no?
-const ORCHESTRATOR_NAME = "orchestrator-wasmiot.local.";
-const DEVICE_DESC_ROUTE = "/.well-known/wasmiot-device-description";
-const DEVICE_WOT_ROUTE = "/.well-known/wot-thing-description";
-// NOTE: "webthing" is what the JS-library returns as type for Flask-host's
-// "_webthing._tcp.local.", soooo search for those.
-const DEVICE_TYPE = "webthing";
-
 
 module.exports = {
     respondWithFile,
     callDeviceFuncSingleIntegerArgument,
     callDeviceFuncRaw,
     callDeviceFuncHttp,
-    FILE_ROOT,
-    MODULE_DIR,
-    MANIFEST_DIR,
-    ORCHESTRATOR_NAME,
-    DEVICE_DESC_ROUTE,
-    DEVICE_TYPE,
 };
 
 

@@ -3,14 +3,14 @@ const { Router } = require("express");
 const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
-const utils = require("../utils.js");
+const { MODULE_DIR } = require("../constants.js");
 
 
 const router = Router();
 
 // Set where the wasm-binaries will be saved into on the filesystem.
 // From: https://www.twilio.com/blog/handle-file-uploads-node-express
-const fileUpload = require("multer")({ dest: utils.MODULE_DIR }).single("module");
+const fileUpload = require("multer")({ dest: MODULE_DIR }).single("module");
 
 module.exports = { router };
 
