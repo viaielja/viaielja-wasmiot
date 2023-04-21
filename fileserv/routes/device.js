@@ -1,6 +1,6 @@
 const express = require("express");
 
-const { getDb } = require("../server");
+const { getDb, resetDeviceDiscovery } = require("../server");
 
 
 const router = express.Router();
@@ -28,19 +28,15 @@ router.delete("/", (request, response) => {
 });
 
 /**
- * POST a new device's architecture information (i.e., device description) to
- * add to orchestrator's database.
+ * NOTE TEMPORARY route to easily refresh the devices stored in discovery.
+ * Natural to use when doing device deletion.
  */
-router.post("/", async (request, response) => {
-    // TODO Only add what is allowed (e.g. _id should not come from POST).
-    let result = await getDb().device.insertOne(request.body)
-    if (result.acknowledged) {
-        let msg = "New device added";
-        console.log(msg);
-        response.send(msg);
-    } else {
-        let msg = "failed to add the device";
-        console.log(msg);
-        response.status(500).send(msg);
+router.post("/discovery/reset", (request, response) => {
+    try {
+        resetDeviceDiscovery();
+    } catch(e) {
+        response.status(500).json({ err: e });
     }
+
+    response.json({ success: "Device discovery reset!" });
 });

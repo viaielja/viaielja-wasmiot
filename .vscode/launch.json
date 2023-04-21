@@ -1,5 +1,16 @@
 {
+    "version": "0.2.0",
     "configurations": [
+        // For debugging server.
+        {
+            "type": "node",
+            // For explanation see:
+            // https://code.visualstudio.com/Docs/editor/debugging#_launch-versus-attach-configurations
+            "request": "launch",
+            "name": "Debug orchestrator",
+            "program": "${workspaceFolder}/fileserv/server.js",
+            "cwd": "${workspaceFolder}/fileserv"
+        },
         {
             "name": "Docker Node.js Launch",
             "type": "docker",
@@ -10,13 +21,6 @@
                 "package": "${workspaceFolder}/fileserv/package.json",
                 "localRoot": "${workspaceFolder}/fileserv"
             }
-        },
-        {
-            "type": "node",
-            "request": "attach",
-            "name": "Docker: Debug server",
-            "remoteRoot": "/app",
-            "port": 9229
         }
     ]
 }

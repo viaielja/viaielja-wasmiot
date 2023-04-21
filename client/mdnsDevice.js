@@ -1,5 +1,5 @@
+const bonjour = require("bonjour-service");
 const express = require("express")();
-const bonjour = require("bonjour")();
 
 /**
  * Name identifying this device on the network.
@@ -8,10 +8,8 @@ const HOSTNAME = require("os").hostname();
 
 /**
  * Type of service to advertise self as.
- * ...Apparently this JS-library is not the same as the python-counterpart
- * which can use "_webthing._tcp.local."
  */
-const SERVICE_TYPE = "webthing";//"_webthing._tcp.local.";
+const SERVICE_TYPE = "webthing";
 
 let port = 3001;
 let maxNum = 100;
@@ -21,10 +19,15 @@ if (process.argv.length > 2) {
 if (process.argv.length > 3) {
     maxNum = Number.parseInt(process.argv.at(3));
 }
-console.log(`${HOSTNAME}: starting HTTP-server and mDNS publish...`);
 
-express.get("/.well-known/wot-thing-description", (_, response) => {
-    response.send({ "architecture": "intel i7", "platform": "Windows 11", "repository": "TODO What dis?", "peripherals": [] });
+express.get("/.well-known/wasmiot-device-description", (_, response) => {
+    let description = {
+        "architecture": "intel i7",
+        "platform": "Windows 11",
+        "repository": "TODO What dis?",
+        "peripherals": []
+    };
+    response.send(description);
 });
 
 express.get("/*", (_, response) => {
@@ -41,30 +44,36 @@ express.get("/*", (_, response) => {
 </html>`);
 })
 
-// Start server to respond to description-queries.
-const SERVER = express.listen(port, () => {
-    console.log(`Serving HTTP on port ${port}`)
+
+let service;
+let bonjourInstance;
+// "Main". Start server to respond to description-queries.
+const server = express.listen(port, () => {
+    console.log(`Serving HTTP on port ${port}. Starting service publishing...`)
+    bonjourInstance = new bonjour.Bonjour();
+    const serviceInfo = { name: `Test device ${maxNum}`, port: port, type: SERVICE_TYPE };
+    service = bonjourInstance.publish(serviceInfo);
+    console.log("Service up! Advertising the following service info:", serviceInfo);
 });
 
-// Start advertising this device.
-const serviceInfo = { name: `RNG-Box ${maxNum}`, port: port, type: SERVICE_TYPE };
-bonjour.publish(serviceInfo);
-console.log(`Advertising the following service info: ${JSON.stringify(serviceInfo)}`);
 
-
-// Handle shutdown when stopping from Docker desktop.
-process.on("SIGTERM", () => {
-    SERVER.close((err) => {
+function shutdown() {
+    server.close((err) => {
         // Shutdown the mdns
         if (err) {
             console.log(`Errors from earlier 'close' event: ${err}`);
         }
-        console.log("Closing server...");
+        console.log("HTTP server closed.");
+
+        service.stop(_ => {
+            console.log("Stopped mDNS service.");
+            bonjourInstance.destroy();
+            console.log("Destroyed the mDNS instance. Exiting...");
+            process.exit();
+        });
     });
+}
 
-    // This seems to be synchronous because no callback provided(?)
-    bonjour.destroy();
-    console.log("Destroyed the mDNS instance.");
-
-    console.log("Done!");
-});
+// Handle shutdown when stopping from Docker desktop.
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

@@ -13,12 +13,12 @@
       justify-content: space-around;
     }
 
-    #form-container {
+    .form-container {
       display: flex;
       flex-direction: column;
     }
 
-    #form-container > div {
+    .form-container > div {
       margin-top: 15%;
     }
 
@@ -33,6 +33,28 @@
     }
   </style>
   <script>
+    async function generateModuleFuncInputForm(event) {
+      let deploymentId = event.target.value;
+      let deployment = await fetch(`/file/manifest/${deploymentId}`)
+        .then(response => response.json())
+        .catch(setStatus);
+      
+      // TODO: This is configured only for executing the fibonacci function atm
+      // and should ideally be automated to construct the needed fields from any
+      // Wasm-func's description...
+      let formTopDiv = document.querySelector("#execution-form fieldset > div");
+      let inputFieldDiv = document.createElement("div");
+      let inputFieldLabel = document.createElement("label");
+      inputFieldLabel.textContent = "Iteration count for fibonacci sequence";
+      let inputField = document.createElement("input");
+      inputField.type = "number";
+      inputField.defaultValue = "7";
+      inputField.name = "iterations";
+      inputFieldLabel.appendChild(inputField);
+      inputFieldDiv.appendChild(inputFieldLabel);
+      formTopDiv.appendChild(inputFieldDiv);
+    }
+
     function addProcedureRow(listId) {
       /**
        * Constructor for the following HTML:
@@ -138,10 +160,12 @@
           // does not currently always do so...
           .then(function(response) { return response.json(); })
           .then(function(result) {
-            // Re-enable the form and show success message
-            formSubmitEvent.target.querySelector("fieldset").disabled = false;
+            if (result.success) {
+              // Re-enable the form and show success message
+              formSubmitEvent.target.querySelector("fieldset").disabled = false;
+              if (successCallback) { successCallback(result) };
+            }
             setStatus(result);
-            if (successCallback) { successCallback() };
           })
           .catch(function(result) {
             // Show an error message.
@@ -185,9 +209,12 @@
         formData.append(fileField.name, fileField.files[0]);
 
         fetch(url, { method: "POST", body: formData })
+          .then((resp) => resp.json())
           .then(result => {
             setStatus(result);
           })
+          // TODO: This never happens with fetch(), does it? (unless explicitly
+          // coded throwing an error).
           .catch(result => {
             setStatus(result)
           });
@@ -202,7 +229,7 @@
      * Using HTMLElement.dataset (See:
      * https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/dataset),
      * create a Javascript object from the fields i.e.:
-     * - text-inputs become 'key:string-value' pairs,
+     * - text and number -inputs become 'key:string-value' pairs,
      * - select elements' selected options become 'key:string-value' pairs,
      * - 1-dimensional ordered lists become lists of objects (based on the
      * serialized JSON in their items' value-fields). Note: The key that then
@@ -212,8 +239,12 @@
     function formToObject(form) {
       let obj = {};
       
+      let inputs = [
+        ...form.querySelectorAll("input[type=text]"),
+        ...form.querySelectorAll("input[type=number]"),
+      ];
       // Text inputs.
-      for (let input of form.querySelectorAll("input[type=text]")) {
+      for (let input of inputs) {
         // HACK: List-inputs are identified by a custom field and
         // ','-characters delimit the values.
         if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
@@ -282,6 +313,52 @@
           }
         });
     }
+  
+    /**
+     * Update the form that is used to request deployment execution with the
+     * current selection of deployments recorded in database. TODO: Generalize
+     * with same module-upload-selections func.
+     */
+    function populateExecutionFormDeployments() {
+      // Get all current deployments' ids and names and add them to the list for
+      // selection.
+      fetch("/file/manifest")
+        .then((resp) => resp.json())
+        .then(function(deploymentsData) {
+          let selectElem = document.querySelector("#edeployment-select");
+
+          // Remove previous ones first and replace with newly fetched ones.
+          for (let option of selectElem.querySelectorAll("option")) {
+            if (option.value !== "") {
+              option.remove();
+            }
+          }
+
+          for (let deployment of deploymentsData) {
+            let optionElem = document.createElement("option");
+            optionElem.value = deployment._id;
+            optionElem.textContent = deployment.name;
+            selectElem.appendChild(optionElem);
+          }
+
+          // Now that the selection is populated, add events to generate a form
+          // for giving inputs that will eventually be fed into the initial func
+          // of the execution sequence.
+          for (option of document.querySelectorAll("#edeployment-select option")) {
+            option.addEventListener("click", function(event) {
+              // Remove all other children immediately under the form's "inputs area"
+              // except for the deployment selector.
+              let divsExpectFirst =
+                document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
+              for (div of divsExpectFirst) {
+                div.remove();
+              }
+
+              generateModuleFuncInputForm(event);
+            });
+          }
+        });
+    }
 
     /**
      * Set the status bar to success if result.success or error if result.error
@@ -290,13 +367,12 @@
       let focusBar = document.querySelector("#status");
       focusBar.classList.remove("error");
       focusBar.classList.remove("success");
-
       if (result.success) {
         msg = result.success;
         classs = "success";
       } else {
         // Empty the message if result is malformed.
-        msg = result.err ?? ("RESPONSE RESULT MALFORMED: " + JSON.stringify(result));
+        msg = result.err ?? ("RESPONSE MISSING FIELD `err`: " + JSON.stringify(result));
         // Default the style to error.
         classs = "error"
       }
@@ -311,16 +387,59 @@
 
       // Populate lists on page load.
       populateWasmFormModules();
+      populateExecutionFormDeployments();
+
+      // Module forms:
 
       document.querySelector("#module-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#module-json-form").querySelector("textarea")); });
       document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
       document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/upload"));
 
       // Deployment forms:
-      document.querySelector("#dadd-procedure-row").addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
 
-      document.querySelector("#deployment-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#deployment-json-form").querySelector("textarea")); });
-      document.querySelector("#deployment-json-form").addEventListener("submit", submitJsonTextarea("/file/manifest"));
+      document
+        .querySelector("#dadd-procedure-row")
+        .addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
+
+      // Transform form into JSON and paste into textarea.
+      document
+        .querySelector("#deployment-form")
+        .addEventListener(
+          "submit",
+          (event) => {
+            event.preventDefault();
+            populateWithJson(
+              event.target,
+              document
+                .querySelector("#deployment-json-form")
+                .querySelector("textarea")
+            );
+          }
+        );
+
+      // POST the JSON found in textarea to the server.
+      document
+        .querySelector("#deployment-json-form")
+        .addEventListener("submit", submitJsonTextarea("/file/manifest", populateExecutionFormDeployments));
+
+      // Execution forms:
+
+      document
+        .querySelector("#execution-form")
+        .addEventListener(
+          "submit",
+          (event) => {
+            event.preventDefault();
+            let deploymentObj = formToObject(event.target);
+            fetch(`/execute/${deploymentObj.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(deploymentObj)
+              })
+              .then(resp => resp.json())
+              .then(setStatus);
+          }
+        );
 
       // Database listings:
 
@@ -337,6 +456,21 @@
           .then(resp => resp.json())
           .then(setStatus);
       });
+      
+      // Device discovery:
+
+      document.querySelector("#device-discovery-reset-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        fetch("/file/device/discovery/reset",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Send nothing.
+            body: "{}",
+          })
+          .then(resp => resp.json())
+          .then(setStatus);
+      });
     };
   </script>
 </head>
@@ -348,7 +482,7 @@
   <div>
     <div>
       <h2>Compose your application</h2>
-      <div id="form-container">
+      <div class="form-container">
         <div>
           <form id="deployment-form">
             <fieldset>
@@ -375,7 +509,7 @@
                 <legend>Submit a deployment in JSON</legend>
                 <div>
                   <div>
-                    <textarea id="djjson" name="json" required>{}</textarea>
+                    <textarea id="djson" name="json" required>{}</textarea>
                   </div>
                 </div>
             </fieldset>
@@ -385,13 +519,40 @@
       </div>
     </div>
     <div>
+      <h2>Execute your application</h2>
+      <div class="form-container">
+        <div>
+          <form id="execution-form">
+            <fieldset>
+              <legend>Execute</legend>
+              <div>
+                <div>
+                  <label for="edeployment-select">Select the deployment:</label>
+                    <select id="edeployment-select" name="id" required>
+                      <option value="">Please select a deployment:</option>
+                    </select>
+                </div>
+                <!-- Generate here the needed form-fields according to (Thing?) Description -->
+              </div>
+            </fieldset>
+            <input type="submit" value="Execute!"/>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div>
       <ul>
         <li> 
           <a href="/file/device">Devices</a>
           <div>
-          <form id="device-deleteall-form">
-            <input type="submit" value="DELETE ALL DEVICES"/>
-          </form>
+            <form id="device-deleteall-form">
+              <input type="submit" value="DELETE ALL DEVICES"/>
+            </form>
+          </div>
+          <div>
+            <form id="device-discovery-reset-form">
+              <input type="submit" value="RESET DEVICE DISCOVERY"/>
+            </form>
           </div>
         </li>
         <li>
@@ -403,7 +564,7 @@
         <li><a href="/file/manifest">Deployments</a></li>
       </ul>
     </div>
-    <div id="form-container">
+    <div class="form-container">
       <div>
         <form id="module-form">
           <fieldset>
