@@ -42,7 +42,10 @@ workarounds to these issues are to:
 ### Orchestrator
 Orchestrator is a NodeJS server using a MongoDB database.
 
-Running these containers can be done with the command:
+In order to get them running, first you need to setup a `.env` file for user
+credentials. Copy the [`.env.example`](./.env.example) file into your own `.env` file at the repository root and edit appropriate values to your liking.
+
+Running the orchestrator containers can be done with the command:
 ```
 docker compose up --build
 ```
