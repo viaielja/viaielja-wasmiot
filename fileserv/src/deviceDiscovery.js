@@ -1,7 +1,7 @@
 const http = require('http');
 
 const bonjour = require("bonjour-service");
-const { DEVICE_DESC_ROUTE } = require("../utils");
+const { DEVICE_DESC_ROUTE } = require("../constants.js");
 
 
 /**
