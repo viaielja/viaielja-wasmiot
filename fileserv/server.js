@@ -305,7 +305,7 @@ expressApp.get("/", (_, response) => {
  * Direct to error-page when bad URL used.
  */
 expressApp.all("/*", (_, response) => {
-    response.send("Bad URL").status(404);
+    response.status(404).send({ err: "Bad URL" });
 });
 
 ////////////

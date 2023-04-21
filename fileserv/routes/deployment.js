@@ -206,10 +206,12 @@ async function deploy(deploymentId, packageBaseUrl) {
 
         // Add data needed by the device for pulling a module.
         // NOTE: The download URL for .wasm is passed here.
+        let url = new URL(packageBaseUrl);
+        url.pathname = `/file/module/${module._id}/wasm`;
         let moduleData = {
             id: module._id,
             name: module.name,
-            url: `${packageBaseUrl}/file/module/${module._id}/wasm`,
+            url: url.toString(),
         };
         // Attach the created details of deployment to matching device.
         deploymentsToDevices[device._id].modules.push(moduleData);
