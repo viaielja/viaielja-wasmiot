@@ -5,6 +5,7 @@ const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
 const utils = require("../utils.js");
+const { PUBLIC_BASE_URI } = require("../constants.js");
 
 
 const router = express.Router();
@@ -72,8 +73,7 @@ router.post("/", async (request, response) => {
 
             //TODO: Start searching for suitable packages using saved file.
             //startSearch();
-            // TODO: Put package-manager hostname to a constant or other global.
-            let err = await deploy(actionId, require("os").hostname() + ":3000");
+            let err = await deploy(actionId, PUBLIC_BASE_URI);
             if (err) {
                 errorMsg = "Failed constructing manifest for deployment: " + err;
             }
@@ -94,7 +94,7 @@ router.post("/", async (request, response) => {
  * @param {*} deploymentId The database-id of deployment.
  * @param {*} packageBaseUrl The base of the package manager server address for
  * devices to pull modules from. TODO Define "base" in this context. Currently
- * just called in the post("/")-route with the "localhost:3000" equivalent part
+ * uses the public address defined with environmental variables (containing the protocol)
  * but could be e.g. a function taking in a module-ID that constructs the actual URL.
  * @returns An error message or null if building the manifest was successfull
  * (TODO/NOTE: Does not include checks for sending the deployments to devices).
@@ -124,7 +124,7 @@ async function deploy(deploymentId, packageBaseUrl) {
             } else {
                 console.log(`Failed to find function '${func}' from requested module:`, modulee);
                 return;
-            }    
+            }
         } else {
             console.log(`Failed to find module matching the received module ID ${moduleId}`);
             return;
@@ -199,7 +199,7 @@ async function deploy(deploymentId, packageBaseUrl) {
         let device = selectedDevices[i];
         let module = selectedModules[i];
         let func = deployment.sequence[i]["func"];
-        
+
         let instruction = {
             // ... 3.1. Waiting for an incoming POST with certain identifier
             // (NOTE: deployment ID for now),
@@ -214,11 +214,12 @@ async function deploy(deploymentId, packageBaseUrl) {
 
         // Add data needed by the device for pulling a module.
         // NOTE: The download URL for .wasm is passed here.
+        let url = new URL(packageBaseUrl);
+        url.pathname = `/file/module/${module._id}/wasm`;
         let moduleData = {
             id: module._id,
             name: module.name,
-            // TODO: Any way to get base and protocol from express instead of hardcoding?
-            url: `http://${packageBaseUrl}/file/module/${module._id}/wasm`,
+            url: url.toString(),
         };
         // Attach the created details of deployment to matching device.
         deploymentsToDevices[device._id].modules.push(moduleData);
@@ -259,7 +260,6 @@ async function deploy(deploymentId, packageBaseUrl) {
         );
         request.on("error", e => {
             console.log(`Error while posting to device '${JSON.stringify(deployment.device, null, 2)}': `, e);
-            
         })
 
         request.write(deploymentJson);

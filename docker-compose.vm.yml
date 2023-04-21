@@ -18,7 +18,7 @@ services:
       CONFIG_PUBLIC_PORT: ${PUBLIC_PORT:-3000}
 
   mongo:
-    image: mongo
+    image: mongo:4.4.20
     restart: unless-stopped
     # TODO Add volumes for db.
     environment:
@@ -29,12 +29,29 @@ services:
       - mongo-config:/DATA/CONFIGDB
       - mongo-db:/DATA/DB
 
+  mdns-reflector:
+    image: flungo/avahi
+    restart: unless-stopped
+    environment:
+      REFLECTOR_ENABLE_REFLECTOR: "yes"
+    networks:
+      - default
+      - physical
+
 volumes:
   mongo-config:
   mongo-db:
 
 networks:
-  # Network where orchestrator (which could in the future be separate from the
-  # "(web)server" and its routes?) lives in.
+  # Network for orchestrator and MongoDB
   default:
     name: wasmiot-net
+  physical:
+    name: physical
+    driver: macvlan
+    driver_opts:
+      parent: ${NETWORK_INTERFACE:-eth0}
+    ipam:
+      config:
+        - subnet: "${NETWORK_IP_BASE:-192.168.1}.0/24"
+          gateway: "${NETWORK_IP_BASE:-192.168.1}.1"
