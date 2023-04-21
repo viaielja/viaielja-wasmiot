@@ -100,6 +100,7 @@ async function initializeDatabase() {
     // mongo-service differently in the .yml -files. Or otherwise TODO pass the
     // hostname from environment)
     databaseClient = new MongoClient(MONGO_URI);
+    console.log(`Connecting to database through '${MONGO_URI}' ...`);
     try {
         const orchDb = (await databaseClient.connect()).db();
         // Create references to the needed collections.

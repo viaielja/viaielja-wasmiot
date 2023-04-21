@@ -22,6 +22,13 @@ cd .\wasmiot-orchestrator\
 git clone git@github.com:LiquidAI-project/wasmiot-supervisor.git
 git submodule init
 git submodule update
+<#
+  NOTE: Be sure to have your MongoDB credentials present in environment
+  variables or .env before composing up! Otherwise your MongoDB database is
+  created without a "superuser" and you have to re-create it to gain access.
+  Here we copy defaults from .env.example.
+#>
+cp .env.example .env
 docker compose up
 ```
 
