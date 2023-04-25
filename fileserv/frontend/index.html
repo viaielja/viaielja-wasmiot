@@ -7,97 +7,53 @@
   <title>Wasm-IoT</title>
 </head>
 <body>
-  <h1>WasmIoT - Orchestrator</h1>
-  <div>
-    <h1 id="status"></h1>
+  
+  <div id="header">
+    <div  class="container">
+      <div class="overlay"></div>
+      <div class="terminal">
+        <h1>WasmIoT - Orchestrator</h1>
+        <div>
+          <h1 id="status"></h1>
+        </div>
+      </div>
+    </div>
   </div>
-  <div>
-    <div>
-      <h2>Compose your application</h2>
-      <div class="form-container">
-        <div>
-          <form id="deployment-form">
-            <fieldset>
-                <legend>Create a deployment</legend>
-                <div>
-                  <div>
-                    <label for="dname">Name</label>
-                    <input id="dname" name="name" required type="text" value="">
-                  </div>
-                  <div>
-                    <p>Procedure-call sequence:</p>
-                    <ol id="dprocedure-sequence-list" data-json-key="sequence">
-                    </ol>
-                    <button type="button" id="dadd-procedure-row">Next</button>
-                  </div>
-                </div>
-            </fieldset>
-            <input type="submit" value="To JSON"/>
-          </form>
-        </div>
-        <div>
-          <form id="deployment-json-form">
-            <fieldset>
-                <legend>Submit a deployment in JSON</legend>
-                <div>
-                  <div>
-                    <textarea id="djson" name="json" required>{}</textarea>
-                  </div>
-                </div>
-            </fieldset>
-            <input type="submit" value="Deploy!"/>
-          </form>
-        </div>
+
+  <div class="content">
+    <div id="resource-listing" class="container">
+      <div class="overlay"></div>
+      <div class="terminal">
+        <ul>
+          <li> 
+            <a href="/file/device">Devices</a>
+            <div>
+              <form id="device-deleteall-form">
+                <input type="submit" value="DELETE ALL DEVICES"/>
+              </form>
+            </div>
+            <div>
+              <form id="device-discovery-reset-form">
+                <input type="submit" value="RESET DEVICE DISCOVERY"/>
+              </form>
+            </div>
+          </li>
+          <li>
+            <a href="/file/module">Modules</a>
+            <form id="module-deleteall-form">
+              <input type="submit" value="DELETE ALL MODULES"/>
+            </form>
+          </li>
+          <li><a href="/file/manifest">Deployments</a></li>
+        </ul>
       </div>
     </div>
-    <div>
-      <h2>Execute your application</h2>
-      <div class="form-container">
-        <div>
-          <form id="execution-form">
-            <fieldset>
-              <legend>Execute</legend>
-              <div>
-                <div>
-                  <label for="edeployment-select">Select the deployment:</label>
-                    <select id="edeployment-select" name="id" required>
-                      <option value="">Please select a deployment:</option>
-                    </select>
-                </div>
-                <!-- Generate here the needed form-fields according to (Thing?) Description -->
-              </div>
-            </fieldset>
-            <input type="submit" value="Execute!"/>
-          </form>
-        </div>
-      </div>
-    </div>
-    <div>
-      <ul>
-        <li> 
-          <a href="/file/device">Devices</a>
-          <div>
-            <form id="device-deleteall-form">
-              <input type="submit" value="DELETE ALL DEVICES"/>
-            </form>
-          </div>
-          <div>
-            <form id="device-discovery-reset-form">
-              <input type="submit" value="RESET DEVICE DISCOVERY"/>
-            </form>
-          </div>
-        </li>
-        <li>
-          <a href="/file/module">Modules</a>
-          <form id="module-deleteall-form">
-            <input type="submit" value="DELETE ALL MODULES"/>
-          </form>
-        </li>
-        <li><a href="/file/manifest">Deployments</a></li>
-      </ul>
-    </div>
-    <div class="form-container">
-      <div>
+  </div>
+
+  <div class="content">
+    <div class="container">
+      <div class="overlay"></div>
+      <div class="terminal">
         <form id="module-form">
           <fieldset>
             <legend>Fill-in metadata for a new module</legend>
@@ -111,7 +67,10 @@
           <input type="submit" value="To JSON"/>
         </form>
       </div>
-      <div>
+    </div>
+    <div class="container">
+      <div class="overlay"></div>
+      <div class="terminal">
         <form id="module-json-form">
           <fieldset>
               <legend>Submit a module in JSON</legend>
@@ -124,7 +83,10 @@
           <input type="submit" value="Submit"/>
         </form>
       </div>
-      <div>
+    </div>
+    <div class="container">
+      <div class="overlay"></div>
+      <div class="terminal">
         <form id="wasm-form">
           <fieldset>
             <legend>Upload WebAssembly file to a module</legend>
@@ -143,6 +105,73 @@
         </form>
       </div>
     </div>
+  </div>
+
+  <div class="content">
+    <div class="container">
+      <div class="overlay"></div>
+      <div class="terminal">
+        <form id="deployment-form">
+          <fieldset>
+              <legend>Create a deployment</legend>
+              <div>
+                <div>
+                  <label for="dname">Name</label>
+                  <input id="dname" name="name" required type="text" value="">
+                </div>
+                <div>
+                  <p>Procedure-call sequence:</p>
+                  <ol id="dprocedure-sequence-list" data-json-key="sequence">
+                  </ol>
+                  <button type="button" id="dadd-procedure-row">Next</button>
+                </div>
+              </div>
+          </fieldset>
+          <input type="submit" value="To JSON"/>
+        </form>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="overlay"></div>
+      <div class="form-container terminal">
+        <form id="deployment-json-form">
+          <fieldset>
+              <legend>Submit a deployment in JSON</legend>
+              <div>
+                <div>
+                  <textarea id="djson" name="json" required>{}</textarea>
+                </div>
+              </div>
+          </fieldset>
+          <input type="submit" value="Deploy!"/>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="container">
+      <div class="overlay"></div>
+      <div class="terminal">
+        <form id="execution-form">
+          <fieldset>
+            <legend>Execute</legend>
+            <div>
+              <div>
+                <label for="edeployment-select">Select the deployment:</label>
+                  <select id="edeployment-select" name="id" required>
+                    <option value="">Please select a deployment:</option>
+                  </select>
+              </div>
+              <!-- Generate here the needed form-fields according to (Thing?) Description -->
+            </div>
+          </fieldset>
+          <input type="submit" value="Execute!"/>
+        </form>
+      </div>
+    </div>
+
   </div>
 </body>
 </html>
