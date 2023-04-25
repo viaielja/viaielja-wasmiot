@@ -179,6 +179,9 @@ const urlencodedExtendedMw = express.urlencoded({ extended: true });
 // TODO: Can the more fine-grained authentication (i.e. on DELETEs and POSTs but
 // not on GETs) be done here?
 
+// Serve the frontend files for use.
+expressApp.use(express.static("frontend"));
+
 expressApp.use(requestMethodLogger);
 
 expressApp.use(

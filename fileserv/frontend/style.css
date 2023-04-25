@@ -1,0 +1,27 @@
+h1 {
+    text-align: center;
+}
+
+body > div {
+    display: flex;
+    justify-content: space-around;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-container > div {
+    margin-top: 15%;
+}
+
+.success {
+    width: 100%;
+    background-color: cyan;
+}
+
+.error {
+    width: 100%;
+    background-color: red;
+}
