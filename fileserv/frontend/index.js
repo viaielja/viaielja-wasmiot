@@ -356,7 +356,18 @@ window.onload = function() {
 
     // Module forms:
 
-    document.querySelector("#module-form").addEventListener("submit", (event) => { event.preventDefault(); populateWithJson(event.target, document.querySelector("#module-json-form").querySelector("textarea")); });
+    // Swap the form's view from human-friendly to the JSON textarea.
+    document.querySelector("#module-form")
+        .addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            let jsonForm = document.querySelector("#module-json-form");
+            populateWithJson(event.target, jsonForm.querySelector("textarea"));
+            
+            event.target.classList.add("hidden");
+            jsonForm.classList.remove("hidden");
+        });
+
     document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
     document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/upload"));
 
@@ -366,21 +377,17 @@ window.onload = function() {
     .querySelector("#dadd-procedure-row")
     .addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
 
-    // Transform form into JSON and paste into textarea.
-    document
-    .querySelector("#deployment-form")
-    .addEventListener(
-        "submit",
-        (event) => {
-        event.preventDefault();
-        populateWithJson(
-            event.target,
-            document
-            .querySelector("#deployment-json-form")
-            .querySelector("textarea")
-        );
-        }
-    );
+    // Swap the form's view from human-friendly to the JSON textarea.
+    document.querySelector("#deployment-form")
+        .addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            let jsonForm = document.querySelector("#deployment-json-form");
+            populateWithJson(event.target, jsonForm.querySelector("textarea"));
+            
+            event.target.classList.add("hidden");
+            jsonForm.classList.remove("hidden");
+        });
 
     // POST the JSON found in textarea to the server.
     document
@@ -436,4 +443,18 @@ window.onload = function() {
         .then(resp => resp.json())
         .then(setStatus);
     });
+
+    // Toggle visibility of UI controls.
+    let controlElems = document.querySelectorAll("#selector > div");
+    for (let elem of controlElems) {
+        elem.addEventListener("click", function(event) {
+            let previousControl = document.querySelector("#control-container > .selected");
+            previousControl.classList.remove("selected");
+            previousControl.classList.add("hidden");
+
+            let targetControl = document.getElementById(event.target.dataset.controlId);
+            targetControl.classList.remove("hidden");
+            targetControl.classList.add("selected");
+        });
+    }
 };

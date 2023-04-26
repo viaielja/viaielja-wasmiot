@@ -38,14 +38,18 @@ html {
     NOTE That the height needs to be set and be some non-percent value for
     the terminal screen to even show.
     */
-    height: 30vh;
+    min-height: 30vh;
 }
 
-.content {
+#content {
     display: flex;
     flex-direction: row;
     /* FIXME: This constant (iiuc) prevents growing the terminals dynamically */
-    height: 45vh;
+    min-height: 45vh;
+}
+
+.hidden {
+    display: none;
 }
 
 fieldset {
