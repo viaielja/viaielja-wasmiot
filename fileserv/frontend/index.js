@@ -358,8 +358,11 @@ window.onload = function() {
 
     // Swap the form's view from human-friendly to the JSON textarea. TODO: This
     // is a bit boilerplatey because repeated with deployment forms.
-    document.querySelector("#module-form .input-view-switch")
-        .addEventListener("click", function() {
+    document.querySelector("#module-form")
+        // NOTE: Submit event here in order to have form make requirement-checks
+        // automatically.
+        .addEventListener("submit", function(event) {
+            event.preventDefault();
             // Also populate the JSON field.
             let thisForm = document.querySelector("#module-form")
             let jsonForm = document.querySelector("#module-json-form");
@@ -388,8 +391,9 @@ window.onload = function() {
     .addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
 
     // Swap the form's view from human-friendly to the JSON textarea.
-    document.querySelector("#deployment-form .input-view-switch")
-        .addEventListener("click", function() {
+    document.querySelector("#deployment-form")
+        .addEventListener("submit", function(event) {
+            event.preventDefault();
             // Also populate the JSON field.
             let thisForm = document.querySelector("#deployment-form")
             let jsonForm = document.querySelector("#deployment-json-form");
