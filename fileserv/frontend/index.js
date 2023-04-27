@@ -356,19 +356,29 @@ window.onload = function() {
 
     // Module forms:
 
-    // Swap the form's view from human-friendly to the JSON textarea.
-    document.querySelector("#module-form")
-        .addEventListener("submit", function(event) {
-            event.preventDefault();
-
+    // Swap the form's view from human-friendly to the JSON textarea. TODO: This
+    // is a bit boilerplatey because repeated with deployment forms.
+    document.querySelector("#module-form .input-view-switch")
+        .addEventListener("click", function() {
+            // Also populate the JSON field.
+            let thisForm = document.querySelector("#module-form")
             let jsonForm = document.querySelector("#module-json-form");
-            populateWithJson(event.target, jsonForm.querySelector("textarea"));
+            populateWithJson(thisForm, jsonForm.querySelector("textarea"));
             
-            event.target.classList.add("hidden");
+            thisForm.classList.add("hidden");
             jsonForm.classList.remove("hidden");
         });
+    // Same as above but reverse and does not fill in the form (TODO).
+    document.querySelector("#module-json-form .input-view-switch")
+        .addEventListener("click", function(_) {
+            document.querySelector("#module-json-form").classList.add("hidden");
+            document.querySelector("#module-form").classList.remove("hidden");
+        });
 
-    document.querySelector("#module-json-form").addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
+    document
+        .querySelector("#module-json-form")
+        .addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
+
     document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/upload"));
 
     // Deployment forms:
@@ -378,21 +388,28 @@ window.onload = function() {
     .addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
 
     // Swap the form's view from human-friendly to the JSON textarea.
-    document.querySelector("#deployment-form")
-        .addEventListener("submit", function(event) {
-            event.preventDefault();
-
+    document.querySelector("#deployment-form .input-view-switch")
+        .addEventListener("click", function() {
+            // Also populate the JSON field.
+            let thisForm = document.querySelector("#deployment-form")
             let jsonForm = document.querySelector("#deployment-json-form");
-            populateWithJson(event.target, jsonForm.querySelector("textarea"));
+            populateWithJson(thisForm, jsonForm.querySelector("textarea"));
             
-            event.target.classList.add("hidden");
+            thisForm.classList.add("hidden");
             jsonForm.classList.remove("hidden");
         });
+    // Same as above but reverse and does not fill in the form (TODO).
+    document.querySelector("#deployment-json-form .input-view-switch")
+        .addEventListener("click", function(_) {
+            document.querySelector("#deployment-json-form").classList.add("hidden");
+            document.querySelector("#deployment-form").classList.remove("hidden");
+        });
+
 
     // POST the JSON found in textarea to the server.
     document
-    .querySelector("#deployment-json-form")
-    .addEventListener("submit", submitJsonTextarea("/file/manifest", populateExecutionFormDeployments));
+        .querySelector("#deployment-json-form")
+        .addEventListener("submit", submitJsonTextarea("/file/manifest", populateExecutionFormDeployments));
 
     // Execution forms:
 
