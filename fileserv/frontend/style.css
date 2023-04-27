@@ -1,0 +1,270 @@
+/* 
+h1, h2 {
+    text-align: center;
+}
+
+body > div {
+    display: flex;
+    justify-content: space-around;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-container > div {
+    margin-top: 15%;
+}
+
+.success {
+    width: 100%;
+    background-color: cyan;
+}
+
+.error {
+    width: 100%;
+    background-color: red;
+}
+
+*/
+html {
+    background-color: black;
+}
+
+#header {
+    display: flex;
+    /*
+    NOTE That the height needs to be set and be some non-percent value for
+    the terminal screen to even show.
+    */
+    min-height: 30vh;
+}
+
+#content {
+    display: flex;
+    flex-direction: row;
+    /* FIXME: This constant (iiuc) prevents growing the terminals dynamically */
+    min-height: 45vh;
+}
+
+.hidden {
+    display: none;
+}
+
+fieldset {
+    margin-top: 2%;
+
+    border-style: ridge;
+    border-radius: 1%;
+    border-width: 5px;
+    border-color: #243627;
+}
+
+form
+h1,
+h2,
+p,
+button,
+input:not([type=file]),
+select,
+option,
+textarea,
+label
+{
+    width: 100%;
+    margin-top: 1%;
+    margin-bottom: 2%;
+}
+
+/*
+Overlay positioning adapted from:
+https://stackoverflow.com/questions/2941189/how-to-overlay-one-div-over-another-div
+*/
+.container {
+    position: relative;
+    width: 100%;
+    margin: 1%;
+
+    border-style: ridge;
+    border-radius: 1%;
+    border-width: 5px;
+    border-color: #243627;
+}
+
+.overlay,
+.terminal {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+}
+
+/** Idea author: https://codepen.io/robinselmer */
+/** Idea continuer: http://wetware.fi/ */
+.terminal {
+    box-sizing: border-box;
+    background-color: #000000;
+    background-image: radial-gradient(#11581E, #041607);
+    background-repeat: no-repeat;
+    background-size: cover;
+    font-family: 'Inconsolata', Helvetica, sans-serif;
+    color: rgba(128, 255, 128, 0.8);
+    text-shadow:
+        0 0 11px rgba(51, 255, 51, 1),
+        0 0 2px rgba(255, 255, 255, 0.8);
+
+
+    text-transform: uppercase;
+    padding-left: 2%;
+    padding-right: 2%;
+}
+
+.overlay {
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(
+            180deg,
+            rgba(0, 0, 0, 0) 0,
+            rgba(0, 0, 0, 0.3) 50%,
+            rgba(0, 0, 0, 0) 100%);
+    background-size: auto 4px;
+    z-index: 1;
+}
+
+.overlay::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    display: block;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(
+        0deg,
+        transparent 0%,
+        rgba(32, 128, 32, 0.2) 2%,
+        rgba(32, 128, 32, 0.8) 3%,
+        rgba(32, 128, 32, 0.2) 3%,
+        transparent 100%);
+    background-repeat: no-repeat;
+    animation: scan 7.5s linear 0s infinite;
+}
+
+@keyframes scan {
+    0%        { background-position: 0 -100vh; }
+    35%, 100% { background-position: 0 100vh; }
+}
+
+@keyframes blink {
+    0%   { opacity: 0; }
+    50%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+h1 {
+    font-size: 46px;
+}
+
+h2,
+legend
+{
+    font-size: 36px;
+}
+
+p,
+button,
+label,
+input,
+textarea,
+select
+{
+    font-size: 22px;
+    font-family: 'Inconsolata', Helvetica, sans-serif;
+    text-transform: uppercase;
+
+    border: 0;
+    background: 0;
+}
+
+/* Green glow. */
+p,
+button,
+label {
+    color: rgba(128, 255, 128, 0.8);
+    text-shadow:
+        0 0 11px rgba(51, 255, 51, 1),
+        0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Turquoise glow. */
+input,
+textarea,
+select {
+    color: rgba(4, 255, 247, 0.8);
+    text-shadow:
+        0 0 11px rgba(200, 200, 255, 1),
+        0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Red glow. */
+.error {
+    color: rgba(210, 39, 48, 0.8);
+    text-shadow:
+        0 0 11px rgba(200, 51, 51, 1),
+        0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+label:hover, input:hover, textarea:hover, select:hover {
+    color: #fff;
+    cursor: pointer;
+    border: 0;
+    background: 0;
+}
+
+.terminal
+    h1::after,
+    h2::after,
+    p::after
+{
+    display: inline-block;
+    content: "█";
+    animation: blink 1s step-end infinite;
+}
+
+
+.output, .status_check {
+    color: rgba(128, 255, 128, 0.8);
+    text-shadow:
+        0 0 1px rgba(51, 255, 51, 0.4),
+        0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.output::before {
+    content: "> ";
+}
+
+.status_check::before {
+    content: "$ ";
+}
+
+a {
+    color: #fff;
+    text-decoration: none;
+}
+
+a::before {
+    content: "[";
+}
+
+a::after {
+    content: "]";
+}
+
+.status_code {
+    color: white;
+}
