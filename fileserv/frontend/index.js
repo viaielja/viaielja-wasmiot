@@ -462,7 +462,7 @@ window.onload = function() {
     });
 
     // Toggle visibility of UI controls.
-    let controlElems = document.querySelectorAll("#selector > div");
+    let controlElems = document.querySelectorAll("#selector > ul li");
     for (let elem of controlElems) {
         elem.addEventListener("click", function(event) {
             let previousControl = document.querySelector("#control-container > .selected");
