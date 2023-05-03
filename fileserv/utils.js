@@ -84,7 +84,7 @@ function callDeviceFuncRaw(
         "Content-type": "application/octet-stream",
         "Content-length": input.byteLength,
     };
-    callDeviceFuncHttp(device, path, headers, onResponse, onError, input);
+    callDeviceFuncHttp(device, path, headers, input, onResponse, onError);
 }
 
 /**
@@ -110,14 +110,24 @@ function callDeviceFuncHttp(device, path, headers, input, onResponse, onError, m
     };   
     let url = new URL(`http://${device.address}:${device.port}`);
     url.pathname = path;
+
+    // Set the input to send based on its type.
     if (typeof(input) === "string") {
         url.search = input;
+    } else if (typeof(input) === "object") {
+        if (input instanceof Uint8Array) {
+            requestOptions.body = input;
+        } else {
+            throw `Tried sending device unsupported input instanceof: ${JSON.stringify(input, null, 2)}`;
+        }
+    } else {
+        throw `Tried sending device unsupported input type '${typeof(input)}'`;
     }
 
     console.log(`Using HTTP '${method}' to call a func on '${url}' with headers: `, headers);
 
     fetch(url, requestOptions)
-        .then(response => response.json())
+        .then(response => response.json().catch(onError))
         .then(onResponse)
         .catch(onError);
 }
