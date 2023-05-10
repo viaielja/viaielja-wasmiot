@@ -6,8 +6,13 @@ services:
       context: ./fileserv
       dockerfile: ./Dockerfile
       target: compose
-    ports:
-      - ${PUBLIC_PORT:-3000}:3000
+    # TODO Is this necessary as in the local network the port seems to be
+    # accessible anyway (e.g., 'curl http://192.168.68.2:3000' succeeds)?
+    #ports:
+    #  - ${PUBLIC_PORT:-3000}:3000
+    networks:
+      dockeripvlan:
+      default: 
     command: nodejs ./server.js
     environment:
       CONFIG_MONGODB_HOST: ${MONGO_HOST:-mongo}
@@ -20,7 +25,8 @@ services:
   mongo:
     image: mongo
     restart: unless-stopped
-    # TODO Add volumes for db.
+    networks:
+      default:
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
@@ -34,7 +40,19 @@ volumes:
   mongo-db:
 
 networks:
-  # Network where orchestrator (which could in the future be separate from the
-  # "(web)server" and its routes?) lives in.
   default:
+    # Network for the orchestrator and MongoDB.
     name: wasmiot-net
+  dockeripvlan:
+    # Network for connecting orchestrator server and device discovery to
+    # outside from Docker.
+    name: dockeripvlan
+    driver: ipvlan
+    driver_opts:
+      parent: ${NETWORK_INTERFACE} #eno1 #wlp0s20f3
+    ipam:
+      config:
+        - subnet: "${NETWORK_IP_BASE}.0/24"
+        #  TODO Are these two needed?
+        #  ip_range: "10.0.0.0/16"
+        #  gateway: "10.0.0.1"
