@@ -7,6 +7,10 @@ services:
     extends:
       file: docker-compose.yml
       service: orchestrator
+    networks:
+      # Only use the "orchestrator net" and not the setup that connects with
+      # other hosts in LAN.
+      default:
     build:
       # For debugging the whole project directory needs to be available, not
       # just `fileserv`.

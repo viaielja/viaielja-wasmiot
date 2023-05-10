@@ -6,6 +6,9 @@
 	//"image": "mcr.microsoft.csm/devcontainers/javascript-node:0-18"
 	"dockerComposeFile": "../docker-compose.devcontainer.yml",
 	"service": "orchestrator",
+	// Could not seem to be able to select "profile" from compose-file to run
+	// the orchestration-related services (server and db), so list them here.
+	"runServices": ["orchestrator", "mongo"],
 	"workspaceFolder": "/app",
 
 	//"remoteUser": "vscode",
