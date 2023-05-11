@@ -66,6 +66,10 @@ function addProcedureRow(listId) {
         let anyDevice = { _id: null, name: "any device" };
         for (let device of [anyDevice].concat(devicesData)) {
             for (let mod of modulesData) {
+                if (mod.exports === undefined) {
+                    // Do not include modules without uploaded Wasm's at all.
+                    continue;
+                }
                 for (let exportt of mod.exports) {
                     let exportOption = document.createElement("option");
 
@@ -327,15 +331,21 @@ async function populateSelectWithDeployments(selectElem) {
 }
 
 /**
- * Set the status bar to success if result.success or error if result.error
+ * Set the status bar to signify different states described by key-value pair in
+ * the `result` parameter.
+ * @param {} result `null` to reset the element or an Object containing one of
+ * the keys `error`, `success`, `result` with message as the value.
  */
 function setStatus(result) {
     let focusBar = document.querySelector("#status");
     focusBar.classList.remove("error");
     focusBar.classList.remove("success");
+    // "Result" is the result of execution e.g. `plus(1, 2)` results in `3`.
+    focusBar.classList.remove("result");
     focusBar.classList.remove("hidden");
+
     if (result === null) {
-        // Just remove the status with null input.
+        // Reset the status.
         focusBar.classList.add("hidden");
         return;
     }
@@ -343,6 +353,9 @@ function setStatus(result) {
     if (result.success) {
         msg = result.success;
         classs = "success";
+    } else if (result.result) {
+        msg = result.result;
+        classs = "result";
     } else {
         // Empty the message if result is malformed.
         msg = result.error ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
