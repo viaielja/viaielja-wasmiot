@@ -29,7 +29,7 @@ git submodule update
   Here we copy defaults from .env.example.
 #>
 cp .env.example .env
-docker compose up
+docker compose --profile orchestration up --build
 ```
 
 ### Supervisor (git submodule)
@@ -54,7 +54,7 @@ credentials. Copy the [`.env.example`](./.env.example) file into your own `.env`
 
 Running the orchestrator containers can be done with the command:
 ```
-docker compose up --build
+docker compose --profile orchestration up --build
 ```
 
 Another way is to open the project directory on VSCode and follow these instructions:
@@ -92,9 +92,8 @@ the orchestrator's and second one in the supervisor's devcontainer.
 For debugging, the devcontainer should work quite well and you can just use
 VSCode like you would locally for debugging JavaScript (using the JavaScript Debug Terminal).
 
-NOTE that opening the project in devcontainer has sometimes been failing. A
-workaround could be to first __locally__ run `docker compose -f .\docker-compose.devcontainer.yml up`
-and after this the devcontainer should start opening fine.
+With both the devcontainer and database containers up, the server can be started
+from "Run" > "Start Debugging" or pressing F5 on the keyboard.
 
 ### Running the orchestrator in a separate environment than the supervisor
 
@@ -111,6 +110,10 @@ This assumes that both the orchestrator and the supervisor are in the same local
 
     ```bash
     docker compose -f docker-compose.vm.yml up --build
+    ```
+  or
+    ```bash
+    docker compose -f docker-compose.yml --profile lan up --build
     ```
 
 - The discovery and deployment with a supervisor instance running in a separate device has only been tested when the supervisor has been started locally as a Python application. See the [Supervisor repository](https://github.com/LiquidAI-project/wasmiot-supervisor) for installation instructions.
