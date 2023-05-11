@@ -283,45 +283,48 @@ function populateWasmFormModules() {
  * current selection of deployments recorded in database. TODO: Generalize
  * with same module-upload-selections func.
  */
-function populateExecutionFormDeployments() {
-    // Get all current deployments' ids and names and add them to the list for
-    // selection.
-    fetch("/file/manifest")
-        .then((resp) => resp.json())
-        .then(function (deploymentsData) {
-            let selectElem = document.querySelector("#edeployment-select");
+async function populateExecutionFormDeployments() {
+    await populateSelectWithDeployments(document.querySelector("#edeployment-select"));
 
-            // Remove previous ones first and replace with newly fetched ones.
-            for (let option of selectElem.querySelectorAll("option")) {
-                if (option.value !== "") {
-                    option.remove();
-                }
+    // Now that the selection is populated, add events to generate a form
+    // for giving inputs that will eventually be fed into the initial func
+    // of the execution sequence.
+    for (option of document.querySelectorAll("#edeployment-select option")) {
+        option.addEventListener("click", function (event) {
+            // Remove all other children immediately under the form's "inputs area"
+            // except for the deployment selector.
+            let divsExpectFirst =
+                document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
+            for (div of divsExpectFirst) {
+                div.remove();
             }
 
-            for (let deployment of deploymentsData) {
-                let optionElem = document.createElement("option");
-                optionElem.value = deployment._id;
-                optionElem.textContent = deployment.name;
-                selectElem.appendChild(optionElem);
-            }
-
-            // Now that the selection is populated, add events to generate a form
-            // for giving inputs that will eventually be fed into the initial func
-            // of the execution sequence.
-            for (option of document.querySelectorAll("#edeployment-select option")) {
-                option.addEventListener("click", function (event) {
-                    // Remove all other children immediately under the form's "inputs area"
-                    // except for the deployment selector.
-                    let divsExpectFirst =
-                        document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
-                    for (div of divsExpectFirst) {
-                        div.remove();
-                    }
-
-                    generateModuleFuncInputForm(event);
-                });
-            }
+            generateModuleFuncInputForm(event);
         });
+    }
+}
+
+/**
+ * Get all current deployments' ids and names and add them to the list for
+ * selection.
+ * @param {*} selectElem The `select` element to populate with options.
+ */
+async function populateSelectWithDeployments(selectElem) {
+    let deploymentsData = await fetch("/file/manifest").then((resp) => resp.json())
+
+    // Remove previous ones first and replace with newly fetched ones.
+    for (let option of selectElem.querySelectorAll("option")) {
+        if (option.value !== "") {
+            option.remove();
+        }
+    }
+
+    for (let deployment of deploymentsData) {
+        let optionElem = document.createElement("option");
+        optionElem.value = deployment._id;
+        optionElem.textContent = deployment.name;
+        selectElem.appendChild(optionElem);
+    }
 }
 
 /**
@@ -343,7 +346,7 @@ function setStatus(result) {
         classs = "success";
     } else {
         // Empty the message if result is malformed.
-        msg = result.err ?? ("RESPONSE MISSING FIELD `err`: " + JSON.stringify(result));
+        msg = result.error ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
         // Default the style to error.
         classs = "error"
     }
@@ -353,12 +356,12 @@ function setStatus(result) {
     focusBar.focus();
 }
 
-window.onload = function () {
+window.onload = async function () {
     // Module forms:
 
     // Populate lists on page load.
     populateWasmFormModules();
-    populateExecutionFormDeployments();
+    await populateExecutionFormDeployments();
 
     // Module forms:
 
@@ -381,7 +384,7 @@ window.onload = function () {
                 setStatus(null);
                 moduleObj["openapi"] = JSON.parse(thisForm.querySelector("#mopenapi").value);
             } catch (e) {
-                setStatus({err: `Check for 'TODO' in your OpenAPI description: ${e}`});
+                setStatus({error: `Check for 'TODO' in your OpenAPI description: ${e}`});
                 return;
             }
 
