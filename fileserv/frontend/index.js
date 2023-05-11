@@ -280,8 +280,7 @@ function populateWasmFormModules() {
 
 /**
  * Update the form that is used to request deployment execution with the
- * current selection of deployments recorded in database. TODO: Generalize
- * with same module-upload-selections func.
+ * current selection of deployments recorded in database.
  */
 async function populateExecutionFormDeployments() {
     await populateSelectWithDeployments(document.querySelector("#edeployment-select"));
@@ -289,7 +288,7 @@ async function populateExecutionFormDeployments() {
     // Now that the selection is populated, add events to generate a form
     // for giving inputs that will eventually be fed into the initial func
     // of the execution sequence.
-    for (option of document.querySelectorAll("#edeployment-select option")) {
+    for (let option of document.querySelectorAll("#edeployment-select option")) {
         option.addEventListener("click", function (event) {
             // Remove all other children immediately under the form's "inputs area"
             // except for the deployment selector.
@@ -306,7 +305,7 @@ async function populateExecutionFormDeployments() {
 
 /**
  * Get all current deployments' ids and names and add them to the list for
- * selection.
+ * selection. TODO: Generalize for module or whatever else -selections.
  * @param {*} selectElem The `select` element to populate with options.
  */
 async function populateSelectWithDeployments(selectElem) {
@@ -356,12 +355,19 @@ function setStatus(result) {
     focusBar.focus();
 }
 
-window.onload = async function () {
-    // Module forms:
+/**
+ * Update selection list of available deployments to deploy to devices on
+ * command.
+ */
+async function populateDeploymentFormDeployments() {
+    await populateSelectWithDeployments(document.querySelector("#dmanifest-select"));
+}
 
-    // Populate lists on page load.
+window.onload = async function () {
+    // Populate different kinds of lists when page loads.
     populateWasmFormModules();
     await populateExecutionFormDeployments();
+    await populateDeploymentFormDeployments();
 
     // Module forms:
 
@@ -431,11 +437,35 @@ window.onload = async function () {
             document.querySelector("#deployment-form").classList.remove("hidden");
         });
 
-
     // POST the JSON found in textarea to the server.
     document
         .querySelector("#deployment-json-form")
-        .addEventListener("submit", submitJsonTextarea("/file/manifest", populateExecutionFormDeployments));
+        .addEventListener("submit", submitJsonTextarea("/file/manifest", function () {
+            populateExecutionFormDeployments();
+            populateDeploymentFormDeployments();
+        }));
+
+    document
+        .querySelector("#deployment-action-form")
+        .addEventListener(
+            "submit",
+            (event) => {
+                event.preventDefault();
+                let deploymentObj = formToObject(event.target);
+                // TODO: The way I see it atm, because this makes calls to other
+                // hosts (devices) and all that, it should preferrably be in a
+                // path like '/deploy/' to separate from CRUD-operations of
+                // different resources.
+                fetch(`/file/manifest/${deploymentObj.id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(deploymentObj)
+                })
+                    .then(resp => resp.json())
+                    .then(setStatus)
+                    .catch(setStatus);
+            }
+        );
 
     // Execution forms:
 
@@ -452,7 +482,8 @@ window.onload = async function () {
                     body: JSON.stringify(deploymentObj)
                 })
                     .then(resp => resp.json())
-                    .then(setStatus);
+                    .then(setStatus)
+                    .catch(setStatus);
             }
         );
 

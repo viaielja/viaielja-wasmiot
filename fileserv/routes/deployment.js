@@ -36,7 +36,6 @@ router.get("/", async (request, response) => {
 
 /**
  * POST a new deployment manifest to add to orchestrator's database.
- * TODO Separate this function to a separate "/handle_form/deployment"-route.
  */
 router.post("/", async (request, response) => {
     let data = request.body;
@@ -72,7 +71,7 @@ router.post("/", async (request, response) => {
 
             //TODO: Start searching for suitable packages using saved file.
             //startSearch();
-            let err = await deploy(actionId, PUBLIC_BASE_URI);
+            let err = await createSolution(actionId, PUBLIC_BASE_URI);
             if (err) {
                 errorMsg = "Failed constructing manifest for deployment: " + err;
             }
@@ -89,16 +88,63 @@ router.post("/", async (request, response) => {
 });
 
 /**
- * Deploy application according to deployment with `actionId`.
+ *  Deploy applications and instructions to devices according to a pre-created
+ *  deployment.
+ */
+router.post("/:deploymentId", async (request, response) => {
+    let deploymentDoc = (await getDb()
+        .deployment
+        .findOne({ _id: ObjectId(request.params.deploymentId) }));
+
+    let deploymentSolution = deploymentDoc.fullManifest;
+
+    // Make the requests on each device.
+    // POST-making from example snippet at:
+    // https://nodejs.org/api/http.html#httprequesturl-options-callback
+    for (let deployment of Object.values(deploymentSolution)) {
+        let deploymentJson = JSON.stringify(deployment, null, 2);
+        // Select where and how to send this particular deployment.
+        let requestOptions = {
+            method: "POST",
+            protocol: "http:",
+            host: deployment.device.addresses[0],
+            port: deployment.device.port,
+            path: "/deploy",
+            headers: {
+                "Content-type": "application/json",
+                "Content-length": Buffer.byteLength(deploymentJson),
+            }
+        };
+
+        // TODO: Refactor into promises to await for them in bulk and respond to
+        // the top request.
+        let req = http.request(
+            requestOptions,
+            (res) => {
+                console.log(`Deployment: Device '${deployment.device.name}' responded ${res.statusCode}`);
+            }
+        );
+        req.on("error", e => {
+            console.log(`Error while posting to device '${JSON.stringify(deployment.device, null, 2)}': `, e);
+        })
+
+        req.write(deploymentJson);
+        req.end();
+    }
+    response.json({success: `Deployed '${deploymentDoc.name}'!`});
+});
+
+/**
+ * Solve for M2M-call interfaces and create individual instructions
+ * (deployments) to send to devices. Save created solution to database attached
+ * to the deployment manifest.
  * @param {*} deploymentId The database-id of deployment.
  * @param {*} packageBaseUrl The base of the package manager server address for
- * devices to pull modules from. TODO Define "base" in this context. Currently
- * uses the public address defined with environmental variables (containing the protocol)
- * but could be e.g. a function taking in a module-ID that constructs the actual URL.
- * @returns An error message or null if building the manifest was successfull
- * (TODO/NOTE: Does not include checks for sending the deployments to devices).
+ * devices to pull modules from.
+ * @returns An error message or null if building and saving the solution was
+ * successfull.
  */
-async function deploy(deploymentId, packageBaseUrl) {
+async function createSolution(deploymentId, packageBaseUrl) {
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(deploymentId) });
 
     let selectedModules = [];
@@ -232,38 +278,6 @@ async function deploy(deploymentId, packageBaseUrl) {
         { _id: deployment._id },
         { $set: { fullManifest: deploymentsToDevices, sequence: updatedSequence } },
     );
-
-    // Make the requests on each device.
-    // POST-making from example snippet at:
-    // https://nodejs.org/api/http.html#httprequesturl-options-callback
-    for (let deployment of Object.values(deploymentsToDevices)) {
-        let deploymentJson = JSON.stringify(deployment, null, 2);
-        // Where and how to send this particular deployment.
-        let requestOptions = {
-            method: "POST",
-            protocol: "http:",
-            host: deployment.device.addresses[0],
-            port: deployment.device.port,
-            path: "/deploy",
-            headers: {
-                "Content-type": "application/json",
-                "Content-length": Buffer.byteLength(deploymentJson),
-            }
-        };
-
-        let request = http.request(
-            requestOptions,
-            (response) => {
-                console.log(`Deployment: Device '${deployment.device.name}' responded ${response.statusCode}`);
-            }
-        );
-        request.on("error", e => {
-            console.log(`Error while posting to device '${JSON.stringify(deployment.device, null, 2)}': `, e);
-        })
-
-        request.write(deploymentJson);
-        request.end();
-    }
 
     return null;
 }
