@@ -68,7 +68,7 @@ router.post("/", async (request, response) => {
     let exists = (await getDb().module.findOne({ name: request.body.name }));
     if (exists) {
         console.log(`Tried to write module with existing name: '${request.body.name}'`);
-        let errmsg = `Module of name ' ${request.body.name}' already exists`;
+        let errmsg = `Module with name ' ${request.body.name}' already exists`;
         response.status(400).json({ err: errmsg });
         return;
     }

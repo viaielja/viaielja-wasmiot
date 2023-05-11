@@ -331,6 +331,13 @@ function setStatus(result) {
     let focusBar = document.querySelector("#status");
     focusBar.classList.remove("error");
     focusBar.classList.remove("success");
+    focusBar.classList.remove("hidden");
+    if (result === null) {
+        // Just remove the status with null input.
+        focusBar.classList.add("hidden");
+        return;
+    }
+
     if (result.success) {
         msg = result.success;
         classs = "success";
@@ -365,7 +372,20 @@ window.onload = function () {
             // Also populate the JSON field.
             let thisForm = document.querySelector("#module-form")
             let jsonForm = document.querySelector("#module-json-form");
-            populateWithJson(thisForm, jsonForm.querySelector("textarea"));
+            let jsonFormTextarea = jsonForm.querySelector("textarea");
+            populateWithJson(thisForm, jsonFormTextarea);
+
+            // Merge the OpenAPI field into the JSON. TODO: This is clunky...
+            let moduleObj = JSON.parse(jsonFormTextarea.value)
+            try {
+                setStatus(null);
+                moduleObj["openapi"] = JSON.parse(thisForm.querySelector("#mopenapi").value);
+            } catch (e) {
+                setStatus({err: `Check for 'TODO' in your OpenAPI description: ${e}`});
+                return;
+            }
+
+            jsonFormTextarea.value = JSON.stringify(moduleObj);
 
             thisForm.classList.add("hidden");
             jsonForm.classList.remove("hidden");
