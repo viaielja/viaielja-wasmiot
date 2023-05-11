@@ -19,9 +19,13 @@ router.post("/:deploymentId", async (request, response) => {
     // 1. get the deployment and other execution related data from db.
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(request.params.deploymentId) });
     // "Node" as in the circle connected to others by edges in a graph.
-    let startNodeManifestData = deployment.fullManifest[deployment.sequence[0].device].device;
+    let startNodeId = deployment.sequence[0].device;
+
+    // TODO: Shouldn't the address and port have been selected by the deployment-solver already at this point?
+    let startNodeManifestData = await getDb().device.findOne({ _id: ObjectId(startNodeId) });
     let deviceAddress = startNodeManifestData.addresses[0];
     let devicePort = startNodeManifestData.port;
+
     // Note: these are not taken from the above "manifest data", as the "manifest"
     // is concerned with deployment (i.e., delivering modules and configs, not
     // execution sequence).

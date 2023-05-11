@@ -92,23 +92,38 @@ router.post("/", async (request, response) => {
  *  deployment.
  */
 router.post("/:deploymentId", async (request, response) => {
-    let deploymentDoc = (await getDb()
+    let deploymentDoc = await getDb()
         .deployment
-        .findOne({ _id: ObjectId(request.params.deploymentId) }));
+        .findOne({ _id: ObjectId(request.params.deploymentId) });
+
+    if (!deploymentDoc) {
+        response.status(404).json({"error": `No deployment found for '${request.params.deploymentId}'`});
+        return;
+    }
 
     let deploymentSolution = deploymentDoc.fullManifest;
 
     // Make the requests on each device.
     // POST-making from example snippet at:
     // https://nodejs.org/api/http.html#httprequesturl-options-callback
-    for (let deployment of Object.values(deploymentSolution)) {
-        let deploymentJson = JSON.stringify(deployment, null, 2);
+    for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
+        // TODO: Use database-reference instead of using device id from field.
+        let device = await getDb()
+            .device
+            .findOne({_id: ObjectId(deviceId)});
+
+        if (!device) {
+            response.status(404).json({"error": `No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`});
+            return;
+        }
+
+        let deploymentJson = JSON.stringify(manifest, null, 2);
         // Select where and how to send this particular deployment.
         let requestOptions = {
             method: "POST",
             protocol: "http:",
-            host: deployment.device.addresses[0],
-            port: deployment.device.port,
+            host: device.addresses[0],
+            port: device.port,
             path: "/deploy",
             headers: {
                 "Content-type": "application/json",
@@ -121,11 +136,11 @@ router.post("/:deploymentId", async (request, response) => {
         let req = http.request(
             requestOptions,
             (res) => {
-                console.log(`Deployment: Device '${deployment.device.name}' responded ${res.statusCode}`);
+                console.log(`Deployment: Device '${device.name}' responded ${res.statusCode}`);
             }
         );
         req.on("error", e => {
-            console.log(`Error while posting to device '${JSON.stringify(deployment.device, null, 2)}': `, e);
+            console.log(`Error while posting to device '${JSON.stringify(device, null, 2)}': `, e);
         })
 
         req.write(deploymentJson);
@@ -147,13 +162,90 @@ router.post("/:deploymentId", async (request, response) => {
 async function createSolution(deploymentId, packageBaseUrl) {
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(deploymentId) });
 
+    let updatedSequence = await sequenceFromResources(deployment.sequence);
+
+    // 3. Prepare instructions for the devices in order to have them ...
+
+    // Prepare to make a mapping of devices and their instructions in order to
+    // bulk-send the instructions to each device when deploying.
+    let deploymentsToDevices = {}
+    for (let deviceId of new Set(updatedSequence.map(x => x.device._id))) {
+        deploymentsToDevices[deviceId] = {
+            // The modules the device needs to download.
+            modules: [],
+            // The instructions the device needs to follow.
+            instructions: [],
+        };
+    }
+    
+    // Create and collect together the instructions and to which devices to send
+    // them to.
+    for (let i = 0; i < updatedSequence.length; i++) {
+        let device = updatedSequence[i].device;
+        let module = updatedSequence[i].module;
+        let func   = updatedSequence[i].func;
+
+        let instruction = {
+            // ... 3.1. Wait for an incoming POST with certain identifier
+            // (NOTE: deployment ID for now),
+            actionId: deploymentId,
+            moduleId: module._id,
+            // 3.2. Run a module (function),
+            moduleFunc: func,
+            // 3.3. POST the result to the next device.
+            // TODO Where/how does the call-chain end?
+            outputTo: updatedSequence[i + 1]?.device._id ?? null,
+        };
+
+        // Add data needed by the device for pulling a module.
+        // NOTE: The download URL for .wasm is passed here.
+        let url = new URL(packageBaseUrl);
+        url.pathname = `/file/module/${module._id}/wasm`;
+        let moduleData = {
+            id: module._id,
+            name: module.name,
+            url: url.toString(),
+        };
+        // Attach the created details of deployment to matching device.
+        deploymentsToDevices[device._id].modules.push(moduleData);
+        deploymentsToDevices[device._id].instructions.push(instruction);
+    }
+
+    let sequenceAsIds = Array.from(updatedSequence)
+        .map(x => ({
+            device: x.device._id,
+            module: x.module._id,
+            func: x.func
+        }));
+
+    // Do all database updates at once here.
+    // Add the composed deployment structure to database for inspecting it later
+    // (i.e. during execution or from user interface).
+    getDb().deployment.updateOne(
+        { _id: deployment._id },
+        { $set: { fullManifest: deploymentsToDevices, sequence: sequenceAsIds } },
+    );
+
+    return null;
+}
+
+/**
+ * Based on deployment sequence, confirm the existence (funcs in modules) and
+ * availability (devices) of needed resources and select most suitable ones if
+ * so chosen.
+ * @param {*} sequence List (TODO: Or a graph ?) of calls between devices and
+ * functions in order.
+ * @returns The same sequence but with intelligently selected combination of
+ * resources [[device, module, func]...] as Objects. TODO: Throw errors if fails
+ */
+async function sequenceFromResources(sequence) {
     let selectedModules = [];
     let selectedDevices = [];
 
     // Iterate all the items in the request's sequence and fill in the given
     // modules and devices or choose most suitable ones.
     for (let [deviceId, moduleId, func]
-        of Array.from(deployment.sequence)
+        of Array.from(sequence)
             .map(x => [x.device, x.module, x.func])
     ) {
         // Selecting the module automatically is useless, as they can
@@ -205,79 +297,24 @@ async function createSolution(deploymentId, packageBaseUrl) {
     // Check that length of all the different lists matches (i.e., for every
     // item in deployment sequence found exactly one module and device).
     let length =
-        deployment.sequence.length === selectedModules.length &&
+        sequence.length === selectedModules.length &&
         selectedModules.length     === selectedDevices.length
-        ? deployment.sequence.length
+        ? sequence.length
         : 0;
     // Assert.
     if (length === 0) {
-        return `Error on deployment: mismatch length between deployment (${deployment.sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`;
+        return `Error on deployment: mismatch length between deployment (${sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`;
     }
 
     // Now that the devices that will be used have been selected, prepare to
     // update the deployment sequence's devices in database with the ones
     // selected (handles possibly 'null' devices).
-    let updatedSequence = Array.from(deployment.sequence);
+    let updatedSequence = Array.from(sequence);
     for (let i in updatedSequence) {
-        updatedSequence[i].device = selectedDevices[i]._id;
+        updatedSequence[i].device = selectedDevices[i];
+        updatedSequence[i].module = selectedModules[i];
+        updatedSequence[i].func   = sequence[i].func;
     }
 
-    // 3. Send devices instructions for ...
-
-    // Make a mapping of devices and their instructions in order to bulk-send
-    // the instructions to each device.
-    let deploymentsToDevices = {};
-    for (let device of selectedDevices) {
-        deploymentsToDevices[device._id] = {
-            // The modules the device needs to download.
-            modules: [],
-            // The instructions the device needs to follow.
-            instructions: [],
-            // The device's metadata fetched earlier.
-            device: device,
-        };
-    }
-
-    // Create and collect together the instructions and to which devices to send
-    // them to.
-    for (let i = 0; i < length; i++) {
-        let device = selectedDevices[i];
-        let module = selectedModules[i];
-        let func = deployment.sequence[i]["func"];
-
-        let instruction = {
-            // ... 3.1. Waiting for an incoming POST with certain identifier
-            // (NOTE: deployment ID for now),
-            actionId: deploymentId,
-            moduleId: module._id,
-            // 3.2. Running a module (function),
-            moduleFunc: func,
-            // 3.3. POSTing the result to the next device.
-            // TODO Where/how does the call-chain end?
-            outputTo: selectedDevices[i + 1] ?? null,
-        };
-
-        // Add data needed by the device for pulling a module.
-        // NOTE: The download URL for .wasm is passed here.
-        let url = new URL(packageBaseUrl);
-        url.pathname = `/file/module/${module._id}/wasm`;
-        let moduleData = {
-            id: module._id,
-            name: module.name,
-            url: url.toString(),
-        };
-        // Attach the created details of deployment to matching device.
-        deploymentsToDevices[device._id].modules.push(moduleData);
-        deploymentsToDevices[device._id].instructions.push(instruction);
-    }
-
-    // Do all database updates at once here.
-    // Add the composed deployment structure to database for inspecting it later
-    // (i.e. during execution or from user interface).
-    getDb().deployment.updateOne(
-        { _id: deployment._id },
-        { $set: { fullManifest: deploymentsToDevices, sequence: updatedSequence } },
-    );
-
-    return null;
+    return updatedSequence;
 }
