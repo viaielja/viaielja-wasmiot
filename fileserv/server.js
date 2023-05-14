@@ -9,7 +9,7 @@ const { MongoClient } = require("mongodb");
 const express = require("express");
 
 const discovery = require("./src/deviceDiscovery");
-const { MONGO_URI, PUBLIC_PORT, DEVICE_TYPE, FRONT_END_DIR } = require("./constants.js");
+const { MONGO_URI, PUBLIC_PORT, DEVICE_TYPE, FRONT_END_DIR, SENTRY_DSN } = require("./constants.js");
 
 
 const expressApp = express();
@@ -48,6 +48,12 @@ chdir(__dirname);
 (async function main() {
     console.log("Orchestrator starting...")
 
+    // Sentry early initialization so that it can catch errors in the rest of
+    // the initialization.
+    if (SENTRY_DSN) {
+        initSentry(expressApp);
+    }
+
     // Must wait for database before starting to listen for web-clients.
     await initializeDatabase();
     console.log(db);
@@ -64,7 +70,7 @@ chdir(__dirname);
 })()
     .then(_ => { console.log("Finished!"); })
     .catch(e => {
-        console.log("Orchestrator failed to start: ", e);
+        console.error("Orchestrator failed to start: ", e);
         shutDown();
     });
 
@@ -117,6 +123,33 @@ async function initializeDatabase() {
         // Propagate the exception to caller.
         throw e;
     }
+}
+
+/**
+ * Initialize Sentry error reporting, and add it to the express app.
+ */
+function initSentry(app) {
+    const Sentry = require("@sentry/node");
+    Sentry.init({
+        dsn: SENTRY_DSN,
+        integrations: [
+            // HTTP call tracing
+            new Sentry.Integrations.Http({ tracing: true }),
+            // Express.js middleware tracing
+            new Tracing.Integrations.Express({ app }),
+            // Automatically instrument Node.js libraries and frameworks
+            ...Sentry.autoDiscoverNodePerformanceMonitoringIntegrations(),
+        ]
+    });
+
+    // RequestHandler creates a separate execution context, so that all
+    // transactions/spans/breadcrumbs are isolated across requests
+    app.use(Sentry.Handlers.requestHandler());
+    // TracingHandler creates a trace for every incoming request
+    app.use(Sentry.Handlers.tracingHandler());
+
+    // The error handler must be before any other error middleware and after all controllers
+    //app.use(Sentry.Handlers.errorHandler());
 }
 
 
@@ -217,6 +250,11 @@ expressApp.get("/", (_, response) => {
 expressApp.all("/*", (_, response) => {
     response.status(404).send({ err: "Bad URL" });
 });
+
+// Sentry error handler must be before any other error middleware and after all controllers
+if(SENTRY_DSN) {
+    app.use(Sentry.Handlers.errorHandler());
+}
 
 ////////////
 // SHUTDOWN:
