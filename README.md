@@ -50,7 +50,13 @@ workarounds to these issues are to:
 Orchestrator is a NodeJS server using a MongoDB database.
 
 In order to get them running, first you need to setup a `.env` file for user
-credentials. Copy the [`.env.example`](./.env.example) file into your own `.env` file at the repository root and edit appropriate values to your liking.
+credentials. Copy the [`.env.example`](./.env.example) file into your own `.env`
+file at the repository root and edit appropriate values to your liking.
+
+__Note__ that if you intend to test the system with devices in the Docker
+network, you should __unset__ the `PUBLIC_HOST` environment variable (e.g.
+inside `.env` put "`PUBLIC_HOST=`") so that the hosts connecting to orchestrator
+use the one automatically obtained from NodeJS.
 
 Running the orchestrator containers can be done with the command:
 ```
