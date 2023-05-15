@@ -5,7 +5,7 @@
 const path = require('path');
 const { chdir } = require('process');
 
-const { MongoClient } = require("mongodb");
+const { MongoClient, MongoRuntimeError } = require("mongodb");
 const express = require("express");
 
 const discovery = require("./src/deviceDiscovery");
@@ -132,11 +132,11 @@ function initSentry(app) {
     const Sentry = require("@sentry/node");
     Sentry.init({
         dsn: SENTRY_DSN,
+        environment: process.env.NODE_ENV,
         integrations: [
             // HTTP call tracing
             new Sentry.Integrations.Http({ tracing: true }),
-            // Express.js middleware tracing
-            new Tracing.Integrations.Express({ app }),
+            new Sentry.Integrations.Express({ app }),
             // Automatically instrument Node.js libraries and frameworks
             ...Sentry.autoDiscoverNodePerformanceMonitoringIntegrations(),
         ]
@@ -147,6 +147,21 @@ function initSentry(app) {
     app.use(Sentry.Handlers.requestHandler());
     // TracingHandler creates a trace for every incoming request
     app.use(Sentry.Handlers.tracingHandler());
+
+    app.get("/sentry.js", (req, res) => {
+        res.setHeader("Content-Type", "application/javascript");
+        res.send(`
+            Sentry.onLoad(function() {
+                Sentry.init({
+                    dsn: ${JSON.stringify(SENTRY_DSN)},
+                    environment: ${JSON.stringify(process.env.NODE_ENV)},
+                    integrations: [
+                        new Sentry.Integrations.BrowserTracing()
+                    ],
+                });
+            });
+        `);
+    });
 
     // The error handler must be before any other error middleware and after all controllers
     //app.use(Sentry.Handlers.errorHandler());
@@ -244,6 +259,13 @@ expressApp.get("/", (_, response) => {
     response.sendFile(path.join(FRONT_END_DIR, "index.html"));
 });
 
+if (SENTRY_DSN) {
+    // Sentry error handler must be before any other error middleware and after all controllers
+    // to get errors from routes.
+    const Sentry = require("@sentry/node");
+    expressApp.use(Sentry.Handlers.errorHandler());
+}
+
 /**
  * Direct to error-page when bad URL used.
  */
@@ -251,10 +273,6 @@ expressApp.all("/*", (_, response) => {
     response.status(404).send({ err: "Bad URL" });
 });
 
-// Sentry error handler must be before any other error middleware and after all controllers
-if(SENTRY_DSN) {
-    app.use(Sentry.Handlers.errorHandler());
-}
 
 ////////////
 // SHUTDOWN:

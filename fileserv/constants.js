@@ -11,7 +11,7 @@ const mongo_user = process.env.CONFIG_MONGODB_ADMINUSERNAME;
 const mongo_pass = process.env.CONFIG_MONGODB_ADMINPASSWORD;
 const MONGO_URI = `mongodb://${mongo_user}:${mongo_pass}@${mongo_host}:${mongo_port}/`;
 
-const SENTRY_DSN = process.env.CONFIG_SENTRY_DSN;
+const SENTRY_DSN = process.env.SENTRY_DSN;
 
 const public_host = process.env.CONFIG_PUBLIC_HOST || `http://${require("os").hostname()}`;
 const PUBLIC_PORT = process.env.CONFIG_PUBLIC_PORT || "3000";
