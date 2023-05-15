@@ -5,16 +5,18 @@
 
 const path = require("path");
 
-const mongo_host = process.env.CONFIG_MONGODB_HOST || "mongo";
-const mongo_port = process.env.CONFIG_MONGODB_PORT || "27017";
-const mongo_user = process.env.CONFIG_MONGODB_ADMINUSERNAME;
-const mongo_pass = process.env.CONFIG_MONGODB_ADMINPASSWORD;
+require('dotenv').config({path: path.join(__dirname, "..", ".env"), override: true});
+
+const mongo_host = process.env.MONGODB_HOST || "mongo";
+const mongo_port = process.env.MONGODB_PORT || "27017";
+const mongo_user = process.env.MONGO_ROOT_USERNAME;
+const mongo_pass = process.env.MONGO_ROOT_PASSWORD;
 const MONGO_URI = `mongodb://${mongo_user}:${mongo_pass}@${mongo_host}:${mongo_port}/`;
 
 const SENTRY_DSN = process.env.SENTRY_DSN;
 
-const public_host = process.env.CONFIG_PUBLIC_HOST || `http://${require("os").hostname()}`;
-const PUBLIC_PORT = process.env.CONFIG_PUBLIC_PORT || "3000";
+const public_host = process.env.PUBLIC_HOST || `http://${require("os").hostname()}`;
+const PUBLIC_PORT = process.env.PUBLIC_PORT || "3000";
 const PUBLIC_BASE_URI = `${public_host}:${PUBLIC_PORT}/`;
 
 const MODULE_DIR = path.join(__dirname, "files", "wasm");
