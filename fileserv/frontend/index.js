@@ -516,6 +516,13 @@ window.onload = async function () {
             .then(setStatus);
     });
 
+    document.querySelector("#manifest-deleteall-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        fetch("/file/manifest", { method: "DELETE" })
+            .then(resp => resp.json())
+            .then(setStatus);
+    });
+
     // Device discovery:
 
     document.querySelector("#device-discovery-reset-form").addEventListener("submit", (event) => {
