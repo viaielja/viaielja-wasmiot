@@ -150,6 +150,15 @@ router.post("/:deploymentId", async (request, response) => {
 });
 
 /**
+ * Delete all the deployment manifests from database.
+ */
+router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
+    getDb().deployment.deleteMany({}).then(_ => {
+        response.status(202).json({ success: "deleting all deployment manifests" }); // Accepted.
+    });
+});
+
+/**
  * Solve for M2M-call interfaces and create individual instructions
  * (deployments) to send to devices. Save created solution to database attached
  * to the deployment manifest.
@@ -181,21 +190,10 @@ async function createSolution(deploymentId, packageBaseUrl) {
     // Create and collect together the instructions and to which devices to send
     // them to.
     for (let i = 0; i < updatedSequence.length; i++) {
-        let device = updatedSequence[i].device;
+        let deviceId = updatedSequence[i].device._id;
         let module = updatedSequence[i].module;
-        let func   = updatedSequence[i].func;
 
-        let instruction = {
-            // ... 3.1. Wait for an incoming POST with certain identifier
-            // (NOTE: deployment ID for now),
-            actionId: deploymentId,
-            moduleId: module._id,
-            // 3.2. Run a module (function),
-            moduleFunc: func,
-            // 3.3. POST the result to the next device.
-            // TODO Where/how does the call-chain end?
-            outputTo: updatedSequence[i + 1]?.device._id ?? null,
-        };
+        let instruction = instruct(deploymentId, updatedSequence[i], updatedSequence[i + 1] ?? null);
 
         // Add data needed by the device for pulling a module.
         // NOTE: The download URL for .wasm is passed here.
@@ -207,8 +205,8 @@ async function createSolution(deploymentId, packageBaseUrl) {
             url: url.toString(),
         };
         // Attach the created details of deployment to matching device.
-        deploymentsToDevices[device._id].modules.push(moduleData);
-        deploymentsToDevices[device._id].instructions.push(instruction);
+        deploymentsToDevices[deviceId].modules.push(moduleData);
+        deploymentsToDevices[deviceId].instructions.push(instruction);
     }
 
     let sequenceAsIds = Array.from(updatedSequence)
@@ -244,7 +242,7 @@ async function sequenceFromResources(sequence) {
 
     // Iterate all the items in the request's sequence and fill in the given
     // modules and devices or choose most suitable ones.
-    for (let [deviceId, moduleId, func]
+    for (let [deviceId, moduleId, funcName]
         of Array.from(sequence)
             .map(x => [x.device, x.module, x.func])
     ) {
@@ -256,10 +254,10 @@ async function sequenceFromResources(sequence) {
         // contains the func.
         let modulee = await getDb().module.findOne({ _id: ObjectId(moduleId) })
         if (modulee !== null) {
-            if (modulee.exports.find(x => x === func) !== undefined) {
+            if (modulee.exports.find(x => x === funcName) !== undefined) {
                 selectedModules.push(modulee);
             } else {
-                console.log(`Failed to find function '${func}' from requested module:`, modulee);
+                console.log(`Failed to find function '${funcName}' from requested module:`, modulee);
                 return;
             }
         } else {
@@ -317,4 +315,87 @@ async function sequenceFromResources(sequence) {
     }
 
     return updatedSequence;
+}
+
+/**
+ * Create instructions for `device` to enable calling `func` from a `module` on
+ * it. Also according to deployment manifest, specify where the result of
+ * executing `func` should be forwarded to (machine-to-machine communication).
+ * 
+ * NOTE/FIXME: Marks the input objects as prepared by adding the `description`
+ * field (hence the 'OUT PARAMETER'), so it will be returned as is. Saving this "flag" identifies if the node
+ * has been handled already, but this creates state (previous loop at caller
+ * alters the next) and makes this function complicated.
+ * @param {*} deploymentId Identification for this particular instruction.
+ * Separates between the function-call-chain and just running a particular
+ * action "ad hoc".
+ * @param {*} from OUT PARAMETER: The node that should enable executing `func` on request.
+ * Should contain connectivity information (address and port) and definition of
+ * `func` so it can be called with correct inputs.
+ * @param {*} to OUT PARAMETER: The next node in line to receive the result `from` action.
+ * @returns Object containing needed fields for the device to
+ * follow and configure itself (ideally most effortlessly i.e., requiring
+ * minimal logic/intelligence on said device).
+ */
+function instruct(deploymentId, from, to) {
+    if (!("description" in from)) {
+        from.description = endpointDescription(from);
+    }
+    if (to !== null) {
+        to.description = endpointDescription(to);
+    }
+
+    let instruction = {
+        // How requests to the configured endpoint should be identified (i.e.
+        // forward result to another node or just perform this action once).
+        // (NOTE: deployment ID for now),
+        actionId: deploymentId,
+        // How the device should configure itself.
+        configuration: from.description,
+        // TODO Where/how does the call-chain end?
+        outputTo: to?.description ?? null, 
+    };
+
+    return instruction;
+}
+
+/**
+ * Based on description of a node and `func` that it should execute, put
+ * together and fill out information needed for describing the service.
+ * @param {*} target OUT PARAMETER: The node containing data for where and how execution of
+ * `func` on it should be requested.
+ * @returns Pre-filled OpenAPI-doc specially made for this node.
+ */
+function endpointDescription(target) {
+    // Prepare options for making needed HTTP-request to this path.
+    // TODO: Check for device availability here?
+    // FIXME hardcoded: selecting first address.
+    let urlString = target.module.openapi.servers[0].url;
+    // FIXME hardcoded: "url" field assumed to be template "http://{serverIp}:{port}/<path base>".
+    urlString = urlString.replace("{serverIp}", target.device.addresses[0]);
+    urlString = urlString.replace("{port}", target.device.port);
+    let url = new URL(urlString);
+
+    // FIXME hardcoded: "paths" field assumed to contain template "/{module}/{func}".
+    const mainPathKey = "/{module}/{func}";
+    let mainPath = target.module.openapi.paths[mainPathKey];
+    // FIXME: URL-encode the names.
+    let filledMainPathKey = mainPathKey.replace("{module}", target.module.name)
+        .replace("{func}", target.func);
+
+    // Fill out the prepared parts of the templated OpenAPI-doc.
+    let preFilledOpenapiDoc = target.module.openapi;
+    // Where the device is located.
+    // FIXME hardcoded: selecting first address.
+    preFilledOpenapiDoc.servers[0].url = url.toString();
+    // Calling the func.
+    preFilledOpenapiDoc.paths[filledMainPathKey] = mainPath;
+
+    // Remove unnecessary fields.
+    // FIXME hardcoded: selecting first address.
+    delete preFilledOpenapiDoc.servers[0].variables;
+    delete preFilledOpenapiDoc.paths[filledMainPathKey].parameters
+    delete preFilledOpenapiDoc.paths[mainPathKey];
+
+    return preFilledOpenapiDoc;
 }
