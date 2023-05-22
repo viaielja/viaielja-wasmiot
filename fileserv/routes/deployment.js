@@ -36,7 +36,6 @@ router.get("/", async (request, response) => {
 
 /**
  * POST a new deployment manifest to add to orchestrator's database.
- * TODO Separate this function to a separate "/handle_form/deployment"-route.
  */
 router.post("/", async (request, response) => {
     let data = request.body;
@@ -72,11 +71,15 @@ router.post("/", async (request, response) => {
 
             //TODO: Start searching for suitable packages using saved file.
             //startSearch();
-            let err = await deploy(actionId, PUBLIC_BASE_URI);
+            let err = await createSolution(actionId, PUBLIC_BASE_URI);
             if (err) {
                 errorMsg = "Failed constructing manifest for deployment: " + err;
             }
         }
+    }
+
+    if (errorMsg !== null) {
+        console.log(errorMsg);
     }
 
     response
@@ -89,25 +92,226 @@ router.post("/", async (request, response) => {
 });
 
 /**
- * Deploy application according to deployment with `actionId`.
+ *  Deploy applications and instructions to devices according to a pre-created
+ *  deployment.
+ */
+router.post("/:deploymentId", async (request, response) => {
+    let deploymentDoc = await getDb()
+        .deployment
+        .findOne({ _id: ObjectId(request.params.deploymentId) });
+
+    if (!deploymentDoc) {
+        response.status(404).json({"error": `No deployment found for '${request.params.deploymentId}'`});
+        return;
+    }
+
+    let deploymentSolution = deploymentDoc.fullManifest;
+
+    // Make the requests on each device.
+    // POST-making from example snippet at:
+    // https://nodejs.org/api/http.html#httprequesturl-options-callback
+    for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
+        // TODO: Use database-reference instead of using device id from field.
+        let device = await getDb()
+            .device
+            .findOne({_id: ObjectId(deviceId)});
+
+        if (!device) {
+            response.status(404).json({"error": `No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`});
+            return;
+        }
+
+        let deploymentJson = JSON.stringify(manifest, null, 2);
+        // Select where and how to send this particular deployment.
+        let requestOptions = {
+            method: "POST",
+            protocol: "http:",
+            host: device.addresses[0],
+            port: device.port,
+            path: "/deploy",
+            headers: {
+                "Content-type": "application/json",
+                "Content-length": Buffer.byteLength(deploymentJson),
+            }
+        };
+
+        // TODO: Refactor into promises to await for them in bulk and respond to
+        // the top request.
+        let req = http.request(
+            requestOptions,
+            (res) => {
+                console.log(`Deployment: Device '${device.name}' responded ${res.statusCode}`);
+            }
+        );
+        req.on("error", e => {
+            console.log(`Error while posting to device '${JSON.stringify(device, null, 2)}': `, e);
+        })
+
+        req.write(deploymentJson);
+        req.end();
+    }
+    response.json({success: `Deployed '${deploymentDoc.name}'!`});
+});
+
+/**
+ * Delete all the deployment manifests from database.
+ */
+router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
+    getDb().deployment.deleteMany({}).then(_ => {
+        response.status(202).json({ success: "deleting all deployment manifests" }); // Accepted.
+    });
+});
+
+/**
+ * Solve for M2M-call interfaces and create individual instructions
+ * (deployments) to send to devices. Save created solution to database attached
+ * to the deployment manifest.
  * @param {*} deploymentId The database-id of deployment.
  * @param {*} packageBaseUrl The base of the package manager server address for
- * devices to pull modules from. TODO Define "base" in this context. Currently
- * uses the public address defined with environmental variables (containing the protocol)
- * but could be e.g. a function taking in a module-ID that constructs the actual URL.
- * @returns An error message or null if building the manifest was successfull
- * (TODO/NOTE: Does not include checks for sending the deployments to devices).
+ * devices to pull modules from.
+ * @returns An error message or null if building and saving the solution was
+ * successfull.
  */
-async function deploy(deploymentId, packageBaseUrl) {
+async function createSolution(deploymentId, packageBaseUrl) {
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(deploymentId) });
 
+    let updatedSequence;
+    try {
+        updatedSequence = await sequenceFromResources(deployment.sequence);
+    } catch (error) {
+        return error;
+    }
+
+    // 3. Prepare instructions for the devices in order to have them ...
+
+    // Prepare to make a mapping of devices and their instructions in order to
+    // bulk-send the instructions to each device when deploying.
+    let deploymentsToDevices = {}
+    for (let deviceId of new Set(updatedSequence.map(x => x.device._id))) {
+        let moduleData = updatedSequence
+            .filter(x => x.device._id === deviceId)
+            .map(function moduleData(x) {
+                // Add data needed by the device for pulling a module.
+                // NOTE: The download URL for .wasm is passed here.
+                let url = new URL(packageBaseUrl);
+                url.pathname = `/file/module/${x.module._id}/wasm`;
+                return {
+                    id: x.module._id,
+                    name: x.module.name,
+                    url: url.toString(),
+                };
+            });
+        
+        // TODO This needs not be a list because ...
+        let endpoints = Array.prototype.concat(
+            // Flatten the list of lists.
+            ...(
+                updatedSequence
+                    .filter(x => x.device._id === deviceId)
+                    // TODO ... Add together into a single OpenAPI doc __all__
+                    // the modules' endpoints.
+                    .map(x => endpointDescriptions(deploymentId, x))
+            )
+        );
+
+        // It does not make sense to have a device without any possible
+        // interaction.
+        if (endpoints.length === 0) {
+            return `no endpoints defined for device '${deviceId}'`;
+        }
+
+        deploymentsToDevices[deviceId] = {
+            // Used to separate similar requests between deployments at
+            // supervisor.
+            deploymentId: deploymentId,
+            // The modules the device needs to download.
+            modules: moduleData,
+            // Descriptions of endpoints needed to set up on the device for this
+            // deployment.
+            endpoints: endpoints,
+            // The instructions the device needs to follow the execution
+            // sequence i.e., where to forward computation results initiated by
+            // which arriving request.
+            instructions: [],
+        };
+    }
+
+    // According to deployment manifest describing the composed
+    // application-calls, create a structure to represent the expected behaviour
+    // and flow of data between nodes.
+    for (let i = 0; i < updatedSequence.length; i++) {
+        let deviceId = updatedSequence[i].device._id;
+        let forwardEndpoint;
+        let forwardDeployment = deploymentsToDevices[updatedSequence[i + 1]?.device._id];
+
+        if (forwardDeployment === undefined) {
+            forwardEndpoint = null;
+        } else {
+            // The order of endpoints attached to deployment is still the same
+            // as it is based on the execution sequence and endpoints are
+            // guaranteed to contain at least one item.
+            forwardEndpoint = forwardDeployment.endpoints[0]
+        }
+
+        let instruction = {
+            // Set where in the execution sequence is this configuration expected to
+            // be used at. Value of 0 signifies beginning of the sequence and caller
+            // can be any party with an access. This __MIGHT__ be useful to prevent
+            // recursion at supervisor when a function with same input and output is
+            // chained to itself e.g. deployment fibo -> fibo would result in
+            //     fiboLimit2_0(7) -> 13 -> fiboLimit2_1(13) -> 233 -> <end result 233>
+            // versus
+            //     fibo(7)         -> 13 -> fibo(13)         -> 233 -> fibo(233) -> <loop forever>
+            // NOTE: Atm just the list indices would work the same, but maybe graphs
+            // used in future?
+            // TODO: How about this being a handle or other reference to the
+            // matching installed endpoint on supervisor?
+            // TODO: Will this sort of sequence-identification prevent
+            // supporting events (which are inherently "autonomous")?
+            from: i,
+            to: forwardEndpoint,
+        };
+
+        // Attach the created details of deployment to matching device.
+        deploymentsToDevices[deviceId].instructions.push(instruction);
+    }
+
+    let sequenceAsIds = Array.from(updatedSequence)
+        .map(x => ({
+            device: x.device._id,
+            module: x.module._id,
+            func: x.func
+        }));
+
+    // Do all database updates at once here.
+    // Add the composed deployment structure to database for inspecting it later
+    // (i.e. during execution or from user interface).
+    getDb().deployment.updateOne(
+        { _id: deployment._id },
+        { $set: { fullManifest: deploymentsToDevices, sequence: sequenceAsIds } },
+    );
+
+    return null;
+}
+
+/**
+ * Based on deployment sequence, confirm the existence (funcs in modules) and
+ * availability (devices) of needed resources and select most suitable ones if
+ * so chosen.
+ * @param {*} sequence List (TODO: Or a graph ?) of calls between devices and
+ * functions in order.
+ * @returns The same sequence but with intelligently selected combination of
+ * resources [[device, module, func]...] as Objects. TODO: Throw errors if fails
+ * @throws String error if validation of given sequence fails.
+ */
+async function sequenceFromResources(sequence) {
     let selectedModules = [];
     let selectedDevices = [];
 
     // Iterate all the items in the request's sequence and fill in the given
     // modules and devices or choose most suitable ones.
-    for (let [deviceId, moduleId, func]
-        of Array.from(deployment.sequence)
+    for (let [deviceId, moduleId, funcName]
+        of Array.from(sequence)
             .map(x => [x.device, x.module, x.func])
     ) {
         // Selecting the module automatically is useless, as they can
@@ -118,23 +322,20 @@ async function deploy(deploymentId, packageBaseUrl) {
         // contains the func.
         let modulee = await getDb().module.findOne({ _id: ObjectId(moduleId) })
         if (modulee !== null) {
-            if (modulee.exports.find(x => x === func) !== undefined) {
+            if (modulee.exports.find(x => x === funcName) !== undefined) {
                 selectedModules.push(modulee);
             } else {
-                console.log(`Failed to find function '${func}' from requested module:`, modulee);
-                return;
+                throw `Failed to find function '${funcName}' from requested module: ${modulee}`;
             }
         } else {
-            console.log(`Failed to find module matching the received module ID ${moduleId}`);
-            return;
+            throw `Failed to find module matching the received module ID ${moduleId}`;
         }
         if (deviceId !== null) {
             let dbDevice = await getDb().device.findOne({ _id: ObjectId(deviceId) });
             if (dbDevice !== null) {
                 selectedDevices.push(dbDevice);
             } else {
-                console.log(`Failed to find device matching the received device ID ${moduleId}`);
-                return;
+                throw `Failed to find device matching the received device ID ${moduleId}`;
             }
         } else {
             // 2. Search for a device that could run the module.
@@ -150,7 +351,7 @@ async function deploy(deploymentId, packageBaseUrl) {
                 }
             }
             if (match === null) {
-                return `Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`;
+                throw `Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`;
             }
             selectedDevices.push(match);
         }
@@ -159,111 +360,78 @@ async function deploy(deploymentId, packageBaseUrl) {
     // Check that length of all the different lists matches (i.e., for every
     // item in deployment sequence found exactly one module and device).
     let length =
-        deployment.sequence.length === selectedModules.length &&
-        selectedModules.length     === selectedDevices.length
-        ? deployment.sequence.length
+        sequence.length === selectedModules.length &&
+        selectedModules.length === selectedDevices.length
+        ? sequence.length
         : 0;
     // Assert.
     if (length === 0) {
-        return `Error on deployment: mismatch length between deployment (${deployment.sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`;
+        return `Error on deployment: mismatch length between deployment (${sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`;
     }
 
     // Now that the devices that will be used have been selected, prepare to
     // update the deployment sequence's devices in database with the ones
     // selected (handles possibly 'null' devices).
-    let updatedSequence = Array.from(deployment.sequence);
+    let updatedSequence = Array.from(sequence);
     for (let i in updatedSequence) {
-        updatedSequence[i].device = selectedDevices[i]._id;
+        updatedSequence[i].device = selectedDevices[i];
+        updatedSequence[i].module = selectedModules[i];
+        updatedSequence[i].func   = sequence[i].func;
     }
 
-    // 3. Send devices instructions for ...
+    return updatedSequence;
+}
 
-    // Make a mapping of devices and their instructions in order to bulk-send
-    // the instructions to each device.
-    let deploymentsToDevices = {};
-    for (let device of selectedDevices) {
-        deploymentsToDevices[device._id] = {
-            // The modules the device needs to download.
-            modules: [],
-            // The instructions the device needs to follow.
-            instructions: [],
-            // The device's metadata fetched earlier.
-            device: device,
-        };
+/**
+ * Based on description of a node and functions that it should execute, put
+ * together and fill out information needed for describing the service(s).
+ * TODO Somehow filter out the unnecessary paths for this deployment that could
+ * be attached to the module.
+ * @param {*} deploymentId Identification for the deployment the endpoints will
+ * be associated to.
+ * @param {*} node OUT PARAMETER: The node containing data for where and how
+ * execution of functions on it should be requested.
+ * Should contain connectivity information (address and port) and definition of
+ * module containing functions so they can be called with correct inputs.
+ * @returns Pre-filled OpenAPI-doc specially made for this node for configuring
+ * its endpoints (ideally most effortlessly).
+ */
+function endpointDescriptions(deploymentId, node) {
+    // Prepare options for making needed HTTP-request to this path.
+    // TODO: Check for device availability here?
+    // FIXME hardcoded: selecting first address.
+    let urlString = node.module.openapi.servers[0].url;
+    // FIXME hardcoded: "url" field assumed to be template "http://{serverIp}:{port}".
+    urlString = urlString
+        .replace("{serverIp}", node.device.addresses[0])
+        .replace("{port}", node.device.port);
+    let url = new URL(urlString);
+
+    // FIXME hardcoded: "paths" field assumed to contain template "/{deployment}/modules/{module}/<thisFuncName>".
+    // FIXME: URL-encode the names.
+    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
+    // TODO: Iterate all the paths.
+    let funcPath = node.module.openapi.paths[funcPathKey];
+    let filledFuncPathKey = funcPathKey
+        .replace("{deployment}", deploymentId)
+        .replace("{module}", node.module.name);
+
+    // Fill out the prepared parts of the templated OpenAPI-doc.
+    let preFilledOpenapiDoc = node.module.openapi;
+    // Where the device is located.
+    // FIXME hardcoded: selecting first address.
+    preFilledOpenapiDoc.servers[0].url = url.toString();
+    // Where and how to call the func.
+    preFilledOpenapiDoc.paths[filledFuncPathKey] = funcPath;
+
+    // Remove unnecessary fields.
+    delete preFilledOpenapiDoc.paths[filledFuncPathKey].parameters
+    // FIXME hardcoded: selecting first address.
+    delete preFilledOpenapiDoc.servers[0].variables;
+    // TODO: See above about filtering out unnecessary paths (= based on funcs).
+    for (let unnecessaryPath of Object.keys(preFilledOpenapiDoc.paths).filter(x => x.includes("{module}"))) {
+        delete preFilledOpenapiDoc.paths[unnecessaryPath];
     }
 
-    // Create and collect together the instructions and to which devices to send
-    // them to.
-    for (let i = 0; i < length; i++) {
-        let device = selectedDevices[i];
-        let module = selectedModules[i];
-        let func = deployment.sequence[i]["func"];
-
-        let instruction = {
-            // ... 3.1. Waiting for an incoming POST with certain identifier
-            // (NOTE: deployment ID for now),
-            actionId: deploymentId,
-            moduleId: module._id,
-            // 3.2. Running a module (function),
-            moduleFunc: func,
-            // 3.3. POSTing the result to the next device.
-            // TODO Where/how does the call-chain end?
-            outputTo: selectedDevices[i + 1] ?? null,
-        };
-
-        // Add data needed by the device for pulling a module.
-        // NOTE: The download URL for .wasm is passed here.
-        let url = new URL(packageBaseUrl);
-        url.pathname = `/file/module/${module._id}/wasm`;
-        let moduleData = {
-            id: module._id,
-            name: module.name,
-            url: url.toString(),
-        };
-        // Attach the created details of deployment to matching device.
-        deploymentsToDevices[device._id].modules.push(moduleData);
-        deploymentsToDevices[device._id].instructions.push(instruction);
-    }
-
-    // Do all database updates at once here.
-    // Add the composed deployment structure to database for inspecting it later
-    // (i.e. during execution or from user interface).
-    getDb().deployment.updateOne(
-        { _id: deployment._id },
-        { $set: { fullManifest: deploymentsToDevices, sequence: updatedSequence } },
-    );
-
-    // Make the requests on each device.
-    // POST-making from example snippet at:
-    // https://nodejs.org/api/http.html#httprequesturl-options-callback
-    for (let deployment of Object.values(deploymentsToDevices)) {
-        let deploymentJson = JSON.stringify(deployment, null, 2);
-        // Where and how to send this particular deployment.
-        let requestOptions = {
-            method: "POST",
-            protocol: "http:",
-            host: deployment.device.addresses[0],
-            port: deployment.device.port,
-            path: "/deploy",
-            headers: {
-                "Content-type": "application/json",
-                "Content-length": Buffer.byteLength(deploymentJson),
-            }
-        };
-
-        let request = http.request(
-            requestOptions,
-            (response) => {
-                console.log(`Deployment: Device '${deployment.device.name}' responded ${response.statusCode}`);
-            }
-        );
-        request.on("error", e => {
-            console.log(`Error while posting to device '${JSON.stringify(deployment.device, null, 2)}': `, e);
-        })
-
-        request.write(deploymentJson);
-        request.end();
-    }
-
-    return null;
+    return preFilledOpenapiDoc;
 }

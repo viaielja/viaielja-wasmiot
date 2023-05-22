@@ -42,6 +42,7 @@ router.get("/:moduleId/wasm", async (request, response) => {
         // https://webassembly.github.io/spec/web-api/#mediaType
         // The resp.sendFile(f) uses application/octet-stream by default.
         let options = { headers: { 'Content-Type': 'application/wasm' } };
+        // FIXME: File might not be found at doc.path.
         response.sendFile(doc.path, options);
     } else {
         let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
@@ -68,7 +69,7 @@ router.post("/", async (request, response) => {
     let exists = (await getDb().module.findOne({ name: request.body.name }));
     if (exists) {
         console.log(`Tried to write module with existing name: '${request.body.name}'`);
-        let errmsg = `Module of name ' ${request.body.name}' already exists`;
+        let errmsg = `Module with name ' ${request.body.name}' already exists`;
         response.status(400).json({ err: errmsg });
         return;
     }
@@ -141,7 +142,9 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
                     .filter(x => x.kind === "function")
                     .map(x => x.name);
                 let exportData =  WebAssembly.Module.exports(wasmModule)
-                    // Just get the names of functions(?) for now.
+                    // Just get the names of functions for now; the
+                    // interface description attached to created modules is
+                    // trusted to match the uploaded WebAssembly binary.
                     .filter(x => x.kind === "function")
                     .map(x => x.name);
 

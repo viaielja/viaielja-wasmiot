@@ -41,12 +41,16 @@ function callDeviceFuncSingleIntegerArgument(
     onResponse,
     onError,
 ) {
-    let moduleIdentifierOnDevice = funcData.module.name;
-    let path = `/modules/${moduleIdentifierOnDevice}/${funcData.name}`;
+    // NOTE: the module name must be the same as deployed and saved on the
+    // device.
+    let path = `/modules/${funcData.module.name}/${funcData.name}`;
     let input = `param1=${inputInt}`;
-    let headers = { };
 
-    callDeviceFuncHttp(device, path, headers, input, onResponse, onError, method="GET");
+    let url = new URL(`http://${device.addresses[0]}:${device.port}`);
+    url.pathname = path;
+    url.search = input;
+
+    callDeviceFuncHttp(url, { method: "GET" }, onResponse, onError);
 }
 
 /**
@@ -84,50 +88,31 @@ function callDeviceFuncRaw(
         "Content-type": "application/octet-stream",
         "Content-length": input.byteLength,
     };
-    callDeviceFuncHttp(device, path, headers, input, onResponse, onError);
+
+    callDeviceFuncHttp(
+        `http://${device.addresses[0]}:${device.port}/${path}`,
+        { headers: headers, body: input, method: "POST" },
+        onResponse,
+        onError
+    );
 }
 
 /**
- * Helper for making HTTP request with input. Uses `fetch()`.
- * @param {*} device 
- * @param {*} path 
- * @param {*} headers 
- * @param {*} input "search"-string (as in
- * https://nodejs.org/api/url.html#urlsearch
- * or Byte input TODO Latter not implemented.
+ * Tiny helper (FIXME not sure if this even helps in any significant way) for
+ * making HTTP request to a supervisor's URL.
+ * @param {*} url Url to call.
+ * @param {*} options The same options as for `fetch()`.
  * @param {*} onResponse JSON-result handler.
- * @param {*} onError Fetch rejection handler.
- * @param {*} method 
+ * @param {*} onError Fetch and JSON-parsing's rejection handler.
  */
-function callDeviceFuncHttp(device, path, headers, input, onResponse, onError, method="POST") {
-    // TODO: Should the device use deploymentId or other identifier (blockchain?
-    // /s) in order to connect (potentially multiple) deployed
-    // instruction-sequences together?
+async function callDeviceFuncHttp(url, options, onResponse, onError) {
+    console.log(`Using HTTP '${options.method}' to call a func on '${url}' with headers:`, options.headers);
 
-    let requestOptions = {
-        method: method,
-        headers: headers,
-    };   
-    let url = new URL(`http://${device.address}:${device.port}`);
-    url.pathname = path;
-
-    // Set the input to send based on its type.
-    if (typeof(input) === "string") {
-        url.search = input;
-    } else if (typeof(input) === "object") {
-        if (input instanceof Uint8Array) {
-            requestOptions.body = input;
-        } else {
-            throw `Tried sending device unsupported input instanceof: ${JSON.stringify(input, null, 2)}`;
-        }
-    } else {
-        throw `Tried sending device unsupported input type '${typeof(input)}'`;
-    }
-
-    console.log(`Using HTTP '${method}' to call a func on '${url}' with headers: `, headers);
-
-    fetch(url, requestOptions)
-        .then(response => response.json().catch(onError))
-        .then(onResponse)
-        .catch(onError);
+    try {
+        let response = await fetch(url, options);
+        let jsonResponse = await response.json();
+        onResponse(jsonResponse);
+    } catch (error) {
+        onError(error);
+    } 
 }

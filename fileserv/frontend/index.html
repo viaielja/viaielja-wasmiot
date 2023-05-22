@@ -56,7 +56,13 @@
         <li>
           <div class="overlay"></div>
           <div class="terminal" data-control-id="deployment-create">
-            Deployment creation
+            Deployment manifest creation
+          </div>
+        </li>
+        <li>
+          <div class="overlay"></div>
+          <div class="terminal" data-control-id="deployment-action">
+            Deployment of deployment manifests
           </div>
         </li>
         <li>
@@ -93,7 +99,12 @@
                 <input type="submit" value="DELETE ALL MODULES"/>
               </form>
             </li>
-            <li><a href="/file/manifest">Deployments</a></li>
+            <li>
+              <a href="/file/manifest">Deployments</a>
+              <form id="manifest-deleteall-form">
+                <input type="submit" value="DELETE ALL MANIFESTS"/>
+              </form>
+            </li>
           </ul>
         </div>
       </div>
@@ -109,6 +120,12 @@
                 <div>
                   <label for="mname">Name</label>
                   <input id="mname" name="name" required type="text" value="">
+                </div>
+                <div>
+                  <label for="mopenapi">OpenAPI description</label>
+                  <textarea id="mopenapi" name="openapi" required>
+{}
+                  </textarea>
                 </div>
               </div>
             </fieldset>
@@ -153,13 +170,13 @@
         </div>
       </div>
 
-      <!-- Deployment creation (JSON and HTML-form). -->
+      <!-- Deployment manifest creation (JSON and HTML-form). -->
       <div id="deployment-create" class="control hidden">
         <div class="overlay"></div>
         <div class="terminal">
           <form id="deployment-form">
             <fieldset>
-                <legend>Create a deployment</legend>
+                <legend>Create a deployment manifest</legend>
                 <div>
                   <div>
                     <label for="dname">Name</label>
@@ -178,7 +195,7 @@
 
           <form id="deployment-json-form" class="hidden">
             <fieldset>
-                <legend>Submit a deployment in JSON</legend>
+                <legend>Submit a deployment manifest in JSON</legend>
                 <div>
                   <div>
                     <textarea id="djson" name="json" required>{}</textarea>
@@ -186,6 +203,27 @@
                 </div>
             </fieldset>
             <input class="input-view-switch" type="button" value="Switch to form"/>
+            <input type="submit" value="Submit"/>
+          </form>
+        </div>
+      </div>
+
+      <!-- Deploying. -->
+      <div id="deployment-action" class="control hidden">
+        <div class="overlay"></div>
+        <div class="terminal">
+          <form id="deployment-action-form">
+            <fieldset>
+              <legend>Deploy</legend>
+              <div>
+                <div>
+                  <label for="dmanifest-select">Select the deployment manifest:</label>
+                    <select id="dmanifest-select" name="id" required>
+                      <option value="">Please select a deployment manifest:</option>
+                    </select>
+                </div>
+              </div>
+            </fieldset>
             <input type="submit" value="Deploy!"/>
           </form>
         </div>
