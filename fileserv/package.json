@@ -9,6 +9,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@sentry/node": "^7.51.2",
     "bonjour-service": "^1.1.1",
     "deptrace": "^0.2.4",
     "dotenv": "^16.0.3",

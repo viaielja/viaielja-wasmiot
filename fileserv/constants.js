@@ -13,6 +13,8 @@ const mongo_user = process.env.MONGO_ROOT_USERNAME;
 const mongo_pass = process.env.MONGO_ROOT_PASSWORD;
 const MONGO_URI = `mongodb://${mongo_user}:${mongo_pass}@${mongo_host}:${mongo_port}/`;
 
+const SENTRY_DSN = process.env.SENTRY_DSN;
+
 const public_host = process.env.PUBLIC_HOST || `http://${require("os").hostname()}`;
 const PUBLIC_PORT = process.env.PUBLIC_PORT || "3000";
 const PUBLIC_BASE_URI = `${public_host}:${PUBLIC_PORT}/`;
@@ -32,6 +34,7 @@ const DEVICE_WOT_ROUTE = "/.well-known/wot-thing-description";
 
 module.exports = {
     MONGO_URI,
+    SENTRY_DSN,
     PUBLIC_PORT,
     PUBLIC_BASE_URI,
     MODULE_DIR,
