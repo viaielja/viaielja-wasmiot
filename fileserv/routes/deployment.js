@@ -210,7 +210,7 @@ async function createSolution(deploymentId, packageBaseUrl) {
                     .filter(x => x.device._id === deviceId)
                     // TODO ... Add together into a single OpenAPI doc __all__
                     // the modules' endpoints.
-                    .map(endpointDescriptions)
+                    .map(x => endpointDescriptions(deploymentId, x))
             )
         );
 
@@ -232,7 +232,7 @@ async function createSolution(deploymentId, packageBaseUrl) {
             // The instructions the device needs to follow the execution
             // sequence i.e., where to forward computation results initiated by
             // which arriving request.
-            behaviour: [],
+            instructions: [],
         };
     }
 
@@ -264,12 +264,16 @@ async function createSolution(deploymentId, packageBaseUrl) {
             //     fibo(7)         -> 13 -> fibo(13)         -> 233 -> fibo(233) -> <loop forever>
             // NOTE: Atm just the list indices would work the same, but maybe graphs
             // used in future?
+            // TODO: How about this being a handle or other reference to the
+            // matching installed endpoint on supervisor?
+            // TODO: Will this sort of sequence-identification prevent
+            // supporting events (which are inherently "autonomous")?
             from: i,
             to: forwardEndpoint,
         };
 
         // Attach the created details of deployment to matching device.
-        deploymentsToDevices[deviceId].behaviour.push(instruction);
+        deploymentsToDevices[deviceId].instructions.push(instruction);
     }
 
     let sequenceAsIds = Array.from(updatedSequence)
@@ -383,6 +387,8 @@ async function sequenceFromResources(sequence) {
  * together and fill out information needed for describing the service(s).
  * TODO Somehow filter out the unnecessary paths for this deployment that could
  * be attached to the module.
+ * @param {*} deploymentId Identification for the deployment the endpoints will
+ * be associated to.
  * @param {*} node OUT PARAMETER: The node containing data for where and how
  * execution of functions on it should be requested.
  * Should contain connectivity information (address and port) and definition of
@@ -390,7 +396,7 @@ async function sequenceFromResources(sequence) {
  * @returns Pre-filled OpenAPI-doc specially made for this node for configuring
  * its endpoints (ideally most effortlessly).
  */
-function endpointDescriptions(node) {
+function endpointDescriptions(deploymentId, node) {
     // Prepare options for making needed HTTP-request to this path.
     // TODO: Check for device availability here?
     // FIXME hardcoded: selecting first address.
@@ -401,12 +407,13 @@ function endpointDescriptions(node) {
         .replace("{port}", node.device.port);
     let url = new URL(urlString);
 
-    // FIXME hardcoded: "paths" field assumed to contain template "/{module}/<thisFuncName>".
+    // FIXME hardcoded: "paths" field assumed to contain template "/{deployment}/modules/{module}/<thisFuncName>".
     // FIXME: URL-encode the names.
-    const funcPathKey = `/{module}/${node.func}`;
+    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
     // TODO: Iterate all the paths.
     let funcPath = node.module.openapi.paths[funcPathKey];
     let filledFuncPathKey = funcPathKey
+        .replace("{deployment}", deploymentId)
         .replace("{module}", node.module.name);
 
     // Fill out the prepared parts of the templated OpenAPI-doc.
