@@ -19,11 +19,16 @@ router.post("/:deploymentId", async (request, response) => {
     // 1. get the deployment and other execution related data from db.
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(request.params.deploymentId) });
     // "Node" as in the circle connected to others by edges in a graph.
-    let startNode = deployment.fullManifest[deployment.sequence[0].device].instructions[0];
+    let startNode = deployment
+        .fullManifest[deployment.sequence[0].device]
+        .instructions[0]
+        .to;
 
     // FIXME hardcoded: selecting first(s) from list(s).
-    let url = new URL(startNode.configuration.servers[0].url);
-    let [pathName, pathObj] = Object.entries(startNode.configuration.paths)[0];
+    let url = new URL(startNode.servers[0].url);
+    // FIXME hardcoded: Selecting 0 because paths expected to contain only a
+    // single item selected at creation of deployment manifest.
+    let [pathName, pathObj] = Object.entries(startNode.paths)[0];
     // TODO: Only one method should be available here but idk if OpenAPI doc
     // fits that idea...
     let method = "get" in pathObj ? "GET" : "POST";
