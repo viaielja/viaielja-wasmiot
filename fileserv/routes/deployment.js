@@ -364,7 +364,7 @@ async function sequenceFromResources(sequence) {
         : 0;
     // Assert.
     if (length === 0) {
-        return `Error on deployment: mismatch length between deployment (${sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`;
+        throw `Error on deployment: mismatch length between deployment (${sequence.length}), modules (${selectedModules.length}) and devices (${selectedDevices.length}) or is zero`;
     }
 
     // Now that the devices that will be used have been selected, prepare to
