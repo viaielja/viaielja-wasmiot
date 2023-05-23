@@ -18,17 +18,17 @@ module.exports = { router };
 router.post("/:deploymentId", async (request, response) => {
     // 1. get the deployment and other execution related data from db.
     let deployment = await getDb().deployment.findOne({ _id: ObjectId(request.params.deploymentId) });
-    // "Node" as in the circle connected to others by edges in a graph.
-    let startNode = deployment
+    
+    // Pick the starting point based on sequence's first device and function.
+    let startEndpoint = deployment
         .fullManifest[deployment.sequence[0].device]
-        .instructions[0]
-        .to;
+        .endpoints[deployment.sequence[0].func];
 
     // FIXME hardcoded: selecting first(s) from list(s).
-    let url = new URL(startNode.servers[0].url);
+    let url = new URL(startEndpoint.servers[0].url);
     // FIXME hardcoded: Selecting 0 because paths expected to contain only a
     // single item selected at creation of deployment manifest.
-    let [pathName, pathObj] = Object.entries(startNode.paths)[0];
+    let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
     // TODO: Only one method should be available here but idk if OpenAPI doc
     // fits that idea...
     let method = "get" in pathObj ? "GET" : "POST";
@@ -62,7 +62,8 @@ router.post("/:deploymentId", async (request, response) => {
         }
     }
 
-    url.pathname += pathName;
+    // NOTE: The URL should not contain any path before this point.
+    url.pathname = pathName;
 
     let options = { method: method };
     // Request with GET/HEAD method cannot have body.

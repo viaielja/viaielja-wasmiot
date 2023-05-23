@@ -202,21 +202,17 @@ async function createSolution(deploymentId, packageBaseUrl) {
                 };
             });
         
-        // TODO This needs not be a list because ...
-        let endpoints = Array.prototype.concat(
-            // Flatten the list of lists.
-            ...(
-                updatedSequence
-                    .filter(x => x.device._id === deviceId)
-                    // TODO ... Add together into a single OpenAPI doc __all__
-                    // the modules' endpoints.
-                    .map(x => endpointDescriptions(deploymentId, x))
-            )
+        let endpoints = Object.fromEntries(
+            updatedSequence
+                .filter(x => x.device._id === deviceId)
+                // TODO ... Merge together into a single OpenAPI doc for __all__
+                // the modules' endpoints.
+                .map(x => endpointDescription(deploymentId, x))
         );
 
         // It does not make sense to have a device without any possible
         // interaction.
-        if (endpoints.length === 0) {
+        if (Object.entries(endpoints).length === 0) {
             return `no endpoints defined for device '${deviceId}'`;
         }
 
@@ -226,8 +222,8 @@ async function createSolution(deploymentId, packageBaseUrl) {
             deploymentId: deploymentId,
             // The modules the device needs to download.
             modules: moduleData,
-            // Descriptions of endpoints needed to set up on the device for this
-            // deployment.
+            // Descriptions of endpoints that functions can be called from and
+            // that are needed to set up on the device for this deployment.
             endpoints: endpoints,
             // The instructions the device needs to follow the execution
             // sequence i.e., where to forward computation results initiated by
@@ -241,7 +237,9 @@ async function createSolution(deploymentId, packageBaseUrl) {
     // and flow of data between nodes.
     for (let i = 0; i < updatedSequence.length; i++) {
         let deviceId = updatedSequence[i].device._id;
+
         let forwardEndpoint;
+        let forwardFunc = updatedSequence[i].func;
         let forwardDeployment = deploymentsToDevices[updatedSequence[i + 1]?.device._id];
 
         if (forwardDeployment === undefined) {
@@ -250,7 +248,7 @@ async function createSolution(deploymentId, packageBaseUrl) {
             // The order of endpoints attached to deployment is still the same
             // as it is based on the execution sequence and endpoints are
             // guaranteed to contain at least one item.
-            forwardEndpoint = forwardDeployment.endpoints[0]
+            forwardEndpoint = forwardDeployment.endpoints[forwardFunc];
         }
 
         let instruction = {
@@ -268,7 +266,7 @@ async function createSolution(deploymentId, packageBaseUrl) {
             // matching installed endpoint on supervisor?
             // TODO: Will this sort of sequence-identification prevent
             // supporting events (which are inherently "autonomous")?
-            from: i,
+            sequence: i,
             to: forwardEndpoint,
         };
 
@@ -393,10 +391,11 @@ async function sequenceFromResources(sequence) {
  * execution of functions on it should be requested.
  * Should contain connectivity information (address and port) and definition of
  * module containing functions so they can be called with correct inputs.
- * @returns Pre-filled OpenAPI-doc specially made for this node for configuring
- * its endpoints (ideally most effortlessly).
+ * @returns Pair of the function (index 0) and a pre-filled OpenAPI-doc endpoint
+ * (index 1) specially made for this node for configuring (ideally most
+ * effortlessly) the endpoint that function is available to be called from.
  */
-function endpointDescriptions(deploymentId, node) {
+function endpointDescription(deploymentId, node) {
     // Prepare options for making needed HTTP-request to this path.
     // TODO: Check for device availability here?
     // FIXME hardcoded: selecting first address.
@@ -433,5 +432,5 @@ function endpointDescriptions(deploymentId, node) {
         delete preFilledOpenapiDoc.paths[unnecessaryPath];
     }
 
-    return preFilledOpenapiDoc;
+    return [node.func, preFilledOpenapiDoc];
 }
