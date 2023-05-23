@@ -1,12 +1,5 @@
 const path = require('path');
 
-module.exports = {
-    respondWithFile,
-    callDeviceFuncSingleIntegerArgument,
-    callDeviceFuncRaw,
-    callDeviceFuncHttp,
-};
-
 
 /// Perform boilerplate tasks when responding with a file read from filesystem.
 function respondWithFile(response, filePath, contentType) {
@@ -116,3 +109,30 @@ async function callDeviceFuncHttp(url, options, onResponse, onError) {
         onError(error);
     } 
 }
+
+/**
+ * "Enum variant" for an error with result containing some data.
+ */
+class Error {
+    constructor(data) {
+        this.error = data;
+    }
+}
+
+/**
+ * "Enum variant" for a success with result containing some data.
+ */
+class Success {
+    constructor(data) {
+        this.success = data;
+    }
+}
+
+module.exports = {
+    respondWithFile,
+    callDeviceFuncSingleIntegerArgument,
+    callDeviceFuncRaw,
+    callDeviceFuncHttp,
+    Error,
+    Success,
+};

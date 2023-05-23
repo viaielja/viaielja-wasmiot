@@ -5,7 +5,7 @@ const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
 const { PUBLIC_BASE_URI } = require("../constants.js");
-
+const { Error, Success } = require("../utils.js");
 
 const router = express.Router();
 
@@ -20,9 +20,9 @@ router.get("/:deploymentId", async (request, response) => {
     if (doc) {
         response.json(doc);
     } else {
-        let errmsg = `Failed querying for deployment id: ${request.params.deploymentId}`;
-        console.log(errmsg);
-        response.status(400).send(errmsg);
+        let err = new Error(`Failed querying for deployment id: ${request.params.deploymentId}`);
+        console.log(err);
+        response.status(400).send(err);
     }
 });
 
@@ -82,13 +82,12 @@ router.post("/", async (request, response) => {
         console.log(errorMsg);
     }
 
+    let result = errorMsg ? new Error(errorMsg) : new Success(`Manifest ${deploymentName} added`);
+    // TODO: Why is this added?
+    result.deploymentId = actionId;
     response
         .status(status)
-        .json({
-            deploymentId: actionId,
-            success: errorMsg ? null : `Manifest ${deploymentName} added`,
-            err: errorMsg,
-        });
+        .json(result);
 });
 
 /**
@@ -101,7 +100,7 @@ router.post("/:deploymentId", async (request, response) => {
         .findOne({ _id: ObjectId(request.params.deploymentId) });
 
     if (!deploymentDoc) {
-        response.status(404).json({"error": `No deployment found for '${request.params.deploymentId}'`});
+        response.status(404).json(new Error(`No deployment found for '${request.params.deploymentId}'`));
         return;
     }
 
@@ -117,7 +116,7 @@ router.post("/:deploymentId", async (request, response) => {
             .findOne({_id: ObjectId(deviceId)});
 
         if (!device) {
-            response.status(404).json({"error": `No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`});
+            response.status(404).json(new Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
             return;
         }
 
@@ -150,7 +149,7 @@ router.post("/:deploymentId", async (request, response) => {
         req.write(deploymentJson);
         req.end();
     }
-    response.json({success: `Deployed '${deploymentDoc.name}'!`});
+    response.json(new Success(`Deployed '${deploymentDoc.name}'!`));
 });
 
 /**
@@ -158,7 +157,7 @@ router.post("/:deploymentId", async (request, response) => {
  */
 router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
     getDb().deployment.deleteMany({}).then(_ => {
-        response.status(202).json({ success: "deleting all deployment manifests" }); // Accepted.
+        response.status(202).json(new Success("deleting all deployment manifests")); // Accepted.
     });
 });
 

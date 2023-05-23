@@ -1,8 +1,32 @@
+async function tryFetchWithStatusUpdate(path) {
+    let resp;
+    let json;
+    try {
+        resp = await fetch(path);
+        json = await resp.json();
+    } catch (error) {
+        setStatus({ error: error });
+        throw error;
+    }
+
+    if (resp.ok) {
+        return json;
+    } else if (json) {
+        if (!json.error) {
+            json.error = "error field missing";
+        }
+        setStatus(json);
+        throw json;
+    } else {
+        let error = { error: f`fetch to '${path}' failed ${resp.status}` };
+        setStatus(error);
+        throw error;
+    }
+}
+
 async function generateModuleFuncInputForm(event) {
     let deploymentId = event.target.value;
-    let deployment = await fetch(`/file/manifest/${deploymentId}`)
-        .then(response => response.json())
-        .catch(setStatus);
+    let deployment = await tryFetchWithStatusUpdate(`/file/manifest/${deploymentId}`);
 
     // TODO: This is configured only for executing the fibonacci function atm
     // and should ideally be automated to construct the needed fields from any
