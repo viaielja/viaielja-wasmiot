@@ -9,7 +9,7 @@ const { MongoClient, MongoRuntimeError } = require("mongodb");
 const express = require("express");
 
 const discovery = require("./src/deviceDiscovery");
-const { MONGO_URI, PUBLIC_PORT, DEVICE_TYPE, FRONT_END_DIR, SENTRY_DSN } = require("./constants.js");
+const { MONGO_URI, PUBLIC_PORT, PUBLIC_BASE_URI, DEVICE_TYPE, FRONT_END_DIR, SENTRY_DSN } = require("./constants.js");
 
 
 const expressApp = express();
@@ -56,16 +56,12 @@ chdir(__dirname);
 
     // Must wait for database before starting to listen for web-clients.
     await initializeDatabase();
-    console.log(db);
-    // FIXME: The following print (i.e., calling stringify) would crash with
-    // 'TypeError: Converting circular structure to JSON'.
-    //console.log(`Database: ${JSON.stringify(db, null, 2)}`);
 
     initAndRunDeviceDiscovery();
 
     express.static.mime.define({"application/wasm": ["wasm"]});
     server = expressApp.listen(PUBLIC_PORT, async () => {
-        console.log(`Listening on port: ${PUBLIC_PORT}`);
+        console.log("Orchestrator is available at: ", PUBLIC_BASE_URI);
     });
 })()
     .then(_ => { console.log("Finished!"); })
@@ -115,7 +111,7 @@ async function initializeDatabase() {
         db.deployment = orchDb.collection("deployment");
 
         // Print something from the db as example of connection.
-        console.log("Connected to and initialized database: " + JSON.stringify(await orchDb.admin().listDatabases(), null, 2));
+        console.log("Connected to and initialized database!");
     } catch (e) {
         console.error("FAILED CONNECTING TO DATABASE >>>");
         console.error(e);
