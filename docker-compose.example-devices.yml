@@ -1,22 +1,6 @@
 version: '3.4'
 
 services:
-  # "Import" the orchestrator-stuff as is.
-  orchestrator-example:
-    extends:
-      file: ./docker-compose.yml
-      service: orchestrator
-    profiles:
-      - server
-
-  mongo:
-    extends:
-      file: ./docker-compose.yml
-      service: mongo
-    profiles:
-      - server
-
-
   # TODO Set IOT-device hostnames to end with ".local."? Considered using `domainname`
   # (see https://docs.docker.com/compose/compose-file/#domainname) but had no
   # luck.
@@ -111,10 +95,6 @@ services:
           # NOTE: It seems that at <40M the container shuts down soon after
           # startup with 'Exited(137)'
           memory: 50M
-
-volumes:
-  mongo-config:
-  mongo-db:
 
 networks:
   default:

@@ -6,7 +6,7 @@ services:
     # https://docs.docker.com/compose/extends/
     extends:
       file: docker-compose.yml
-      service: orchestrator
+      service: orchestrator-base
     networks:
       # Only use the "orchestrator net" and not the setup that connects with
       # other hosts in LAN.
