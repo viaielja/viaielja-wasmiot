@@ -190,14 +190,21 @@ async function createSolution(deploymentId, packageBaseUrl) {
         let moduleData = updatedSequence
             .filter(x => x.device._id === deviceId)
             .map(function moduleData(x) {
-                // Add data needed by the device for pulling a module.
-                // NOTE: The download URL for .wasm is passed here.
-                let url = new URL(packageBaseUrl);
-                url.pathname = `/file/module/${x.module._id}/wasm`;
+                // Add data needed by the device for pulling and using a binary
+                // (i.e., .wasm file) module.
+                let binaryUrl;
+                binaryUrl = new URL(packageBaseUrl);
+                binaryUrl.pathname = `/file/module/${x.module._id}/wasm`;
+                let descriptionUrl;
+                descriptionUrl = new URL(packageBaseUrl);
+                descriptionUrl.pathname = `/file/module/${x.module._id}`;
                 return {
                     id: x.module._id,
                     name: x.module.name,
-                    url: url.toString(),
+                    urls: {
+                        binary: binaryUrl.toString(),
+                        description: descriptionUrl.toString(),
+                    },
                 };
             });
         
