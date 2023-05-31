@@ -186,9 +186,16 @@ async function createSolution(deploymentId, packageBaseUrl) {
     // Prepare to make a mapping of devices and their instructions in order to
     // bulk-send the instructions to each device when deploying.
     let deploymentsToDevices = {}
-    for (let deviceId of new Set(updatedSequence.map(x => x.device._id))) {
+    let uniqueDeviceIds = new Set();
+    for (let item of updatedSequence.map(x => x.device._id.toString())) {
+        // Add strings, which can be uniquely differentiated.
+        uniqueDeviceIds.add(item);
+    }
+    // Convert back to ObjectId for easier operations
+    for (let deviceIdStr of uniqueDeviceIds) {
+        let deviceId = new ObjectId(deviceIdStr);
         let moduleData = updatedSequence
-            .filter(x => x.device._id === deviceId)
+            .filter(x => x.device._id.equals(deviceId))
             .map(function moduleData(x) {
                 // Add data needed by the device for pulling and using a binary
                 // (i.e., .wasm file) module.
@@ -198,27 +205,38 @@ async function createSolution(deploymentId, packageBaseUrl) {
                 let descriptionUrl;
                 descriptionUrl = new URL(packageBaseUrl);
                 descriptionUrl.pathname = `/file/module/${x.module._id}`;
+
+                // This is for any other files related to execution of module's
+                // functions on device e.g., ML-models etc.
+                let other = [];
+                if (x.module.pb) {
+                    other.push((new URL(packageBaseUrl+`file/module/${x.module._id}/pb`)).toString());
+                }
                 return {
                     id: x.module._id,
                     name: x.module.name,
                     urls: {
                         binary: binaryUrl.toString(),
                         description: descriptionUrl.toString(),
+                        other: other,
                     },
                 };
             });
         
-        let endpoints = Object.fromEntries(
-            updatedSequence
-                .filter(x => x.device._id === deviceId)
-                // TODO ... Merge together into a single OpenAPI doc for __all__
-                // the modules' endpoints.
-                .map(x => endpointDescription(deploymentId, x))
-        );
+        // TODO ... Merge together into a single OpenAPI doc for __all__
+        // the modules' endpoints.
+        let devicesEndpoints = {};
+        for (let x of updatedSequence) {
+            if (!x.device._id.equals(deviceId)) {
+                continue;
+            }
+            let [func, endpoint] = endpointDescription(deploymentId, x);
+            devicesEndpoints[func] = endpoint;
+        }
 
         // It does not make sense to have a device without any possible
         // interaction.
-        if (Object.entries(endpoints).length === 0) {
+        if (Object.entries(devicesEndpoints).length === 0) {
             return `no endpoints defined for device '${deviceId}'`;
         }
 
@@ -230,7 +248,7 @@ async function createSolution(deploymentId, packageBaseUrl) {
             modules: moduleData,
             // Descriptions of endpoints that functions can be called from and
             // that are needed to set up on the device for this deployment.
-            endpoints: endpoints,
+            endpoints: devicesEndpoints,
             // The instructions the device needs to follow the execution
             // sequence i.e., where to forward computation results initiated by
             // which arriving request.
@@ -245,10 +263,10 @@ async function createSolution(deploymentId, packageBaseUrl) {
         let deviceId = updatedSequence[i].device._id;
 
         let forwardEndpoint;
-        let forwardFunc = updatedSequence[i].func;
+        let forwardFunc = updatedSequence[i + 1]?.func;
         let forwardDeployment = deploymentsToDevices[updatedSequence[i + 1]?.device._id];
 
-        if (forwardDeployment === undefined) {
+        if (forwardFunc === undefined || forwardDeployment === undefined) {
             forwardEndpoint = null;
         } else {
             // The order of endpoints attached to deployment is still the same
@@ -414,7 +432,7 @@ function endpointDescription(deploymentId, node) {
 
     // FIXME hardcoded: "paths" field assumed to contain template "/{deployment}/modules/{module}/<thisFuncName>".
     // FIXME: URL-encode the names.
-    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
+    const funcPathKey = Object.keys(node.module.openapi.paths)[0];//`/{deployment}/modules/{module}/${node.func}`;
     // TODO: Iterate all the paths.
     let funcPath = node.module.openapi.paths[funcPathKey];
     let filledFuncPathKey = funcPathKey
