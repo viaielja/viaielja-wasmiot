@@ -85,12 +85,24 @@ router.post("/:deploymentId", async (request, response) => {
                 response.status(500).json(new Error(`request to ${url} failed`));
                 return;
             }
-            // Write image to a file to see results.
-            const fs = require("fs");
-            fs.writeFileSync(
-                "./files/chainResultImg.jpeg",
-                Buffer.from(await res.arrayBuffer()),
-            );
+
+            switch (res.headers.get("content-type")) {
+                case "application/json":
+                    response.json(await res.json());
+                    return;
+                case "image/jpeg":
+                    const CHAIN_RESULT_IMAGE_PATH = "./files/chainResultImg.jpeg";
+                    // Write image to a file to see results.
+                    const fs = require("fs");
+                    fs.writeFileSync(
+                        CHAIN_RESULT_IMAGE_PATH,
+                        Buffer.from(await res.arrayBuffer()),
+                    );
+                    response.json(new utils.Success("Saved JPEG to "+CHAIN_RESULT_IMAGE_PATH));
+                    return;
+                default:
+                    response.json(new Error("Unsupported content type"+res.headers["Content-type"]));
+            }
 
             //let jsonResponse;
             //try {
