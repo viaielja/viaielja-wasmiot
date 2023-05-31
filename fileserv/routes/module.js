@@ -21,7 +21,7 @@ router.get("/:moduleId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
     let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
     if (doc) {
-        console.log("Sending metadata of module: " + doc.humanReadableName);
+        console.log("Sending metadata of module: " + doc.name);
         response.json(doc);
     } else {
         let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
@@ -31,19 +31,27 @@ router.get("/:moduleId", async (request, response) => {
 });
 
 /**
- * Serve the WebAssembly binary matching requested module ID.
+ * Serve the a file relate to a module based on module ID and file extension.
  */
-router.get("/:moduleId/wasm", async (request, response) => {
+router.get("/:moduleId/:fileExtension", async (request, response) => {
     let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
+    let fileExtension = request.params.fileExtension;
     if (doc) {
-        console.log("Sending Wasm-file from file-path: " + doc.path);
+        let fileObj = doc[fileExtension];
+        if (!fileObj) {
+            response.status(400).json({
+                err: `file '${fileExtension}' missing from module '${doc.name}'`
+            });
+            return;
+        }
+        console.log(`Sending '${fileExtension}' file from file-path: `, fileObj.path);
         // TODO: Should force to use the application/wasm media type like
         // suggested(?) here:
         // https://webassembly.github.io/spec/web-api/#mediaType
         // The resp.sendFile(f) uses application/octet-stream by default.
-        let options = { headers: { 'Content-Type': 'application/wasm' } };
+        let options = { headers: { 'Content-Type': fileExtension == "wasm" ? 'application/wasm' : 'application/binary' } };
         // FIXME: File might not be found at doc.path.
-        response.sendFile(doc.path, options);
+        response.sendFile(fileObj.path, options);
     } else {
         let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
         console.log(errmsg);
@@ -84,8 +92,11 @@ router.post("/", async (request, response) => {
 });
 
 /**
- * Add the concrete Wasm-module to the server filesystem and references to it
- * into database-entry matching a module-ID (created with an earlier request).
+ * Attach a file to the previously created module.
+ * 
+ * In the case of attaching the concrete Wasm-module, `:type` should be "wasm".
+ * This saves the binary to the server filesystem and references to it
+ * into module's database-entry matching a module-ID given in the body.
  * TODO Could the modules' exports be parsed from Wasm here?
  *
  * Regarding the use of PATCH https://restfulapi.net/http-methods/#patch says:
@@ -99,9 +110,10 @@ router.post("/", async (request, response) => {
  */
 router.post("/upload", fileUpload, validateFileFormSubmission, async (request, response) => {
     let filter = { _id: ObjectId(request.body.id) };
+    let fileExtension = request.file.originalname.split(".").pop();
 
     /**
-     * Helper to update fields in callbacks.
+     * Helper to update fields in callbacks based on the file extension of upload.
      * @param {*} fields The database fields to update on the module.
      * @returns {*} [ status: status, { err: error | undefined, success: success | undefined } ]
      */
@@ -112,22 +124,22 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
             console.log(request.body.id + ": " + msg);
             return [ 200, { success: msg } ];
         } else {
-            let msg = "Failed adding Wasm-file to module";
+            let msg = "Failed attaching a file to module";
             console.log(msg + ". Tried adding data: " + JSON.stringify(fields, null, 2));
             return [ 500, { err: msg } ];
         }
     }
 
+    let updateObj = {}
     // Add additional fields initially from the file-upload and save to
     // database.
-    let fields = {
+    updateObj[fileExtension] = {
         humanReadableName: request.file.originalname,
         fileName: request.file.filename,
         path: request.file.path,
     };
 
-    // Get the exports and imports directly from the Wasm-binary itself.
-    readFile(request.file.path, function (err, data) {
+    readFile(request.file.path, async function (err, data) {
         if (err) {
             console.log("couldn't read Wasm binary from file ", request.file.path, err);
             // TODO: Should this really be considered server-side error (500)?
@@ -135,32 +147,55 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
             return;
         };
 
-        WebAssembly.compile(data)
-            .then(async function(wasmModule) {
-                let importData = WebAssembly.Module.imports(wasmModule)
-                    // Just get the names of functions(?) for now.
-                    .filter(x => x.kind === "function")
-                    .map(x => x.name);
-                let exportData =  WebAssembly.Module.exports(wasmModule)
-                    // Just get the names of functions for now; the
-                    // interface description attached to created modules is
-                    // trusted to match the uploaded WebAssembly binary.
-                    .filter(x => x.kind === "function")
-                    .map(x => x.name);
+        // Perform actions specific for the filetype to update
+        // non-filepath-related metadata fields.
+        switch (fileExtension) {
+            case "wasm":
+                try {
+                    await parseWasmModule(data, updateObj)
+                } catch (err) {
+                    console.log("failed compiling Wasm");
+                    response.status(500).json({err: `couldn't compile Wasm: ${err}`});
+                    return;
+                }
+                break;
+            case "pb":
+                // Model weights etc. for an ML-application.
+                break;
+            default:
+                response.status(400).json({ err: `unsupported file extension '${fileExtension}'`});
+        }
 
-                fields.requirements = importData;
-                fields.exports = exportData;
-
-                // Now actually update the database-document.
-                let updateRes = await update(fields);
-                response.status(updateRes[0]).json(updateRes[1]);
-            })
-            .catch((err) => {
-                console.log("failed compiling Wasm");
-                response.status(500).json({err: `couldn't compile Wasm: ${err}`});
-            });
+        // Now actually update the database-document.
+        let updateRes = await update(updateObj);
+        response.status(updateRes[0]).json(updateRes[1]);
     });
 });
+
+/**
+ * Parse WebAssembly module from data and add info extracted from it into input object.
+ * @param {*} data Data to parse WebAssembly from e.g. the result of a file-read.
+ * @param {*} outFields Object to add new fields into based on parsed
+ * WebAssembly (e.g. module exports etc.)
+ */
+async function parseWasmModule(data, outFields) {
+    // Get the exports and imports directly from the Wasm-binary itself.
+    let wasmModule = await WebAssembly.compile(data);
+
+    let importData = WebAssembly.Module.imports(wasmModule)
+        // Just get the names of functions(?) for now.
+        .filter(x => x.kind === "function")
+        .map(x => x.name);
+    let exportData =  WebAssembly.Module.exports(wasmModule)
+        // Just get the names of functions for now; the
+        // interface description attached to created modules is
+        // trusted to match the uploaded WebAssembly binary.
+        .filter(x => x.kind === "function")
+        .map(x => x.name);
+
+    outFields.requirements = importData;
+    outFields.exports = exportData;
+}
 
 /**
  * Delete all the modules from database (for debugging purposes).
