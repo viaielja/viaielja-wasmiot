@@ -255,6 +255,10 @@ expressApp.get("/", (_, response) => {
     response.sendFile(path.join(FRONT_END_DIR, "index.html"));
 });
 
+expressApp.get("/files/:myPath", (request, response) => {
+    response.sendFile("./files/"+request.params.myPath, { root: "." });
+});
+
 if (SENTRY_DSN) {
     // Sentry error handler must be before any other error middleware and after all controllers
     // to get errors from routes.

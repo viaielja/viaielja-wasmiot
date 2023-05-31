@@ -88,7 +88,7 @@ router.post("/:deploymentId", async (request, response) => {
             // Write image to a file to see results.
             const fs = require("fs");
             fs.writeFileSync(
-                "chainResultImg.jpeg",
+                "./files/chainResultImg.jpeg",
                 Buffer.from(await res.arrayBuffer()),
             );
 
