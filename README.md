@@ -74,11 +74,11 @@ Another way is to open the project directory on VSCode and follow these instruct
 ### Devices
 You can test how the orchestrator interacts with the
 [supervisor](/wasmiot-supervisor)-controlled devices by running the
-containers under profile `device` described in `docker-compose.example.yml`.
+containers under profile `device` described in `docker-compose.example-devices.yml`.
 
 All of these pretend-devices can be run at once with the command:
 ```
-docker compose -f ./docker-compose.example.yml --profile device up --build
+docker compose -f ./docker-compose.example-devices.yml --profile device up --build
 ```
 
 #### Adding new devices to Docker compose
