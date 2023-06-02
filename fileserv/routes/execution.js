@@ -88,7 +88,15 @@ router.post("/:deploymentId", async (request, response) => {
 
             switch (res.headers.get("content-type")) {
                 case "application/json":
-                    response.json(await res.json());
+                    // FIXME: Assuming the return is LE-bytes list for 32 bit
+                    // integer.
+                    let intBytes = await res.json();
+                    let classIndex = 
+                        (intBytes[3] << 24) | 
+                        (intBytes[2] << 16) | 
+                        (intBytes[1] <<  8) | 
+                        (intBytes[0]);
+                    response.json(new utils.Success(classIndex));
                     return;
                 case "image/jpeg":
                     const CHAIN_RESULT_IMAGE_PATH = "./files/chainResultImg.jpeg";
