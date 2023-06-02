@@ -29,14 +29,12 @@ router.post("/:deploymentId", async (request, response) => {
     // FIXME hardcoded: Selecting 0 because paths expected to contain only a
     // single item selected at creation of deployment manifest.
     let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
-    // TODO: Only one method should be available here but idk if OpenAPI doc
-    // fits that idea...
-    let method = "get" in pathObj ? "GET" : "POST";
 
     // 2. prepare given data for sending to device.
     // Build the SELECTED METHOD'S parameters for the request according to the
     // description.
-    for (let param of pathObj[method.toLowerCase()].parameters) {
+    let method = Object.keys(pathObj).includes("get") ? "get" : "post";
+    for (let param of pathObj[method].parameters) {
         if (!(param.name in request.body)) {
             response.status(400).json({ err:`Missing argument '${param.name}'` });
             return;
@@ -80,9 +78,51 @@ router.post("/:deploymentId", async (request, response) => {
     utils.callDeviceFuncHttp(
         url,
         options,
-        function(jsonResponse) {
-            console.log(`Execution: URL at '${url}' responded:`, jsonResponse);
-            response.json(jsonResponse);
+        async function(res) {
+            // TODO: Handle based on the description's response type.
+            // Assume the end of chain responds with JSON for now...
+            if (!res.ok) {
+                response.status(500).json(new Error(`request to ${url} failed`));
+                return;
+            }
+
+            switch (res.headers.get("content-type")) {
+                case "application/json":
+                    // FIXME: Assuming the return is LE-bytes list for 32 bit
+                    // integer.
+                    let intBytes = await res.json();
+                    let classIndex = 
+                        (intBytes[3] << 24) | 
+                        (intBytes[2] << 16) | 
+                        (intBytes[1] <<  8) | 
+                        (intBytes[0]);
+                    response.json(new utils.Success(classIndex));
+                    return;
+                case "image/jpeg":
+                    const CHAIN_RESULT_IMAGE_PATH = "./files/chainResultImg.jpeg";
+                    // Write image to a file to see results.
+                    const fs = require("fs");
+                    fs.writeFileSync(
+                        CHAIN_RESULT_IMAGE_PATH,
+                        Buffer.from(await res.arrayBuffer()),
+                    );
+                    response.json(new utils.Success("Saved JPEG to "+CHAIN_RESULT_IMAGE_PATH));
+                    return;
+                default:
+                    response.json(new Error("Unsupported content type"+res.headers["Content-type"]));
+            }
+
+            //let jsonResponse;
+            //try {
+            //    jsonResponse = await res.json();
+            //} catch (err) {
+            //    console.log(`Error while parsing JSON from response':`, err);
+            //    response.status(500).json({ err: err });
+            //    return;
+            //}
+            //console.log(`Execution: URL at '${url}' responded:`, jsonResponse);
+            //response.json(jsonResponse);
+            response.json({"foo": "bar"});
         },
         function(err) {
             console.log(`Error while posting to URL'${url}':`, err);

@@ -137,3 +137,5 @@ fileserv/files/wasm/
 
 # Place where the example devices saves downloaded WASM-modules.
 example/**/modules/
+
+*.jpeg

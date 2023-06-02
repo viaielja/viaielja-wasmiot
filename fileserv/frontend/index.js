@@ -184,8 +184,8 @@ function submitFile(url) {
         let fileField = formSubmitEvent.target.querySelector("input[type=file]");
 
         // Add the metadata found in the form.
-        // NOTE: Forms more complicated than containing text inputs or
-        // hierarchical/deeper than one are not handled.
+        // NOTE: Forms that are more complicated than just containing text
+        // inputs or that are hierarchical/deeper are not handled.
         for (let [key, value] of Object.entries(formToObject(formSubmitEvent.target))) {
             switch (typeof (value)) {
                 case "string":

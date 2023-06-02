@@ -95,16 +95,15 @@ function callDeviceFuncRaw(
  * making HTTP request to a supervisor's URL.
  * @param {*} url Url to call.
  * @param {*} options The same options as for `fetch()`.
- * @param {*} onResponse JSON-result handler.
- * @param {*} onError Fetch and JSON-parsing's rejection handler.
+ * @param {*} onResponse Response handler.
+ * @param {*} onError Fetch error handler.
  */
 async function callDeviceFuncHttp(url, options, onResponse, onError) {
     console.log(`Using HTTP '${options.method}' to call a func on '${url}' with headers:`, options.headers);
 
     try {
         let response = await fetch(url, options);
-        let jsonResponse = await response.json();
-        onResponse(jsonResponse);
+        onResponse(response);
     } catch (error) {
         onError(error);
     } 
