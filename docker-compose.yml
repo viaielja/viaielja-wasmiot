@@ -2,11 +2,6 @@ version: '3.4'
 
 services:
   orchestrator-base:
-    profiles:
-      # Used to extend from this base service but without running it itself by
-      # accident AND allowing to start the non-ipvlan service with different
-      # profile to the ipvlan version.
-      - ABSTRACT_BASE_HACK_DO_NOT_USE
     build:
       context: ./fileserv
       dockerfile: ./Dockerfile
@@ -19,21 +14,7 @@ services:
     env_file:
       - ./.env.example
       - ./.env
-  orchestrator:
-    extends: orchestrator-base
-    profiles:
-      - orchestration
-
-  orchestrator-ipvlan:
-    extends: orchestrator-base
-    profiles:
-      - lan
-    networks:
-      default:
-      dockeripvlan:
-    environment:
-      CONFIG_PUBLIC_HOST: ${PUBLIC_HOST:-http://orchestrator}
-
+    
   mongo:
     image: mongo
     restart: unless-stopped
@@ -55,16 +36,3 @@ networks:
   default:
     # Network for the orchestrator and MongoDB.
     name: wasmiot-net
-  dockeripvlan:
-    # Network for connecting orchestrator server and device discovery to
-    # outside from Docker.
-    name: dockeripvlan
-    driver: ipvlan
-    driver_opts:
-      parent: ${NETWORK_INTERFACE} #eno1 #wlp0s20f3
-    ipam:
-      config:
-        - subnet: "${NETWORK_IP_BASE}.0/24"
-        #  TODO Are these two needed?
-        #  ip_range: "10.0.0.0/16"
-        #  gateway: "10.0.0.1"

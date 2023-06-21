@@ -18,6 +18,14 @@ html {
         0 0 2px rgba(255, 255, 255, 0.8);
 }
 
+.result {
+    /* Turquoise glow. */
+    color: rgba(4, 255, 247, 0.8);
+    text-shadow:
+        0 0 11px rgba(200, 200, 255, 1),
+        0 0 2px rgba(255, 255, 255, 0.8);
+}
+
 .hidden {
     display: none;
 }

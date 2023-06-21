@@ -1,0 +1,39 @@
+version: '3.4'
+
+services:
+  orchestrator-ipvlan:
+    extends:
+      file: docker-compose.yml
+      service: orchestrator-base
+    networks:
+      default:
+      dockeripvlan:
+    env_file:
+      - ./.env.example
+      - ./.env
+
+  mongo:
+    extends:
+      file: docker-compose.yml
+      service: mongo
+
+volumes:
+  mongo-config:
+  mongo-db:
+
+networks:
+  default:
+    name: wasmiot-net
+  dockeripvlan:
+    # Network for connecting orchestrator server and device discovery to
+    # outside from Docker.
+    name: dockeripvlan
+    driver: ipvlan
+    driver_opts:
+      parent: ${NETWORK_INTERFACE} #eno1 #wlp0s20f3
+    ipam:
+      config:
+        - subnet: "${NETWORK_IP_BASE}.0/24"
+        #  TODO Are these two needed?
+        #  ip_range: "10.0.0.0/16"
+        #  gateway: "10.0.0.1"
