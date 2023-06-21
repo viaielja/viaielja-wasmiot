@@ -2,10 +2,10 @@ version: '3.4'
 
 services:
   orchestrator-base:
+    image: ghcr.io/liquidai-project/wasmiot-orchestrator
     build:
       context: ./fileserv
       dockerfile: ./Dockerfile
-      target: compose
     ports:
       - ${PUBLIC_PORT:-3000}:3000
     networks:

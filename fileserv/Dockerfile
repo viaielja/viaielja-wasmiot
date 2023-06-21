@@ -1,35 +1,13 @@
-FROM "mcr.microsoft.com/devcontainers/javascript-node:0-18" AS base
+FROM "mcr.microsoft.com/devcontainers/javascript-node:0-18" AS app
 
-################################################################################
+LABEL org.opencontainers.image.source=https://github.com/LiquidAI-project/wasmiot-orchestrator/
 
-FROM base AS compose
-
-WORKDIR /app
+WORKDIR /app/fileserv
 
 # Install dependencies first in order to not rebuild every time code changes.
-COPY ./package.json /app/package.json
+COPY package.json .
 RUN npm install
 
-COPY . /app
+COPY . .
 
-################################################################################
-
-FROM base AS devcontainer
-
-
-# Install nodemon (https://nodemon.io/) for automatic reloads on code changes.
-RUN npm install -g nodemon
-
-# Install dependencies to the directory of a fake package.
-COPY ./fileserv/package.json /fake_package/package.json
-WORKDIR /fake_package
-RUN npm install
-
-# Set NodeJS to search for dependencies from the path where they were just
-# installed into. See:
-# https://nodejs.org/api/modules.html#modules_loading_from_the_global_folders
-ENV NODE_PATH=/fake_package/node_modules
-
-WORKDIR /app
-
-COPY . /app
+CMD nodejs ./server.js

@@ -2,6 +2,7 @@ version: '3.4'
 
 services:
   orchestrator:
+    image: ghcr.io/liquidai-project/wasmiot-orchestrator:devcontainer
     # Continue from the original (i.e., docker-compose.yml). See:
     # https://docs.docker.com/compose/extends/
     extends:
@@ -12,11 +13,7 @@ services:
       # other hosts in LAN.
       default:
     build:
-      # For debugging the whole project directory needs to be available, not
-      # just `fileserv`.
       context: .
-      dockerfile: ./fileserv/Dockerfile
-      target: devcontainer
     # VSCode + Docker Compose debugging config from:
     # https://tech.indy.fr/2022/06/10/how-to-use-vscode-debugger-with-multiple-docker-services/
     # and https://code.visualstudio.com/docs/containers/docker-compose
@@ -24,12 +21,15 @@ services:
     #ports:
     #  - 9229:9229
     command: sleep infinity
+    user: node
     environment:
       NODE_ENV: development
     volumes:
     # Mount source code on host to the container in corresponding location. NOTE
     # Mounting overwrites files/directories in image.
       - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - wasmiot-orchestrator-vscode-ext:/home/node/.vscode-server/extensions
 
   mongo:
     extends:
@@ -39,6 +39,7 @@ services:
 volumes:
   mongo-config:
   mongo-db:
+  wasmiot-orchestrator-vscode-ext:
 
 networks:
   default:
