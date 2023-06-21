@@ -6,12 +6,6 @@ on:
       - "main"
     paths:
       - "fileserv/**"
-  pull_request:
-    branches: 
-      - "main"
-    paths:
-      - "fileserv/**"
-
 
 env:
   # Use docker.io for Docker Hub if empty
