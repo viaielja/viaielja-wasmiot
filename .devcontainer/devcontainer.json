@@ -16,15 +16,16 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "yarn install",
+	"postCreateCommand": "bash .devcontainer/post-install.sh",
 
 	// Configure tool-specific properties.
 	// "customizations": {},
 
 	"features": {
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+		// "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
 	},
+	"remoteEnv": { "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}" },
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	"remoteUser": "root",
+	"remoteUser": "node",
 }
