@@ -5,8 +5,9 @@ LABEL org.opencontainers.image.source="https://github.com/LiquidAI-project/wasmi
 WORKDIR /app/fileserv
 
 # Install dependencies first in order to not rebuild every time code changes.
-COPY package.json .
-RUN npm install
+COPY package*.json .
+# RUN npm install
+RUN npm ci
 
 COPY . .
 

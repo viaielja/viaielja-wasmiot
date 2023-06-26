@@ -9,6 +9,9 @@ on:
 env:
   # github.repository as <account>/<repo>
   IMAGE_NAME: ghcr.io/liquidai-project/wasmiot-orchestrator
+  # NOTICE: As time of writing, the devcontainer build doesn't support
+  # platforms with docker-compose file (2023-06).
+  # PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   build:
@@ -16,11 +19,15 @@ jobs:
     permissions:
       contents: read
       packages: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: fileserv/package-lock.json
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -39,14 +46,12 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: fileserv/
-          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_NAME }}:latest
 
       - name: Build and push devcontainer
-        uses: docker/build-push-action@v4
+        uses: devcontainers/ci@v0.3
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ env.IMAGE_NAME }}:devcontainer
+          eventFilterForPush:
+          imageName: ${{ env.IMAGE_NAME }}
+          imageTag: devcontainer
