@@ -14,7 +14,7 @@ services:
       - ABSTRACT_BASE_HACK_DO_NOT_USE
     build:
       context: ./wasmiot-supervisor
-      dockerfile: .devcontainer/Dockerfile
+      dockerfile: Dockerfile
       target: run
       # args:
       #   - DEVICE_NAME='thingi' # ::OVERRIDE::
