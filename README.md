@@ -64,12 +64,7 @@ Running the orchestrator containers can be done with the command:
 docker compose up --build
 ```
 
-Another way is to open the project directory on VSCode and follow these instructions:
-1. Right click `docker-compose.yml` on the file explorer
-2. Select "Compose Up - Select Services"
-3. Select "profiles"
-4. Do not select "ABSTRACT_BASE_HACK_DO_NOT_USE"
-5. Click "OK"
+The index page should then be up and accessible e.g. with a browser at `localhost:3000`
 
 ### Devices
 You can test how the orchestrator interacts with the
