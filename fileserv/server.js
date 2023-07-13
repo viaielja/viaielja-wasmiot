@@ -1,27 +1,18 @@
 /**
- * Initialize server, database, mDNS and routes as needed. TODO How to access database in the routes?
+ * Initialize server, database, mDNS and routes as needed.
  */
 
 const path = require('path');
 const { chdir } = require('process');
 
-const { MongoClient, MongoRuntimeError } = require("mongodb");
 const express = require("express");
 
+const { MongoDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
 const { MONGO_URI, PUBLIC_PORT, PUBLIC_BASE_URI, DEVICE_TYPE, FRONT_END_DIR, SENTRY_DSN } = require("./constants.js");
 
 
 const expressApp = express();
-
-/**
- * Way to operate on the collections in database.
- */
-let db = {
-    device: null,
-    module: null,
-    deployment: null,
-};
 
 /**
  * The underlying nodejs http-server that app.listen() returns.
@@ -34,9 +25,9 @@ let server;
 let deviceDiscovery;
 
 /**
- * For initializations and closing the database connection on shutdown.
+ * For operations on the database connection and its collections.
  */
-let databaseClient;
+let database;
 
 // Set working directory to this file's root in order to use relative paths
 // (i.e. "./foo/bar"). TODO Find out if the problem is with incompatible Node
@@ -45,7 +36,7 @@ chdir(__dirname);
 
 ///////////
 // RUN MAIN
-(async function main() {
+async function main() {
     console.log("Orchestrator starting...")
 
     // Sentry early initialization so that it can catch errors in the rest of
@@ -54,26 +45,34 @@ chdir(__dirname);
         initSentry(expressApp);
     }
 
-    // Must wait for database before starting to listen for web-clients.
+    // Must wait for database before starting to listen for
+    // web-clients.
     await initializeDatabase();
 
     initAndRunDeviceDiscovery();
 
-    express.static.mime.define({"application/wasm": ["wasm"]});
-    server = expressApp.listen(PUBLIC_PORT, async () => {
-        console.log("Orchestrator is available at: ", PUBLIC_BASE_URI);
-    });
-})()
-    .then(_ => { console.log("Finished!"); })
-    .catch(e => {
-        console.error("Orchestrator failed to start: ", e);
-        shutDown();
-    });
+    express.static.mime
+        .define({"application/wasm": ["wasm"]});
+
+    server = expressApp
+        .listen(PUBLIC_PORT, async () => {
+            console.log(
+                "Orchestrator is available at: ",
+                PUBLIC_BASE_URI
+            );
+        });
+}
+
+try {
+    main()
+} catch(e) {
+    console.error("Orchestrator failed to start: ", e);
+    shutDown();
+}
 
 module.exports = {
-    // From:
-    // https://stackoverflow.com/questions/24621940/how-to-properly-reuse-connection-to-mongodb-across-nodejs-application-and-module
-    getDb: function() { return db; },
+    getDb: () => database,
+
     /**
      * Reset device discovery so that devices already discovered and running
      * will be discovered again. TODO: Is this a problem more with the server or
@@ -92,32 +91,19 @@ module.exports = {
 const routes = require("./routes");
 
 
-/**
- * Adapted from:
- * https://www.mongodb.com/developer/languages/javascript/node-connect-mongodb/
- */
+/*
+* Initialize and connect to the database.
+*/
 async function initializeDatabase() {
-    // NOTE: The hostname here (before ":<port>") MUST MATCH THE HOSTNAME ON THE
-    // NETWORK for example with Docker Compose (i.e., do not name the
-    // mongo-service differently in the .yml -files. Or otherwise TODO pass the
-    // hostname from environment)
-    databaseClient = new MongoClient(MONGO_URI);
+    database = new MongoDatabase(MONGO_URI);
+
     console.log(`Connecting to database through '${MONGO_URI}' ...`);
     try {
-        const orchDb = (await databaseClient.connect()).db();
-        // Create references to the needed collections.
-        db.module = orchDb.collection("module");
-        db.device = orchDb.collection("device");
-        db.deployment = orchDb.collection("deployment");
-
-        // Print something from the db as example of connection.
+        await database.connect();
         console.log("Connected to and initialized database!");
-    } catch (e) {
-        console.error("FAILED CONNECTING TO DATABASE >>>");
-        console.error(e);
-        console.error("<<<");
-        // Propagate the exception to caller.
-        throw e;
+    } catch(e) {
+        console.error("Database connection failed", e);
+        shutDown();
     }
 }
 
@@ -171,7 +157,7 @@ function initSentry(app) {
  */
 function initAndRunDeviceDiscovery() {
     try {
-        deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, db.device);
+        deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, database);
     } catch(e) {
         console.log("Device discovery initialization failed: ", e);
         throw e;
@@ -211,17 +197,12 @@ const postLogger = (request, response, next) => {
     next();
 }
 
-// TODO: Gracefully handle malformed JSON POSTs (atm echoes the full error to
-// _client_ because of NODE_ENV=development mode?)
 const jsonMw = express.json();
+
 const urlencodedExtendedMw = express.urlencoded({ extended: true });
 
-// Order the middleware so that for example POST-body is parsed before trying to
-// log it.
-// TODO: Do __SCHEMA__ validation for POSTs (checking for correct fields and
-// types etc.).
-// TODO: Can the more fine-grained authentication (i.e. on DELETEs and POSTs but
-// not on GETs) be done here?
+// Order the middleware so that for example POST-body is parsed
+// before trying to log it.
 
 // Serve the frontend files for use.
 expressApp.use(express.static("frontend"));
@@ -284,7 +265,6 @@ process.on("SIGINT", shutDown);
 
 /**
  * Shut the server and associated services down.
- * TODO: Might not be this easy to do...
  */
 async function shutDown() {
     if (server) {
@@ -297,7 +277,7 @@ async function shutDown() {
         });
     }
 
-    await databaseClient.close();
+    await database.close();
     console.log("Closed database connection.");
 
     destroyDeviceDiscovery();
