@@ -76,7 +76,7 @@ class DeviceDiscovery {
      */
     async saveDeviceData(serviceData) {
         // Check for duplicate service
-        let device_doc = await this.database.read("device", { name: serviceData.name })[0];
+        let device_doc = (await this.database.read("device", { name: serviceData.name }))[0];
 
         // Check if __all__ the required information has been received earlier.
         // NOTE: This is not a check to prevent further actions if device already
