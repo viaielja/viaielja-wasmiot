@@ -13,7 +13,7 @@ module.exports = { router };
  */
 router.get("/", async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await getDb().device.find().toArray());
+    response.json(await getDb().read("device"));
 });
 
 /**
@@ -21,10 +21,10 @@ router.get("/", async (request, response) => {
  * hostname-changes etc.)
  */
 router.delete("/", (request, response) => {
-    getDb().device.deleteMany({}).then(_ => {
-        // NOTE: This is sync right? So 202 "accepted" does not really make sense?
-        response.status(202).json({ success: "deleting all devices" });
-    });
+    getDb().delete("device", {});
+    response
+        .status(202) // Accepted.
+        .json({ success: "deleting all devices" });
 });
 
 /**
