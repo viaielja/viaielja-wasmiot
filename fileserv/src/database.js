@@ -5,6 +5,9 @@ const { MongoClient } = require("mongodb");
 *
 * The abstracticity is implemented in a Python way, which might not
 * be idiomatic Javascript.
+*
+* NOTE: All the CRUD(-like) operations operate on multiple matches of the given
+* filter.
 */
 class Database {
     constructor(value) {}
@@ -18,25 +21,26 @@ class Database {
     /*
     * C
     */
-    async create(collectionName, key, value)
+    async create(collectionName, values)
     { throw "create not implemented"; }
 
     /*
     * R
+    * @returns Array of filter matches.
     */
-    async read(collectionName, key)
+    async read(collectionName, filter)
     { throw "read not implemented"; }
 
     /*
     * U
     */
-    async update(collectionName, key, value)
+    async update(collectionName, filter, fields)
     { throw "update not implemented"; }
 
     /*
     * D
     */
-    async delete(collectionName, key)
+    async delete(collectionName, filter)
     { throw "delete not implemented"; }
 
     async close()
@@ -56,22 +60,39 @@ class MongoDatabase extends Database {
         this.db = await this.client.db();
     }
 
-    async create(collectionName, key, value)
+    async create(collectionName, values)
     {
-        this.db.collection(collectionName)
+        return this.db
+            .collection(collectionName)
+            .insertMany(values);
     }
 
-    async read(collectionName, key)
-    { throw "not implemented"; }
+    async read(collectionName, filter) {
+        return (await this.db
+            .collection(collectionName)
+            .find(filter)
+        ).toArray();
+    }
 
-    async update(collectionName, key, value)
-    { throw "not implemented"; }
+    /**
+     * NOTE: Always upserts.
+     */
+    async update(collectionName, filter, fields) {
+        return this.db
+            .collection(collectionName)
+            .updateMany(
+                filter,
+                { $set: fields },
+                // Always create the fields if missing.
+                { upsert: true }
+            );
 
-    async delete(collectionName, key)
-    { throw "not implemented"; }
+    }
 
-    async close() { 
-        this.client.close();
+    async delete(collectionName, filter) {
+        return this.db
+            .collection(collectionName)
+            .deleteMany(filter ? filter : {});
     }
 }
 
