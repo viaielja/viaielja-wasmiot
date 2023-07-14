@@ -19,7 +19,7 @@ module.exports = { router };
  */
 router.get("/:moduleId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
+    let doc = (await getDb().read("module", { _id: ObjectId(request.params.moduleId) }))[0];
     if (doc) {
         console.log("Sending metadata of module: " + doc.name);
         response.json(doc);
@@ -34,7 +34,7 @@ router.get("/:moduleId", async (request, response) => {
  * Serve the a file relate to a module based on module ID and file extension.
  */
 router.get("/:moduleId/:fileExtension", async (request, response) => {
-    let doc = await getDb().module.findOne({ _id: ObjectId(request.params.moduleId) });
+    let doc = (await getDb().read("module", { _id: ObjectId(request.params.moduleId) }))[0];
     let fileExtension = request.params.fileExtension;
     if (doc) {
         let fileObj = doc[fileExtension];
@@ -64,7 +64,7 @@ router.get("/:moduleId/:fileExtension", async (request, response) => {
  */
 router.get("/", async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await getDb().module.find().toArray());
+    response.json(await getDb().read("module"));
 });
 
 /**
@@ -74,7 +74,7 @@ router.get("/", async (request, response) => {
  */
 router.post("/", async (request, response) => {
     // Prevent using the same name twice for a module.
-    let exists = (await getDb().module.findOne({ name: request.body.name }));
+    let exists = (await getDb().read("module", { name: request.body.name }))[0];
     if (exists) {
         console.log(`Tried to write module with existing name: '${request.body.name}'`);
         let errmsg = `Module with name ' ${request.body.name}' already exists`;
@@ -82,10 +82,8 @@ router.post("/", async (request, response) => {
         return;
     }
 
-    const moduleId = (await getDb()
-            .module
-            .insertOne(request.body)
-        ).insertedId;
+    const moduleId = (await getDb().create("module", [request.body]))
+        .insertedIds[0];
 
     // Wasm-files are identified by their database-id.
     response.status(201).json({ success: "Uploaded module with id: "+ moduleId });
@@ -118,7 +116,7 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
      * @returns {*} [ status: status, { err: error | undefined, success: success | undefined } ]
      */
     async function update(fields) {
-        let result = await getDb().module.updateOne(filter, { $set: fields });
+        let result = await getDb().update("module", filter, fields);
         if (result.acknowledged) {
             let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(fields, null, 2)}`;
             console.log(request.body.id + ": " + msg);
@@ -201,9 +199,10 @@ async function parseWasmModule(data, outFields) {
  * Delete all the modules from database (for debugging purposes).
  */
 router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
-    getDb().module.deleteMany({}).then(_ => {
-        response.status(202).json({ success: "deleting all modules" }); // Accepted.
-    });
+    getDb().delete("module");
+    response
+        .status(202) // Accepted.
+        .json({ success: "deleting all modules" });
 });
 
 /**
