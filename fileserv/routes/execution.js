@@ -17,7 +17,7 @@ module.exports = { router };
  */
 router.post("/:deploymentId", async (request, response) => {
     // 1. get the deployment and other execution related data from db.
-    let deployment = await getDb().deployment.findOne({ _id: ObjectId(request.params.deploymentId) });
+    let deployment = (await getDb().read("deployment", { _id: ObjectId(request.params.deploymentId) }))[0];
     
     // Pick the starting point based on sequence's first device and function.
     let startEndpoint = deployment
