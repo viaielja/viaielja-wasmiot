@@ -16,7 +16,11 @@ module.exports = { router };
  */
 router.get("/:deploymentId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = await getDb().deployment.findOne({ _id: ObjectId(request.params.deploymentId) });
+    let doc = (await getDb().read(
+        "deployment",
+        { _id: ObjectId(request.params.deploymentId) }
+    ))[0];
+
     if (doc) {
         response.json(doc);
     } else {
@@ -31,7 +35,7 @@ router.get("/:deploymentId", async (request, response) => {
  */
 router.get("/", async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await getDb().deployment.find().toArray());
+    response.json(await getDb().read("deployment"));
 });
 
 /**
@@ -49,7 +53,7 @@ router.post("/", async (request, response) => {
 
     // Ignore deployments with an already existing name.
     // TODO When would a new deployment not be accepted? Based on user credits??
-    let doc = await getDb().deployment.findOne({ name: deploymentName });
+    let doc = (await getDb().read("deployment", { name: deploymentName }))[0];
     if (doc) {
         console.log(`Tried to write existing manifest '${doc.name}' ID ${doc._id}`);
         status = 400;
@@ -60,13 +64,13 @@ router.post("/", async (request, response) => {
 
         // Add the new deployment to database.
         // TODO Only add what is allowed (e.g. _id should not come from POST).
-        let result = await getDb().deployment.insertOne(data);
+        let result = await getDb().create("deployment", [data]);
         if (!result.acknowledged) {
-            console.log(`Failed adding the manifest: ${err}`);
+            console.log("Failed adding the manifest");
             status = 500;
             errorMsg = "Failed adding the manifest";
         } else {
-            actionId = result.insertedId;
+            actionId = result.insertedIds[0];
             console.log(`Manifest added to database '${deploymentName}'`);
 
             //TODO: Start searching for suitable packages using saved file.
@@ -95,9 +99,8 @@ router.post("/", async (request, response) => {
  *  deployment.
  */
 router.post("/:deploymentId", async (request, response) => {
-    let deploymentDoc = await getDb()
-        .deployment
-        .findOne({ _id: ObjectId(request.params.deploymentId) });
+    let deploymentDoc = (await getDb()
+        .read("deployment", { _id: ObjectId(request.params.deploymentId) }))[0];
 
     if (!deploymentDoc) {
         response.status(404).json(new Error(`No deployment found for '${request.params.deploymentId}'`));
@@ -111,9 +114,8 @@ router.post("/:deploymentId", async (request, response) => {
     // https://nodejs.org/api/http.html#httprequesturl-options-callback
     for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
         // TODO: Use database-reference instead of using device id from field.
-        let device = await getDb()
-            .device
-            .findOne({_id: ObjectId(deviceId)});
+        let device = (await getDb()
+            .read("device", {_id: ObjectId(deviceId)}))[0];
 
         if (!device) {
             response.status(404).json(new Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
@@ -155,10 +157,12 @@ router.post("/:deploymentId", async (request, response) => {
 /**
  * Delete all the deployment manifests from database.
  */
-router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
-    getDb().deployment.deleteMany({}).then(_ => {
-        response.status(202).json(new Success("deleting all deployment manifests")); // Accepted.
-    });
+router.delete("/", (request, response) => {
+    getDb().delete("deployment");
+    response
+        .status(202) // Accepted.
+        .json(new Success("deleting all deployment manifests"));
+    
 });
 
 /**
@@ -172,7 +176,10 @@ router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
  * successfull.
  */
 async function createSolution(deploymentId, packageBaseUrl) {
-    let deployment = await getDb().deployment.findOne({ _id: ObjectId(deploymentId) });
+    let deployment = (await getDb().read(
+        "deployment",
+        { _id: ObjectId(deploymentId) }
+    ))[0];
 
     let updatedSequence;
     try {
@@ -308,9 +315,13 @@ async function createSolution(deploymentId, packageBaseUrl) {
     // Do all database updates at once here.
     // Add the composed deployment structure to database for inspecting it later
     // (i.e. during execution or from user interface).
-    getDb().deployment.updateOne(
+    getDb().update(
+        "deployment", 
         { _id: deployment._id },
-        { $set: { fullManifest: deploymentsToDevices, sequence: sequenceAsIds } },
+        {
+            fullManifest: deploymentsToDevices,
+            sequence: sequenceAsIds
+        },
     );
 
     return null;
@@ -342,7 +353,11 @@ async function sequenceFromResources(sequence) {
 
         // ...but still, (1.) do a validity-check that the requested module indeed
         // contains the func.
-        let modulee = await getDb().module.findOne({ _id: ObjectId(moduleId) })
+        let modulee = (await getDb().read(
+            "module",
+            { _id: ObjectId(moduleId) }
+        ))[0];
+
         if (modulee !== null) {
             if (modulee.exports.find(x => x === funcName) !== undefined) {
                 selectedModules.push(modulee);
@@ -353,7 +368,11 @@ async function sequenceFromResources(sequence) {
             throw `Failed to find module matching the received module ID ${moduleId}`;
         }
         if (deviceId !== null) {
-            let dbDevice = await getDb().device.findOne({ _id: ObjectId(deviceId) });
+            let dbDevice = (await getDb().read(
+                "device",
+                { _id: ObjectId(deviceId) }
+            ))[0];
+
             if (dbDevice !== null) {
                 selectedDevices.push(dbDevice);
             } else {
@@ -362,7 +381,7 @@ async function sequenceFromResources(sequence) {
         } else {
             // 2. Search for a device that could run the module.
             let match = null;
-            let allDevices = await getDb().device.find().toArray();
+            let allDevices = await getDb().read("device");
             for (let device of allDevices) {
                 if (modulee.requirements.length === 0 ||
                     modulee.requirements
