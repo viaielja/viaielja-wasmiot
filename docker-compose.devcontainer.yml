@@ -35,6 +35,11 @@ services:
       file: docker-compose.yml
       service: mongo
 
+  debug-device:
+    extends:
+      file: docker-compose.example-devices.yml
+      service: adequate-webcam-laptop
+
 volumes:
   mongo-config:
   mongo-db:

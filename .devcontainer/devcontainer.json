@@ -4,14 +4,11 @@
 	"name": "Wasm-IoT Orchestrator",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	//"image": "mcr.microsoft.csm/devcontainers/javascript-node:0-18"
-	"dockerComposeFile": [
-		"../docker-compose.devcontainer.yml",
-		"../docker-compose.example-devices.yml",
-	],
+	"dockerComposeFile": "../docker-compose.devcontainer.yml",
 	"service": "orchestrator",
 	// Could not seem to be able to select "profile" from compose-file to run
 	// the orchestration-related services (server and db), so list them here.
-	"runServices": ["orchestrator", "mongo", "adequate-webcam-laptop"],
+	"runServices": ["orchestrator", "mongo", "debug-device"],
 	"workspaceFolder": "/app",
 
 	//"remoteUser": "vscode",
