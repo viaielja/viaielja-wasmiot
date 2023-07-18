@@ -1,7 +1,6 @@
 const http = require('http');
 
 const express = require("express");
-const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
 const utils = require("../utils.js");
@@ -17,7 +16,7 @@ module.exports = { router };
  */
 router.post("/:deploymentId", async (request, response) => {
     // 1. get the deployment and other execution related data from db.
-    let deployment = (await getDb().read("deployment", { _id: ObjectId(request.params.deploymentId) }))[0];
+    let deployment = (await getDb().read("deployment", { _id: request.params.deploymentId }))[0];
     
     // Pick the starting point based on sequence's first device and function.
     let startEndpoint = deployment

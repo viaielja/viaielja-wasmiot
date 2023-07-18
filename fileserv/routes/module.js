@@ -1,6 +1,5 @@
 const { readFile } = require("node:fs");
 const { Router } = require("express");
-const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
 const { MODULE_DIR } = require("../constants.js");
@@ -19,7 +18,7 @@ module.exports = { router };
  */
 router.get("/:moduleId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = (await getDb().read("module", { _id: ObjectId(request.params.moduleId) }))[0];
+    let doc = (await getDb().read("module", { _id: request.params.moduleId }))[0];
     if (doc) {
         console.log("Sending metadata of module: " + doc.name);
         response.json(doc);
@@ -34,7 +33,7 @@ router.get("/:moduleId", async (request, response) => {
  * Serve the a file relate to a module based on module ID and file extension.
  */
 router.get("/:moduleId/:fileExtension", async (request, response) => {
-    let doc = (await getDb().read("module", { _id: ObjectId(request.params.moduleId) }))[0];
+    let doc = (await getDb().read("module", { _id: request.params.moduleId }))[0];
     let fileExtension = request.params.fileExtension;
     if (doc) {
         let fileObj = doc[fileExtension];
@@ -107,7 +106,7 @@ router.post("/", async (request, response) => {
  * multipart/form-data at the frontend), use POST.
  */
 router.post("/upload", fileUpload, validateFileFormSubmission, async (request, response) => {
-    let filter = { _id: ObjectId(request.body.id) };
+    let filter = { _id: request.body.id };
     let fileExtension = request.file.originalname.split(".").pop();
 
     /**

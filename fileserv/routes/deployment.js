@@ -1,7 +1,6 @@
 const http = require('http');
 
 const express = require("express");
-const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
 const { PUBLIC_BASE_URI } = require("../constants.js");
@@ -18,7 +17,7 @@ router.get("/:deploymentId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
     let doc = (await getDb().read(
         "deployment",
-        { _id: ObjectId(request.params.deploymentId) }
+        { _id: request.params.deploymentId }
     ))[0];
 
     if (doc) {
@@ -100,7 +99,7 @@ router.post("/", async (request, response) => {
  */
 router.post("/:deploymentId", async (request, response) => {
     let deploymentDoc = (await getDb()
-        .read("deployment", { _id: ObjectId(request.params.deploymentId) }))[0];
+        .read("deployment", { _id: request.params.deploymentId }))[0];
 
     if (!deploymentDoc) {
         response.status(404).json(new Error(`No deployment found for '${request.params.deploymentId}'`));
@@ -115,7 +114,7 @@ router.post("/:deploymentId", async (request, response) => {
     for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
         // TODO: Use database-reference instead of using device id from field.
         let device = (await getDb()
-            .read("device", {_id: ObjectId(deviceId)}))[0];
+            .read("device", { _id: deviceId }))[0];
 
         if (!device) {
             response.status(404).json(new Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
@@ -178,7 +177,7 @@ router.delete("/", (request, response) => {
 async function createSolution(deploymentId, packageBaseUrl) {
     let deployment = (await getDb().read(
         "deployment",
-        { _id: ObjectId(deploymentId) }
+        { _id: deploymentId }
     ))[0];
 
     let updatedSequence;
@@ -306,7 +305,7 @@ async function sequenceFromResources(sequence) {
         // contains the func.
         let modulee = (await getDb().read(
             "module",
-            { _id: ObjectId(moduleId) }
+            { _id: moduleId }
         ))[0];
 
         if (modulee !== null) {
@@ -321,7 +320,7 @@ async function sequenceFromResources(sequence) {
         if (deviceId !== null) {
             let dbDevice = (await getDb().read(
                 "device",
-                { _id: ObjectId(deviceId) }
+                { _id: deviceId }
             ))[0];
 
             if (dbDevice !== null) {
