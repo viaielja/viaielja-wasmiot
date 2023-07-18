@@ -1,4 +1,4 @@
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 
 /*
 * Abstract base class for using different database implementations.
@@ -6,10 +6,27 @@ const { MongoClient } = require("mongodb");
 * The abstracticity is implemented in a Python way, which might not
 * be idiomatic Javascript.
 *
-* NOTE: All the CRUD(-like) operations operate on multiple matches of the given
-* filter.
+* NOTE about filters:
+* - All the CRUD(-like) operations operate on multiple matches of the given
+*   filter.
+* - The `idField` field on a filter is special meaning the unique identifier or
+*   primary key of a document/record in the database represented as a string of
+*   characters.
+*
+* NOTE about return values:
+* - If the `idField` is found in the document returned from database, it should
+*   be possible to convert into an equivalent string representation with a
+*   method `toString`.
+*   For example the following way should be able to print out the document id as
+*   a string:
+*   ```
+*   let doc = read("foo", {})[0];
+*   if (idField in doc) { console.log("Id is: ", doc._id.toString()) }
+*   ```
 */
 class Database {
+    static idField = "_id";
+
     constructor(value) {}
 
     /*
@@ -57,7 +74,7 @@ class MongoDatabase extends Database {
     async connect() {
         await this.client.connect();
         // Save reference to the actual database.
-        this.db = await this.client.db();
+        this.db = this.client.db();
     }
 
     async create(collectionName, values)
@@ -68,16 +85,20 @@ class MongoDatabase extends Database {
     }
 
     async read(collectionName, filter) {
-        return (await this.db
-            .collection(collectionName)
-            .find(filter)
-        ).toArray();
+        this.wrapId(filter); 
+
+        return (this.db
+                .collection(collectionName)
+                .find(filter)
+            ).toArray();
     }
 
     /**
      * NOTE: Always upserts.
      */
     async update(collectionName, filter, fields) {
+        this.wrapId(filter);
+
         return this.db
             .collection(collectionName)
             .updateMany(
@@ -90,9 +111,21 @@ class MongoDatabase extends Database {
     }
 
     async delete(collectionName, filter) {
+        this.wrapId(filter);
+
         return this.db
             .collection(collectionName)
             .deleteMany(filter ? filter : {});
+    }
+
+    /**
+     *  Wrap a found id into Mongo's ObjectId.
+     * @param {*} filter The filter to search for id field.
+     */
+    wrapId(filter) {
+        if (filter && Database.idField in filter) {
+            filter[Database.idField] = ObjectId(filter[Database.idField]);
+        }
     }
 }
 
