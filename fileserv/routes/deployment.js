@@ -1,7 +1,6 @@
 const http = require('http');
 
 const express = require("express");
-const { ObjectId } = require("mongodb");
 
 const { getDb } = require("../server.js");
 const { PUBLIC_BASE_URI } = require("../constants.js");
@@ -16,7 +15,11 @@ module.exports = { router };
  */
 router.get("/:deploymentId", async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = await getDb().deployment.findOne({ _id: ObjectId(request.params.deploymentId) });
+    let doc = (await getDb().read(
+        "deployment",
+        { _id: request.params.deploymentId }
+    ))[0];
+
     if (doc) {
         response.json(doc);
     } else {
@@ -31,7 +34,7 @@ router.get("/:deploymentId", async (request, response) => {
  */
 router.get("/", async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await getDb().deployment.find().toArray());
+    response.json(await getDb().read("deployment"));
 });
 
 /**
@@ -49,7 +52,7 @@ router.post("/", async (request, response) => {
 
     // Ignore deployments with an already existing name.
     // TODO When would a new deployment not be accepted? Based on user credits??
-    let doc = await getDb().deployment.findOne({ name: deploymentName });
+    let doc = (await getDb().read("deployment", { name: deploymentName }))[0];
     if (doc) {
         console.log(`Tried to write existing manifest '${doc.name}' ID ${doc._id}`);
         status = 400;
@@ -60,13 +63,13 @@ router.post("/", async (request, response) => {
 
         // Add the new deployment to database.
         // TODO Only add what is allowed (e.g. _id should not come from POST).
-        let result = await getDb().deployment.insertOne(data);
+        let result = await getDb().create("deployment", [data]);
         if (!result.acknowledged) {
-            console.log(`Failed adding the manifest: ${err}`);
+            console.log("Failed adding the manifest");
             status = 500;
             errorMsg = "Failed adding the manifest";
         } else {
-            actionId = result.insertedId;
+            actionId = result.insertedIds[0];
             console.log(`Manifest added to database '${deploymentName}'`);
 
             //TODO: Start searching for suitable packages using saved file.
@@ -95,9 +98,8 @@ router.post("/", async (request, response) => {
  *  deployment.
  */
 router.post("/:deploymentId", async (request, response) => {
-    let deploymentDoc = await getDb()
-        .deployment
-        .findOne({ _id: ObjectId(request.params.deploymentId) });
+    let deploymentDoc = (await getDb()
+        .read("deployment", { _id: request.params.deploymentId }))[0];
 
     if (!deploymentDoc) {
         response.status(404).json(new Error(`No deployment found for '${request.params.deploymentId}'`));
@@ -111,9 +113,8 @@ router.post("/:deploymentId", async (request, response) => {
     // https://nodejs.org/api/http.html#httprequesturl-options-callback
     for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
         // TODO: Use database-reference instead of using device id from field.
-        let device = await getDb()
-            .device
-            .findOne({_id: ObjectId(deviceId)});
+        let device = (await getDb()
+            .read("device", { _id: deviceId }))[0];
 
         if (!device) {
             response.status(404).json(new Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
@@ -155,10 +156,12 @@ router.post("/:deploymentId", async (request, response) => {
 /**
  * Delete all the deployment manifests from database.
  */
-router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
-    getDb().deployment.deleteMany({}).then(_ => {
-        response.status(202).json(new Success("deleting all deployment manifests")); // Accepted.
-    });
+router.delete("/", (request, response) => {
+    getDb().delete("deployment");
+    response
+        .status(202) // Accepted.
+        .json(new Success("deleting all deployment manifests"));
+    
 });
 
 /**
@@ -172,7 +175,10 @@ router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
  * successfull.
  */
 async function createSolution(deploymentId, packageBaseUrl) {
-    let deployment = await getDb().deployment.findOne({ _id: ObjectId(deploymentId) });
+    let deployment = (await getDb().read(
+        "deployment",
+        { _id: deploymentId }
+    ))[0];
 
     let updatedSequence;
     try {
@@ -181,79 +187,31 @@ async function createSolution(deploymentId, packageBaseUrl) {
         return error;
     }
 
-    // 3. Prepare instructions for the devices in order to have them ...
+    let deploymentsToDevices = {};
+    for (let x of updatedSequence) {
+        let deviceIdStr = x.device._id.toString();
 
-    // Prepare to make a mapping of devices and their instructions in order to
-    // bulk-send the instructions to each device when deploying.
-    let deploymentsToDevices = {}
-    let uniqueDeviceIds = new Set();
-    for (let item of updatedSequence.map(x => x.device._id.toString())) {
-        // Add strings, which can be uniquely differentiated.
-        uniqueDeviceIds.add(item);
-    }
-    // Convert back to ObjectId for easier operations
-    for (let deviceIdStr of uniqueDeviceIds) {
-        let deviceId = new ObjectId(deviceIdStr);
-        let moduleData = updatedSequence
-            .filter(x => x.device._id.equals(deviceId))
-            .map(function moduleData(x) {
-                // Add data needed by the device for pulling and using a binary
-                // (i.e., .wasm file) module.
-                let binaryUrl;
-                binaryUrl = new URL(packageBaseUrl);
-                binaryUrl.pathname = `/file/module/${x.module._id}/wasm`;
-                let descriptionUrl;
-                descriptionUrl = new URL(packageBaseUrl);
-                descriptionUrl.pathname = `/file/module/${x.module._id}`;
+        // __Prepare__ to make a mapping of devices and their instructions in order to
+        // bulk-send the instructions to each device when deploying.
+        if (!(deviceIdStr in deploymentsToDevices)) {
+            deploymentsToDevices[deviceIdStr] = new DeploymentNode(deploymentId);
+        }
 
-                // This is for any other files related to execution of module's
-                // functions on device e.g., ML-models etc.
-                let other = [];
-                if (x.module.pb) {
-                    other.push((new URL(packageBaseUrl+`file/module/${x.module._id}/pb`)).toString());
-                }
-                return {
-                    id: x.module._id,
-                    name: x.module.name,
-                    urls: {
-                        binary: binaryUrl.toString(),
-                        description: descriptionUrl.toString(),
-                        other: other,
-                    },
-                };
-            });
-        
+        // Fill in the details about needed modules and endpoints on each device.
+        let moduleDataForDevice = moduleData(x.module, packageBaseUrl);
+        let [funcc, endpoint] = endpointDescription(deploymentId, x);
+        deploymentsToDevices[deviceIdStr].modules.push(moduleDataForDevice);
         // TODO ... Merge together into a single OpenAPI doc for __all__
         // the modules' endpoints.
-        let devicesEndpoints = {};
-        for (let x of updatedSequence) {
-            if (!x.device._id.equals(deviceId)) {
-                continue;
-            }
-            let [func, endpoint] = endpointDescription(deploymentId, x);
-            devicesEndpoints[func] = endpoint;
-        }
+        deploymentsToDevices[deviceIdStr].endpoints[funcc] = endpoint;
+    }
 
-        // It does not make sense to have a device without any possible
-        // interaction.
-        if (Object.entries(devicesEndpoints).length === 0) {
-            return `no endpoints defined for device '${deviceId}'`;
-        }
-
-        deploymentsToDevices[deviceId] = {
-            // Used to separate similar requests between deployments at
-            // supervisor.
-            deploymentId: deploymentId,
-            // The modules the device needs to download.
-            modules: moduleData,
-            // Descriptions of endpoints that functions can be called from and
-            // that are needed to set up on the device for this deployment.
-            endpoints: devicesEndpoints,
-            // The instructions the device needs to follow the execution
-            // sequence i.e., where to forward computation results initiated by
-            // which arriving request.
-            instructions: [],
-        };
+    // It does not make sense to have a device without any possible
+    // interaction (and this would be a bug).
+    let unnecessaryDevice = Object.entries(deploymentsToDevices)
+        .find(([_, x]) => Object.entries(x.endpoints).length === 0);
+    if (unnecessaryDevice) {
+        return `no endpoints defined for device '${unnecessaryDevice[0]}'`;
     }
 
     // According to deployment manifest describing the composed
@@ -308,9 +266,13 @@ async function createSolution(deploymentId, packageBaseUrl) {
     // Do all database updates at once here.
     // Add the composed deployment structure to database for inspecting it later
     // (i.e. during execution or from user interface).
-    getDb().deployment.updateOne(
+    getDb().update(
+        "deployment", 
         { _id: deployment._id },
-        { $set: { fullManifest: deploymentsToDevices, sequence: sequenceAsIds } },
+        {
+            fullManifest: deploymentsToDevices,
+            sequence: sequenceAsIds
+        },
     );
 
     return null;
@@ -338,11 +300,14 @@ async function sequenceFromResources(sequence) {
     ) {
         // Selecting the module automatically is useless, as they can
         // only do what their exports allow. So a well formed request should
-        // always contain the module-id as well...
-
-        // ...but still, (1.) do a validity-check that the requested module indeed
+        // always contain the module-id as well.
+        // Still, do a validity-check that the requested module indeed
         // contains the func.
-        let modulee = await getDb().module.findOne({ _id: ObjectId(moduleId) })
+        let modulee = (await getDb().read(
+            "module",
+            { _id: moduleId }
+        ))[0];
+
         if (modulee !== null) {
             if (modulee.exports.find(x => x === funcName) !== undefined) {
                 selectedModules.push(modulee);
@@ -353,16 +318,20 @@ async function sequenceFromResources(sequence) {
             throw `Failed to find module matching the received module ID ${moduleId}`;
         }
         if (deviceId !== null) {
-            let dbDevice = await getDb().device.findOne({ _id: ObjectId(deviceId) });
+            let dbDevice = (await getDb().read(
+                "device",
+                { _id: deviceId }
+            ))[0];
+
             if (dbDevice !== null) {
                 selectedDevices.push(dbDevice);
             } else {
                 throw `Failed to find device matching the received device ID ${moduleId}`;
             }
         } else {
-            // 2. Search for a device that could run the module.
+            // Search for a device that could run the module.
             let match = null;
-            let allDevices = await getDb().device.find().toArray();
+            let allDevices = await getDb().read("device");
             for (let device of allDevices) {
                 if (modulee.requirements.length === 0 ||
                     modulee.requirements
@@ -457,4 +426,59 @@ function endpointDescription(deploymentId, node) {
     }
 
     return [node.func, preFilledOpenapiDoc];
+}
+
+/**
+ * Extract needed module data that a device needs.
+ * @param {*} modulee The module record in database to extract data from.
+ * @param {*} packageBaseUrl The base of the package manager server address for
+ * devices to pull modules from.
+ * @returns Data needed and usable by a device.
+ */
+function moduleData(modulee, packageBaseUrl) {
+    // Add data needed by the device for pulling and using a binary
+    // (i.e., .wasm file) module.
+    let binaryUrl;
+    binaryUrl = new URL(packageBaseUrl);
+    binaryUrl.pathname = `/file/module/${modulee._id}/wasm`;
+    let descriptionUrl;
+    descriptionUrl = new URL(packageBaseUrl);
+    descriptionUrl.pathname = `/file/module/${modulee._id}`;
+
+    // This is for any other files related to execution of module's
+    // functions on device e.g., ML-models etc.
+    let other = [];
+    if (modulee.pb) {
+        other.push((new URL(packageBaseUrl+`file/module/${modulee._id}/pb`)).toString());
+    }
+    return {
+        id: modulee._id,
+        name: modulee.name,
+        urls: {
+            binary: binaryUrl.toString(),
+            description: descriptionUrl.toString(),
+            other: other,
+        },
+    };
+}
+
+/**
+ * Struct for storing information that a single node (i.e. a device) needs for
+ * deployment.
+ */
+class DeploymentNode {
+    constructor(deploymentId) {
+        // Used to separate similar requests between deployments at
+        // supervisor.
+        this.deploymentId = deploymentId;
+        // The modules the device needs to download.
+        this.modules = [];
+        // Descriptions of endpoints that functions can be called from and
+        // that are needed to set up on the device for this deployment.
+        this.endpoints = {};
+        // The instructions the device needs to follow the execution
+        // sequence i.e., where to forward computation results initiated by
+        // which arriving request.
+        this.instructions = [];
+    }
 }

@@ -12,15 +12,15 @@ class DeviceDiscovery {
     /**
      * Initialize fields needed in querying for IoT-devices.
      * @param type The type of mDNS service to search for.
-     * @param collection Reference to the database-collection to save devices into.
+     * @param database Reference to the database to save devices into.
      */
-    constructor(type, collection) {
-        if (!type || !collection) {
-            throw "device type or collection missing from device discovery constructor!";
+    constructor(type, database) {
+        if (!type || !database) {
+            throw "device type or database missing from device discovery constructor!";
         }
         this.bonjourInstance = new bonjour.Bonjour();
         this.browser = null;
-        this.collection = collection;
+        this.database = database;
         this.queryOptions = { type };
     }
 
@@ -46,7 +46,7 @@ class DeviceDiscovery {
             // Remove service from database once it leaves/"says goodbye".
             console.log("Service emitted 'goodbye' :", service);
             // NOTE: Using IP-addresses as filter for deletion.
-            this.collection.deleteMany({ addresses: service.addresses });
+            this.database.delete("device", { addresses: service.addresses });
             this.logServices();
         }
         onDown = onDown.bind(this);
@@ -76,12 +76,12 @@ class DeviceDiscovery {
      */
     async saveDeviceData(serviceData) {
         // Check for duplicate service
-        let device_doc = await this.collection.findOne({ name: serviceData.name });
+        let device_doc = (await this.database.read("device", { name: serviceData.name }))[0];
 
         // Check if __all__ the required information has been received earlier.
         // NOTE: This is not a check to prevent further actions if device already
         // simply exists in database.
-        if (device_doc !== null
+        if (device_doc
             && device_doc.hasOwnProperty("description") && device_doc.description !== null
             && device_doc.description.hasOwnProperty("platform") && device_doc.description.platform !== null
         ) {
@@ -91,10 +91,9 @@ class DeviceDiscovery {
 
         // Insert or get new device into database for updating in GET-callbacks.
         let newId;
-        if (device_doc === null) {
+        if (!device_doc) {
             try {
-                let res = await this.collection.insertOne(serviceData);
-                newId = res.insertedId;
+                newId = (await this.database.create("device", [serviceData])).insertedIds[0];
                 console.log("Added new device: ", serviceData);
             } catch (e) {
                 console.error(e.message);
@@ -121,11 +120,10 @@ class DeviceDiscovery {
             // Save description in database. TODO Use some standard way to
             // interact with descriptions (validations, operation,
             // contentType, security etc)?.
-            this.collection.updateOne(
+            this.database.update(
+                "device",
                 { _id: newId },
-                { $set: { description: deviceDescription } },
-                // Create the field if missing.
-                { upsert: true }
+                { description: deviceDescription }
             );
             console.log(`Adding device description for '${serviceData.name}'`);
         });
