@@ -7,7 +7,7 @@ const { chdir } = require('process');
 
 const express = require("express");
 
-const { MongoDatabase } = require("./src/database");
+const { MongoDatabase, MockDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
 const { MONGO_URI, PUBLIC_PORT, PUBLIC_BASE_URI, DEVICE_TYPE, FRONT_END_DIR, SENTRY_DSN } = require("./constants.js");
 
@@ -41,7 +41,7 @@ async function main() {
 
     // Sentry early initialization so that it can catch errors in the rest of
     // the initialization.
-    if (SENTRY_DSN) {
+    if (process.env.NODE_ENV !== "test" && SENTRY_DSN) {
         initSentry(expressApp);
     }
 
@@ -83,7 +83,8 @@ module.exports = {
     resetDeviceDiscovery: function() {
         deviceDiscovery.destroy();
         initAndRunDeviceDiscovery();
-    }
+    },
+    app: expressApp,
 };
 
 // NOTE: This needs to be placed after calling main in order to initialize
@@ -95,7 +96,11 @@ const routes = require("./routes");
 * Initialize and connect to the database.
 */
 async function initializeDatabase() {
-    database = new MongoDatabase(MONGO_URI);
+    
+    // Select between mock and real database in case running tests.
+    database = process.env.NODE_ENV === "test"
+        ? new MockDatabase()
+        : new MongoDatabase(MONGO_URI);
 
     console.log(`Connecting to database through '${MONGO_URI}' ...`);
     try {
@@ -229,18 +234,11 @@ expressApp.use(
     [jsonMw, postLogger, routes.execution]
 );
 
-/**
- * Direct to a user-friendlier index-page.
- */
-expressApp.get("/", (_, response) => {
-    response.sendFile(path.join(FRONT_END_DIR, "index.html"));
-});
-
 expressApp.get("/files/:myPath", (request, response) => {
     response.sendFile("./files/"+request.params.myPath, { root: "." });
 });
 
-if (SENTRY_DSN) {
+if (process.env.NODE_ENV !== "test" && SENTRY_DSN) {
     // Sentry error handler must be before any other error middleware and after all controllers
     // to get errors from routes.
     const Sentry = require("@sentry/node");
@@ -283,5 +281,4 @@ async function shutDown() {
     destroyDeviceDiscovery();
 
     console.log("Orchestrator shutdown finished.");
-    process.exit();
 }
