@@ -140,8 +140,15 @@ class MongoDatabase extends Database {
  * For testing.
  */
 class MockDatabase extends Database {
-    constructor(uri) {
+    constructor() {
         super();
+        this.reset()
+    }
+
+    /**
+     * Helper for resetting between tests.
+     */
+    reset() {
         this.db = {};
         this.runningId = 0;
     }
@@ -187,7 +194,7 @@ class MockDatabase extends Database {
         if (filter) {
             try {
                 this.checkIdField(filter);
-                let result = this.db[collectionName].filter(x => filter[Database.idField] === x[Database.idField]);
+                let result = this.db[collectionName].filter(this.equals(filter));
                 console.log(result);
                 return result;
             } catch(_) {
@@ -201,8 +208,7 @@ class MockDatabase extends Database {
     async update(collectionName, filter, fields) {
         if (filter) { this.checkIdField(filter) } else { filter = {} };
 
-        let matches = this.db[collectionName]
-            .filter(x => filter[Database.idField] === x[Database.idField]);
+        let matches = this.db[collectionName].filter(this.equals(filter))
 
         if (matches.length === 0) {
             // Upsert.
@@ -231,6 +237,15 @@ class MockDatabase extends Database {
         for (let deletableId of deletables.map(x => x[Database.idField])) {
             delete this.db[collectionName].find(x => x[idField] === deletableId);
         }
+    }
+
+    /**
+     * Return a function that compares equality with filter and an object (i.e.,
+     * a doc in db).
+     */
+    equals(filter) {
+        // The comparison here is non-strict on purpose.
+        return (x) => filter[Database.idField] == x[Database.idField];
     }
 
     checkIdField(filter) {

@@ -38,9 +38,11 @@ chdir(__dirname);
 async function main() {
     console.log("Orchestrator starting...")
 
+    let testing = process.env.NODE_ENV === "test";
+
     // Sentry early initialization so that it can catch errors in the rest of
     // the initialization.
-    if (process.env.NODE_ENV !== "test" && SENTRY_DSN) {
+    if (!testing && SENTRY_DSN) {
         // Sentry error handler must be before any other error middleware and after all controllers
         // to get errors from routes.
         const Sentry = require("@sentry/node");
@@ -57,7 +59,9 @@ async function main() {
     // web-clients.
     await initializeDatabase();
 
-    initAndRunDeviceDiscovery();
+    if (!testing) {
+        initAndRunDeviceDiscovery();
+    }
     
     initServer();
 }
