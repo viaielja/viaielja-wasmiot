@@ -1,5 +1,5 @@
 const supertest = require('supertest');
-const { app, shutDown } = require('../server');
+const { app } = require('../server');
 
 const orchestratorApi = supertest(app);
 

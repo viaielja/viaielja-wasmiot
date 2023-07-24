@@ -91,10 +91,8 @@ router.post("/", async (request, response) => {
 /**
  * Attach a file to the previously created module.
  * 
- * In the case of attaching the concrete Wasm-module, `:type` should be "wasm".
- * This saves the binary to the server filesystem and references to it
- * into module's database-entry matching a module-ID given in the body.
- * TODO Could the modules' exports be parsed from Wasm here?
+ * Saves the file to the server filesystem and references to it into module's
+ * database-entry matching a module-ID given in the body.
  *
  * Regarding the use of PATCH https://restfulapi.net/http-methods/#patch says:
  * "-- the PATCH method is the correct choice for partially updating an existing

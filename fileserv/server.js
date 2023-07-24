@@ -2,7 +2,6 @@
  * Initialize server, database, mDNS and routes as needed.
  */
 
-const path = require('path');
 const { chdir } = require('process');
 
 const express = require("express");
@@ -20,14 +19,14 @@ const expressApp = express();
 let server;
 
 /**
- * Thing to use for searching and listing services found (by mDNS).
- */
-let deviceDiscovery;
-
-/**
  * For operations on the database connection and its collections.
  */
 let database;
+
+/**
+ * Thing to use for searching and listing services found (by mDNS).
+ */
+let deviceDiscovery;
 
 // Set working directory to this file's root in order to use relative paths
 // (i.e. "./foo/bar"). TODO Find out if the problem is with incompatible Node
@@ -42,73 +41,86 @@ async function main() {
     // Sentry early initialization so that it can catch errors in the rest of
     // the initialization.
     if (process.env.NODE_ENV !== "test" && SENTRY_DSN) {
+        // Sentry error handler must be before any other error middleware and after all controllers
+        // to get errors from routes.
+        const Sentry = require("@sentry/node");
+        expressApp.use(Sentry.Handlers.errorHandler());
+
         initSentry(expressApp);
+
+        console.log("Activated Sentry error reporting.");
+    } else {
+        console.log("Sentry error reporting not activated.");
     }
 
-    // Must wait for database before starting to listen for
+    // Must (successfully) wait for database before starting to listen for
     // web-clients.
     await initializeDatabase();
 
     initAndRunDeviceDiscovery();
-
-    express.static.mime
-        .define({"application/wasm": ["wasm"]});
-
-    server = expressApp
-        .listen(PUBLIC_PORT, async () => {
-            console.log(
-                "Orchestrator is available at: ",
-                PUBLIC_BASE_URI
-            );
-        });
+    
+    initServer();
 }
 
-try {
-    main()
-} catch(e) {
-    console.error("Orchestrator failed to start: ", e);
-    shutDown();
-}
+main()
+    .catch((e) => {
+        console.error("Orchestrator failed to start: ", e);
+        shutDown();
+    });
+
+
+///////////
+// EXPORTS.
 
 module.exports = {
     getDb: () => database,
 
     /**
      * Reset device discovery so that devices already discovered and running
-     * will be discovered again. TODO: Is this a problem more with the server or
-     * the mDNS library?
-     * 
+     * will be discovered again. TODO: Implement probing of devices that are
+     * still alive and change into "refresh" (i.e., update address based on
+     * name and forget missing ones in scanner) instead of "reset" (i.e.,
+     * reinitialize scanning entirely).
+     *
      * NOTE: Throws if re-initializing fails.
      */
     resetDeviceDiscovery: function() {
         deviceDiscovery.destroy();
         initAndRunDeviceDiscovery();
     },
+
+    /* This needs to be exported for tests. */
     app: expressApp,
 };
 
-// NOTE: This needs to be placed after calling main in order to initialize
-// database before routes get access to it...
+// NOTE: This needs to be placed after exports so that the routes defined can
+// import the common functionality like database getter etc.
 const routes = require("./routes");
 
 
+//////////////////////////
+// INITIALIZATION HELPERS.
+
 /*
 * Initialize and connect to the database.
+*
+* @throws If the connection fails (timeouts).
 */
 async function initializeDatabase() {
-    
     // Select between mock and real database in case running tests.
     database = process.env.NODE_ENV === "test"
         ? new MockDatabase()
         : new MongoDatabase(MONGO_URI);
 
-    console.log(`Connecting to database through '${MONGO_URI}' ...`);
+    console.log("Connecting to database: ", database);
+
     try {
         await database.connect();
-        console.log("Connected to and initialized database!");
+        console.log("Database connection success!");
     } catch(e) {
-        console.error("Database connection failed", e);
-        shutDown();
+        console.error("Database connection fail.");
+        // Propagate to caller.
+        throw e;
     }
 }
 
@@ -157,7 +169,7 @@ function initSentry(app) {
 
 /**
  * Create a new device discovery instance and run it.
- * 
+ *
  * NOTE: Throws if fails.
  */
 function initAndRunDeviceDiscovery() {
@@ -170,16 +182,31 @@ function initAndRunDeviceDiscovery() {
     deviceDiscovery.run();
 }
 
-
 /**
- * Destroy the device discovery instance. This is basically just to log it
- * whenever its done without having it originate from the instance itself.
+ * Initialize the server exposing orchestrator API.
  */
-function destroyDeviceDiscovery() {
-    deviceDiscovery.destroy();
-    console.log("Destroyed the mDNS instance.");
+function initServer() {
+    express.static.mime
+        .define({"application/wasm": ["wasm"]});
 
+    server = expressApp.listen(PUBLIC_PORT)
+
+    server.on("listening", () => {
+        console.log(
+            "Orchestrator is available at: ",
+            PUBLIC_BASE_URI
+        );
+    });
+
+    server.on("error", (e) => {
+        if (e.code === 'EADDRINUSE') {
+            console.error("Server failed to start", e);
+            shutDown();
+        }
+    });
 }
+
+
 //////////
 // ROUTES AND MIDDLEWARE (Note: call-order matters!):
 
@@ -197,53 +224,38 @@ const requestMethodLogger = (request, response, next) => {
 const postLogger = (request, response, next) => {
     if (request.method == "POST") {
         // If client is sending a POST request, log sent data.
-        console.log(`body: ${JSON.stringify(request.body, null, 2)}`);
+        console.log("body: ", request.body);
     }
     next();
 }
 
-const jsonMw = express.json();
-
 const urlencodedExtendedMw = express.urlencoded({ extended: true });
 
-// Order the middleware so that for example POST-body is parsed
-// before trying to log it.
-
 // Serve the frontend files for use.
-expressApp.use(express.static("frontend"));
+expressApp.use(express.static(FRONT_END_DIR));
 
 expressApp.use(requestMethodLogger);
 
-expressApp.use(
-    "/file/device",
-    [jsonMw, urlencodedExtendedMw, postLogger, routes.device]
-);
+// All the routes should parse JSON found in the request body.
+expressApp.use(express.json());
 
-expressApp.use(
-    "/file/module",
-    [jsonMw, routes.modules, postLogger] // TODO This post-placement of POST-logger is dumb...EDIT: Nice comment, very clear, you dumbass.
-);
+expressApp.use(urlencodedExtendedMw);
 
-expressApp.use(
-    "/file/manifest",
-    [jsonMw, urlencodedExtendedMw, postLogger, routes.deployment]
-);
+// POST-body needs to be parsed before trying to log it.
+expressApp.use(postLogger);
 
-expressApp.use(
-    "/execute",
-    [jsonMw, postLogger, routes.execution]
-);
+// Feature specific handlers:
+expressApp.use("/file/device",   routes.device);
+expressApp.use("/file/module",   routes.modules);
+expressApp.use("/file/manifest", routes.deployment);
+expressApp.use("/execute",       routes.execution);
 
+// NOTE: This is for testing if for example an image file needs to be available
+// after execution of some deployed work.
 expressApp.get("/files/:myPath", (request, response) => {
     response.sendFile("./files/"+request.params.myPath, { root: "." });
 });
 
-if (process.env.NODE_ENV !== "test" && SENTRY_DSN) {
-    // Sentry error handler must be before any other error middleware and after all controllers
-    // to get errors from routes.
-    const Sentry = require("@sentry/node");
-    expressApp.use(Sentry.Handlers.errorHandler());
-}
 
 /**
  * Direct to error-page when bad URL used.
@@ -252,10 +264,8 @@ expressApp.all("/*", (_, response) => {
     response.status(404).send({ err: "Bad URL" });
 });
 
-
 ////////////
 // SHUTDOWN:
-
 process.on("SIGTERM", shutDown);
 // Handle CTRL-C gracefully; from
 // https://stackoverflow.com/questions/43003870/how-do-i-shut-down-my-express-server-gracefully-when-its-process-is-killed
@@ -265,20 +275,22 @@ process.on("SIGINT", shutDown);
  * Shut the server and associated services down.
  */
 async function shutDown() {
+    console.log("Orchestrator shutting down...");
+
     if (server) {
-        server.close((err) => {
-            // Shutdown the mdns
-            if (err) {
-                console.log(`Errors from earlier 'close' event: ${err}`);
-            }
-            console.log("Closing server...");
-        });
+        await server.close();
     }
 
-    await database.close();
-    console.log("Closed database connection.");
+    if (database) {
+        await database.close();
+        console.log("Closed database connection.");
+    }
 
-    destroyDeviceDiscovery();
-
-    console.log("Orchestrator shutdown finished.");
+    if (deviceDiscovery) {
+        deviceDiscovery.destroy();
+        console.log("Destroyed the mDNS instance.");
+    }
+ 
+    console.log("Finished shutting down.");
+    process.exit();
 }
