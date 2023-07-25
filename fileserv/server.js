@@ -39,20 +39,23 @@ async function main() {
     console.log("Orchestrator starting...")
 
     let testing = process.env.NODE_ENV === "test";
-
-    // Sentry early initialization so that it can catch errors in the rest of
-    // the initialization.
-    if (!testing && SENTRY_DSN) {
-        // Sentry error handler must be before any other error middleware and after all controllers
-        // to get errors from routes.
-        const Sentry = require("@sentry/node");
-        expressApp.use(Sentry.Handlers.errorHandler());
-
-        initSentry(expressApp);
-
-        console.log("Activated Sentry error reporting.");
+    if (testing) {
+        console.log("! RUNNING IN TEST MODE");
     } else {
-        console.log("Sentry error reporting not activated.");
+        // Sentry early initialization so that it can catch errors in the rest of
+        // the initialization.
+        if (SENTRY_DSN) {
+            // Sentry error handler must be before any other error middleware and after all controllers
+            // to get errors from routes.
+            const Sentry = require("@sentry/node");
+            expressApp.use(Sentry.Handlers.errorHandler());
+
+            initSentry(expressApp);
+
+            console.log("Activated Sentry error reporting.");
+        } else {
+            console.log("Sentry error reporting not activated.");
+        }
     }
 
     // Must (successfully) wait for database before starting to listen for
