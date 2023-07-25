@@ -117,7 +117,7 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
         if (result.acknowledged) {
             let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(fields, null, 2)}`;
             console.log(request.body.id + ": " + msg);
-            return [ 200, { success: msg } ];
+            return [ 200, { success: msg, type: Object.keys(fields)[0], exports: fields["exports"] } ];
         } else {
             let msg = "Failed attaching a file to module";
             console.log(msg + ". Tried adding data: " + JSON.stringify(fields, null, 2));
@@ -158,7 +158,7 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
                 // Model weights etc. for an ML-application.
                 break;
             default:
-                response.status(400).json({ err: `unsupported file extension '${fileExtension}'`});
+                response.status(400).json({ err: `unsupported file extension '${fileExtension}'` });
         }
 
         // Now actually update the database-document.
@@ -181,12 +181,18 @@ async function parseWasmModule(data, outFields) {
         // Just get the names of functions(?) for now.
         .filter(x => x.kind === "function")
         .map(x => x.name);
+
+    // An instance is needed for more information about exported functions,
+    // although not much can be (currently?) extracted (for example types would
+    // probably require more specific parsing of the binary and they are just
+    // the Wasm primitives anyway)...
+    let instance = await WebAssembly.instantiate(wasmModule);
     let exportData =  WebAssembly.Module.exports(wasmModule)
         // Just get the names of functions for now; the
         // interface description attached to created modules is
         // trusted to match the uploaded WebAssembly binary.
         .filter(x => x.kind === "function")
-        .map(x => x.name);
+        .map(x => new Func(x.name, instance.exports[x.name].length));
 
     outFields.requirements = importData;
     outFields.exports = exportData;
@@ -216,4 +222,11 @@ function validateFileFormSubmission(request, response, next) {
         return;
     }
     next();
+}
+
+class Func {
+    constructor(name, parameterCount) {
+        this.name = name;
+        this.parameterCount = parameterCount;
+    }
 }

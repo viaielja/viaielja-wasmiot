@@ -54,12 +54,12 @@ describe("end to end", () => {
       .attach("module", PRIMITIVE_MODULE_PATH)
       .expect(200);
 
-    expect(wasmUploadResponse.body).toHaveProperty("wasm");
+    expect(wasmUploadResponse.body).toHaveProperty("type");
     expect(wasmUploadResponse.body["type"]).toEqual("wasm");
     expect(wasmUploadResponse.body).toHaveProperty("exports");
     expect(wasmUploadResponse.body["exports"].length).toBeGreaterThan(0);
     expect(wasmUploadResponse.body["exports"][0])
-        .toEqual([{"name": "add1", "parameters": ["i64"], "output": "i64"}]);
+        .toEqual({ "name": "add1", "parameterCount": 1 });
 
     // TODO: The rest of the test (deployment and execution with a fake device (use `jest.fn()`?)).
     console.error("!!! NOTE: This test is currently unfinished !!!");
