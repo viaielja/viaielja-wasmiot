@@ -3,7 +3,7 @@ const { Router } = require("express");
 
 const { getDb } = require("../server.js");
 const { MODULE_DIR } = require("../constants.js");
-const { Success, Error } = require("../utils.js");
+const utils = require("../utils.js");
 
 
 const router = Router();
@@ -78,7 +78,7 @@ router.post("/", async (request, response) => {
     if (exists) {
         console.log(`Tried to write module with existing name: '${request.body.name}'`);
         let errmsg = `Module with name ' ${request.body.name}' already exists`;
-        response.status(400).json({ err: errmsg });
+        response.status(400).json(new utils.Error(errmsg));
         return;
     }
 
@@ -86,7 +86,7 @@ router.post("/", async (request, response) => {
         .insertedIds[0];
 
     // Wasm-files are identified by their database-id.
-    response.status(201).json({ success: "Uploaded module with id: "+ moduleId });
+    response.status(201).json(new utils.Success({ message: "Uploaded module with id: "+ moduleId }));
 });
 
 /**
@@ -149,17 +149,20 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
             await updateModule(filter, updateObj);
 
             let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(updateObj, null, 2)}`;
-            let success = new Success({ 
+            let success = new utils.Success({ 
                 message: msg,
                 type: fileExtension,
                 fields: updateObj
             });
             response.status(200).json(success);
 
-            console.log(request.body.id + ": " + msg);
+            console.log(msg);
+
+            // Tell devices to fetch updated files on modules.
+            notifyModuleFileUpdate(request.body.id);
         } catch (err) {
             let msg = "Failed attaching a file to module: " + err;
-            response.status(500).json(new Error(msg));
+            response.status(500).json(new utils.Error(msg));
 
             console.log(msg + ". Tried adding data: " + JSON.stringify(updateObj, null, 2));
         }
@@ -211,6 +214,44 @@ router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
         .status(202) // Accepted.
         .json({ success: "deleting all modules" });
 });
+
+/**
+ * Notify devices that a module previously deployed has been updated.
+ * @param {*} moduleId ID of the module that has been updated.
+ */
+async function notifyModuleFileUpdate(moduleId) {
+    // Find devices that have the module deployed and the matching deployment manifests.
+    let deployments = (await getDb().read("deployment"));
+    let devicesToUpdatedManifests = {};
+    for (let deployment of deployments) {
+        // Unpack the mapping of device-id to manifest sent to it.
+        let [deviceId, manifest] = Object.entries(deployment.fullManifest)[0];
+
+        if (manifest.modules.some(x => x.id.toString() === moduleId)) {
+            if (devicesToUpdatedManifests[deviceId] === undefined) {
+                devicesToUpdatedManifests[deviceId] = [];
+            }
+            devicesToUpdatedManifests[deviceId].push(manifest);
+        }
+    }
+
+    // Deploy all the manifests again, which has the same effect as the first
+    // time (following the idempotence of ReST).
+    for (let [deviceId, manifests] of Object.entries(devicesToUpdatedManifests)) {
+        let device = (await getDb()
+            .read("device", { _id: deviceId }))[0];
+
+        if (!device) {
+            response.status(404).json(new utils.Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
+            return;
+        }
+
+        for (let manifest of manifests) {
+            let deploymentJson = JSON.stringify(manifest, null, 2);
+            utils.messageDevice(device, "/deploy", deploymentJson);
+        }
+    }
+}
 
 /**
  * Update the modules matched by filter with the given fields.
