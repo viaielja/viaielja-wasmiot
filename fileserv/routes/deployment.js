@@ -309,7 +309,7 @@ async function sequenceFromResources(sequence) {
         ))[0];
 
         if (modulee !== null) {
-            if (modulee.exports.find(x => x === funcName) !== undefined) {
+            if (modulee.exports.find(x => x.name === funcName) !== undefined) {
                 selectedModules.push(modulee);
             } else {
                 throw `Failed to find function '${funcName}' from requested module: ${modulee}`;
@@ -323,7 +323,7 @@ async function sequenceFromResources(sequence) {
                 { _id: deviceId }
             ))[0];
 
-            if (dbDevice !== null) {
+            if (dbDevice) {
                 selectedDevices.push(dbDevice);
             } else {
                 throw `Failed to find device matching the received device ID ${moduleId}`;
@@ -335,7 +335,7 @@ async function sequenceFromResources(sequence) {
             for (let device of allDevices) {
                 if (modulee.requirements.length === 0 ||
                     modulee.requirements
-                        .every(x => device.description.supervisorInterfaces.find(y => y == x))
+                        .every(x => device.description.supervisorInterfaces.find(y => y === x.name))
                 ) {
                     match = device;
                     break;

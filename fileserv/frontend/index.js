@@ -98,13 +98,13 @@ function addProcedureRow(listId) {
                     let exportOption = document.createElement("option");
 
                     // Add data to the option element for parsing later and sending to the deploy-endpoint.
-                    let optionData = { "device": device._id, "module": mod._id, "func": exportt };
+                    let optionData = { "device": device._id, "module": mod._id, "func": exportt.name };
                     // Saving value as a serialized JSON string, but could there be a
                     // non-string solution?
                     exportOption.value = JSON.stringify(optionData);
                     // Make something that a human could understand from the interface.
                     // TODO/FIXME?: XSS galore?
-                    exportOption.textContent = `Use ${device.name} for ${mod.name}:${exportt}`;
+                    exportOption.textContent = `Use ${device.name} for ${mod.name}:${exportt.name}`;
 
                     select.appendChild(exportOption);
                 }
