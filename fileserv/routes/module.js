@@ -149,7 +149,7 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
                 try {
                     await parseWasmModule(data, updateObj)
                 } catch (err) {
-                    console.log("failed compiling Wasm");
+                    console.error("failed compiling Wasm", err);
                     response.status(500).json({err: `couldn't compile Wasm: ${err}`});
                     return;
                 }
@@ -178,15 +178,20 @@ async function parseWasmModule(data, outFields) {
     let wasmModule = await WebAssembly.compile(data);
 
     let importData = WebAssembly.Module.imports(wasmModule)
-        // Just get the names of functions(?) for now.
-        .filter(x => x.kind === "function")
-        .map(x => x.name);
+        // Just get the functions for now.
+        .filter(x => x.kind === "function");
 
+    // Each import goes under its module name.
+    let importObj = Object.fromEntries(importData.map(x => [x.module, {}]));
+    for (let x of importData) {
+        // Fake the imports for instantiation.
+        importObj[x.module][x.name] = () => {};
+    }
     // An instance is needed for more information about exported functions,
     // although not much can be (currently?) extracted (for example types would
     // probably require more specific parsing of the binary and they are just
     // the Wasm primitives anyway)...
-    let instance = await WebAssembly.instantiate(wasmModule);
+    let instance = await WebAssembly.instantiate(wasmModule, importObj);
     let exportData =  WebAssembly.Module.exports(wasmModule)
         // Just get the names of functions for now; the
         // interface description attached to created modules is
