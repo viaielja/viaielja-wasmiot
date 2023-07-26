@@ -54,11 +54,15 @@ describe("end to end", () => {
       .attach("module", PRIMITIVE_MODULE_PATH)
       .expect(200);
 
-    expect(wasmUploadResponse.body).toHaveProperty("type");
-    expect(wasmUploadResponse.body["type"]).toEqual("wasm");
-    expect(wasmUploadResponse.body).toHaveProperty("exports");
-    expect(wasmUploadResponse.body["exports"].length).toBeGreaterThan(0);
-    expect(wasmUploadResponse.body["exports"][0])
+    expect(wasmUploadResponse.body).toHaveProperty("success");
+    expect(wasmUploadResponse.body["success"]).toHaveProperty("type");
+    expect(wasmUploadResponse.body["success"]["type"]).toEqual("wasm");
+    expect(wasmUploadResponse.body["success"]).toHaveProperty("fields");
+
+    let fields = wasmUploadResponse.body["success"]["fields"];
+    expect(fields).toHaveProperty("exports");
+    expect(fields["exports"].length).toBeGreaterThan(0);
+    expect(fields["exports"][0])
         .toEqual({ "name": "add1", "parameterCount": 1 });
 
     // TODO: The rest of the test (deployment and execution with a fake device (use `jest.fn()`?)).
