@@ -375,7 +375,7 @@ function setStatus(result) {
     }
 
     if (result.success) {
-        msg = result.success;
+        msg = result.success.message;
         classs = "success";
     } else if (result.result) {
         msg = result.result;

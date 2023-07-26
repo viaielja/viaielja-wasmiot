@@ -42,7 +42,6 @@ class Database {
 
     /*
     * C
-    * NOTE: Should always [upsert](https://www.mongodbtutorial.org/mongodb-crud/mongodb-upsert/).
     */
     async create(collectionName, values)
     { throw "create not implemented"; }
@@ -100,10 +99,7 @@ class MongoDatabase extends Database {
             ).toArray();
     }
 
-    /**
-     * NOTE: Always upserts.
-     */
-    async update(collectionName, filter, fields) {
+    async update(collectionName, filter, fields, upsert=true) {
         this.wrapId(filter);
 
         return this.db
@@ -111,8 +107,8 @@ class MongoDatabase extends Database {
             .updateMany(
                 filter,
                 { $set: fields },
-                // Always create the fields if missing.
-                { upsert: true }
+                // Create the fields if missing.
+                { upsert: upsert }
             );
 
     }
@@ -205,7 +201,7 @@ class MockDatabase extends Database {
         return this.db[collectionName];
     }
 
-    async update(collectionName, filter, fields) {
+    async update(collectionName, filter, fields, upsert=true) {
         if (filter) { this.checkIdField(filter) } else { filter = {} };
 
         let matches = this.db[collectionName].filter(this.equals(filter))
@@ -221,7 +217,7 @@ class MockDatabase extends Database {
             }
         }
 
-        return { acknowledged: true };
+        return { acknowledged: true, matchedCount: matches.length };
     }
 
     async delete(collectionName, filter) {

@@ -3,6 +3,7 @@ const { Router } = require("express");
 
 const { getDb } = require("../server.js");
 const { MODULE_DIR } = require("../constants.js");
+const { Success, Error } = require("../utils.js");
 
 
 const router = Router();
@@ -107,24 +108,6 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
     let filter = { _id: request.body.id };
     let fileExtension = request.file.originalname.split(".").pop();
 
-    /**
-     * Helper to update fields in callbacks based on the file extension of upload.
-     * @param {*} fields The database fields to update on the module.
-     * @returns {*} [ status: status, { err: error | undefined, success: success | undefined } ]
-     */
-    async function update(fields) {
-        let result = await getDb().update("module", filter, fields);
-        if (result.acknowledged) {
-            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(fields, null, 2)}`;
-            console.log(request.body.id + ": " + msg);
-            return [ 200, { success: msg, type: Object.keys(fields)[0], exports: fields["exports"] } ];
-        } else {
-            let msg = "Failed attaching a file to module";
-            console.log(msg + ". Tried adding data: " + JSON.stringify(fields, null, 2));
-            return [ 500, { err: msg } ];
-        }
-    }
-
     let updateObj = {}
     // Add additional fields initially from the file-upload and save to
     // database.
@@ -162,8 +145,24 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
         }
 
         // Now actually update the database-document.
-        let updateRes = await update(updateObj);
-        response.status(updateRes[0]).json(updateRes[1]);
+        try {
+            await updateModule(filter, updateObj);
+
+            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(updateObj, null, 2)}`;
+            let success = new Success({ 
+                message: msg,
+                type: fileExtension,
+                fields: updateObj
+            });
+            response.status(200).json(success);
+
+            console.log(request.body.id + ": " + msg);
+        } catch (err) {
+            let msg = "Failed attaching a file to module: " + err;
+            response.status(500).json(new Error(msg));
+
+            console.log(msg + ". Tried adding data: " + JSON.stringify(updateObj, null, 2));
+        }
     });
 });
 
@@ -212,6 +211,18 @@ router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
         .status(202) // Accepted.
         .json({ success: "deleting all modules" });
 });
+
+/**
+ * Update the modules matched by filter with the given fields.
+ * @param {*} filter To match the modules to update.
+ * @param {*} fields To add to the matched modules.
+ */
+async function updateModule(filter, fields) {
+    let updateRes = await getDb().update("module", filter, fields, false);
+    if (updateRes.matchedCount === 0) {
+        throw "no module matched the filter";
+    }
+}
 
 /**
  * Middleware to confirm existence of an incoming file from a user-submitted
