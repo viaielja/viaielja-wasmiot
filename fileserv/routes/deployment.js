@@ -1,10 +1,8 @@
-const http = require('http');
-
 const express = require("express");
 
 const { getDb } = require("../server.js");
 const { PUBLIC_BASE_URI } = require("../constants.js");
-const { Error, Success } = require("../utils.js");
+const { Error, Success, messageDevice } = require("../utils.js");
 
 const router = express.Router();
 
@@ -122,33 +120,7 @@ router.post("/:deploymentId", async (request, response) => {
         }
 
         let deploymentJson = JSON.stringify(manifest, null, 2);
-        // Select where and how to send this particular deployment.
-        let requestOptions = {
-            method: "POST",
-            protocol: "http:",
-            host: device.addresses[0],
-            port: device.port,
-            path: "/deploy",
-            headers: {
-                "Content-type": "application/json",
-                "Content-length": Buffer.byteLength(deploymentJson),
-            }
-        };
-
-        // TODO: Refactor into promises to await for them in bulk and respond to
-        // the top request.
-        let req = http.request(
-            requestOptions,
-            (res) => {
-                console.log(`Deployment: Device '${device.name}' responded ${res.statusCode}`);
-            }
-        );
-        req.on("error", e => {
-            console.log(`Error while posting to device '${JSON.stringify(device, null, 2)}': `, e);
-        })
-
-        req.write(deploymentJson);
-        req.end();
+        messageDevice(device, "/deploy", deploymentJson);
     }
     response.json(new Success(`Deployed '${deploymentDoc.name}'!`));
 });
