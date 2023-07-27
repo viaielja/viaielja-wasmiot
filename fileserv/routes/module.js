@@ -1,25 +1,22 @@
 const { readFile } = require("node:fs");
-const { Router } = require("express");
+const express = require("express");
 
-const { getDb } = require("../server.js");
 const { MODULE_DIR } = require("../constants.js");
 const utils = require("../utils.js");
 
 
-const router = Router();
+let database = null;
 
-// Set where the wasm-binaries will be saved into on the filesystem.
-// From: https://www.twilio.com/blog/handle-file-uploads-node-express
-const fileUpload = require("multer")({ dest: MODULE_DIR }).single("module");
-
-module.exports = { router };
+function setDatabase(db) {
+    database = db;
+}
 
 /**
  * GET a Wasm-module; used by IoT-devices.
  */
-router.get("/:moduleId", async (request, response) => {
+const getModule = async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = (await getDb().read("module", { _id: request.params.moduleId }))[0];
+    let doc = (await database.read("module", { _id: request.params.moduleId }))[0];
     if (doc) {
         console.log("Sending metadata of module: " + doc.name);
         response.json(doc);
@@ -28,13 +25,13 @@ router.get("/:moduleId", async (request, response) => {
         console.log(errmsg);
         response.status(400).send(errmsg);
     }
-});
+}
 
 /**
  * Serve the a file relate to a module based on module ID and file extension.
  */
-router.get("/:moduleId/:fileExtension", async (request, response) => {
-    let doc = (await getDb().read("module", { _id: request.params.moduleId }))[0];
+const getModuleFile = async (request, response) => {
+    let doc = (await database.read("module", { _id: request.params.moduleId }))[0];
     let fileExtension = request.params.fileExtension;
     if (doc) {
         let fileObj = doc[fileExtension];
@@ -57,24 +54,24 @@ router.get("/:moduleId/:fileExtension", async (request, response) => {
         console.log(errmsg);
         response.status(400).json({ err: errmsg });
     }
-});
+}
 
 /**
  * GET list of all Wasm-modules; used by Actors in constructing a deployment.
  */
-router.get("/", async (request, response) => {
+const getModules = async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await getDb().read("module"));
-});
+    response.json(await database.read("module"));
+}
 
 /**
  * Save metadata of a Wasm-module to database and leave information about the
  * concrete file to be patched by another upload-request. This separates
  * between requests with pure JSON or binary bodies.
  */
-router.post("/", async (request, response) => {
+const createModule = async (request, response) => {
     // Prevent using the same name twice for a module.
-    let exists = (await getDb().read("module", { name: request.body.name }))[0];
+    let exists = (await database.read("module", { name: request.body.name }))[0];
     if (exists) {
         console.log(`Tried to write module with existing name: '${request.body.name}'`);
         let errmsg = `Module with name ' ${request.body.name}' already exists`;
@@ -82,12 +79,12 @@ router.post("/", async (request, response) => {
         return;
     }
 
-    const moduleId = (await getDb().create("module", [request.body]))
+    const moduleId = (await database.create("module", [request.body]))
         .insertedIds[0];
 
     // Wasm-files are identified by their database-id.
     response.status(201).json(new utils.Success({ message: "Uploaded module with id: "+ moduleId }));
-});
+}
 
 /**
  * Attach a file to the previously created module.
@@ -104,7 +101,7 @@ router.post("/", async (request, response) => {
  * new resource (the file) (and the method is not supported with
  * multipart/form-data at the frontend), use POST.
  */
-router.post("/upload", fileUpload, validateFileFormSubmission, async (request, response) => {
+const addModuleFile = async (request, response) => {
     let filter = { _id: request.body.id };
     let fileExtension = request.file.originalname.split(".").pop();
 
@@ -167,7 +164,18 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
             console.log(msg + ". Tried adding data: " + JSON.stringify(updateObj, null, 2));
         }
     });
-});
+}
+
+/**
+ * Delete all the modules from database (for debugging purposes).
+ */
+const deleteModules = (request, response) => {
+    database.delete("module");
+    response
+        .status(202) // Accepted.
+        .json({ success: "deleting all modules" });
+}
+
 
 /**
  * Parse WebAssembly module from data and add info extracted from it into input object.
@@ -206,22 +214,12 @@ async function parseWasmModule(data, outFields) {
 }
 
 /**
- * Delete all the modules from database (for debugging purposes).
- */
-router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
-    getDb().delete("module");
-    response
-        .status(202) // Accepted.
-        .json({ success: "deleting all modules" });
-});
-
-/**
- * Notify devices that a module previously deployed has been updated.
- * @param {*} moduleId ID of the module that has been updated.
- */
+* Notify devices that a module previously deployed has been updated.
+* @param {*} moduleId ID of the module that has been updated.
+*/
 async function notifyModuleFileUpdate(moduleId) {
     // Find devices that have the module deployed and the matching deployment manifests.
-    let deployments = (await getDb().read("deployment"));
+    let deployments = (await database.read("deployment"));
     let devicesToUpdatedManifests = {};
     for (let deployment of deployments) {
         // Unpack the mapping of device-id to manifest sent to it.
@@ -238,7 +236,7 @@ async function notifyModuleFileUpdate(moduleId) {
     // Deploy all the manifests again, which has the same effect as the first
     // time (following the idempotence of ReST).
     for (let [deviceId, manifests] of Object.entries(devicesToUpdatedManifests)) {
-        let device = (await getDb()
+        let device = (await database
             .read("device", { _id: deviceId }))[0];
 
         if (!device) {
@@ -254,21 +252,21 @@ async function notifyModuleFileUpdate(moduleId) {
 }
 
 /**
- * Update the modules matched by filter with the given fields.
- * @param {*} filter To match the modules to update.
- * @param {*} fields To add to the matched modules.
- */
+* Update the modules matched by filter with the given fields.
+* @param {*} filter To match the modules to update.
+* @param {*} fields To add to the matched modules.
+*/
 async function updateModule(filter, fields) {
-    let updateRes = await getDb().update("module", filter, fields, false);
+    let updateRes = await database.update("module", filter, fields, false);
     if (updateRes.matchedCount === 0) {
         throw "no module matched the filter";
     }
 }
 
 /**
- * Middleware to confirm existence of an incoming file from a user-submitted
- * form (which apparently `multer` does not do itself...).
- */
+* Middleware to confirm existence of an incoming file from a user-submitted
+* form (which apparently `multer` does not do itself...).
+*/
 function validateFileFormSubmission(request, response, next) {
     if (request.method !== "POST") { next(); return; }
 
@@ -280,6 +278,9 @@ function validateFileFormSubmission(request, response, next) {
     }
     next();
 }
+// Set where the wasm-binaries will be saved into on the filesystem.
+// From: https://www.twilio.com/blog/handle-file-uploads-node-express
+const fileUpload = require("multer")({ dest: MODULE_DIR }).single("module");
 
 class Func {
     constructor(name, parameterCount) {
@@ -287,3 +288,14 @@ class Func {
         this.parameterCount = parameterCount;
     }
 }
+
+const router = express.Router();
+router.get("/:moduleId", getModule);
+router.get("/:moduleId/:fileExtension", getModuleFile);
+router.get("/", getModules);
+router.post("/", createModule);
+router.post("/upload", fileUpload, validateFileFormSubmission, addModuleFile);
+router.delete("/", /*authenticationMiddleware,*/ deleteModules);
+
+
+module.exports = { setDatabase, router };

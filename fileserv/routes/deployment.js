@@ -1,19 +1,22 @@
 const express = require("express");
 
-const { getDb } = require("../server.js");
 const { PUBLIC_BASE_URI } = require("../constants.js");
 const { Error, Success, messageDevice } = require("../utils.js");
 
-const router = express.Router();
 
-module.exports = { router };
+let database = null;
+
+function setDatabase(db) {
+    database = db;
+}
+
 
 /**
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
  */
-router.get("/:deploymentId", async (request, response) => {
+const getDeployment = async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = (await getDb().read(
+    let doc = (await database.read(
         "deployment",
         { _id: request.params.deploymentId }
     ))[0];
@@ -25,20 +28,20 @@ router.get("/:deploymentId", async (request, response) => {
         console.log(err);
         response.status(400).send(err);
     }
-});
+}
 
 /**
  * GET list of all deployments; used by Actors in inspecting their deployments.
  */
-router.get("/", async (request, response) => {
+const getDeployments = async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await getDb().read("deployment"));
-});
+    response.json(await database.read("deployment"));
+}
 
 /**
  * POST a new deployment manifest to add to orchestrator's database.
  */
-router.post("/", async (request, response) => {
+const createDeployment = async (request, response) => {
     let data = request.body;
     // The id of the deployment _after_ added to database. Used to identify
     // received POSTs on devices regarding this deployment.
@@ -50,7 +53,7 @@ router.post("/", async (request, response) => {
 
     // Ignore deployments with an already existing name.
     // TODO When would a new deployment not be accepted? Based on user credits??
-    let doc = (await getDb().read("deployment", { name: deploymentName }))[0];
+    let doc = (await database.read("deployment", { name: deploymentName }))[0];
     if (doc) {
         console.log(`Tried to write existing manifest '${doc.name}' ID ${doc._id}`);
         status = 400;
@@ -61,7 +64,7 @@ router.post("/", async (request, response) => {
 
         // Add the new deployment to database.
         // TODO Only add what is allowed (e.g. _id should not come from POST).
-        let result = await getDb().create("deployment", [data]);
+        let result = await database.create("deployment", [data]);
         if (!result.acknowledged) {
             console.log("Failed adding the manifest");
             status = 500;
@@ -89,14 +92,14 @@ router.post("/", async (request, response) => {
     response
         .status(status)
         .json(result);
-});
+}
 
 /**
  *  Deploy applications and instructions to devices according to a pre-created
  *  deployment.
  */
-router.post("/:deploymentId", async (request, response) => {
-    let deploymentDoc = (await getDb()
+const deploy = async (request, response) => {
+    let deploymentDoc = (await database
         .read("deployment", { _id: request.params.deploymentId }))[0];
 
     if (!deploymentDoc) {
@@ -111,7 +114,7 @@ router.post("/:deploymentId", async (request, response) => {
     // https://nodejs.org/api/http.html#httprequesturl-options-callback
     for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
         // TODO: Use database-reference instead of using device id from field.
-        let device = (await getDb()
+        let device = (await database
             .read("device", { _id: deviceId }))[0];
 
         if (!device) {
@@ -123,18 +126,18 @@ router.post("/:deploymentId", async (request, response) => {
         messageDevice(device, "/deploy", deploymentJson);
     }
     response.json(new Success(`Deployed '${deploymentDoc.name}'!`));
-});
+}
 
 /**
  * Delete all the deployment manifests from database.
  */
-router.delete("/", (request, response) => {
-    getDb().delete("deployment");
+const deleteDeployments = (request, response) => {
+    database.delete("deployment");
     response
         .status(202) // Accepted.
         .json(new Success("deleting all deployment manifests"));
     
-});
+}
 
 /**
  * Solve for M2M-call interfaces and create individual instructions
@@ -147,7 +150,7 @@ router.delete("/", (request, response) => {
  * successfull.
  */
 async function createSolution(deploymentId, packageBaseUrl) {
-    let deployment = (await getDb().read(
+    let deployment = (await database.read(
         "deployment",
         { _id: deploymentId }
     ))[0];
@@ -238,7 +241,7 @@ async function createSolution(deploymentId, packageBaseUrl) {
     // Do all database updates at once here.
     // Add the composed deployment structure to database for inspecting it later
     // (i.e. during execution or from user interface).
-    getDb().update(
+    database.update(
         "deployment", 
         { _id: deployment._id },
         {
@@ -275,7 +278,7 @@ async function sequenceFromResources(sequence) {
         // always contain the module-id as well.
         // Still, do a validity-check that the requested module indeed
         // contains the func.
-        let modulee = (await getDb().read(
+        let modulee = (await database.read(
             "module",
             { _id: moduleId }
         ))[0];
@@ -290,7 +293,7 @@ async function sequenceFromResources(sequence) {
             throw `Failed to find module matching the received module ID ${moduleId}`;
         }
         if (deviceId !== null) {
-            let dbDevice = (await getDb().read(
+            let dbDevice = (await database.read(
                 "device",
                 { _id: deviceId }
             ))[0];
@@ -303,7 +306,7 @@ async function sequenceFromResources(sequence) {
         } else {
             // Search for a device that could run the module.
             let match = null;
-            let allDevices = await getDb().read("device");
+            let allDevices = await database.read("device");
             for (let device of allDevices) {
                 if (modulee.requirements.length === 0 ||
                     modulee.requirements
@@ -454,3 +457,13 @@ class DeploymentNode {
         this.instructions = [];
     }
 }
+
+const router = express.Router();
+router.get("/:deploymentId", getDeployment);
+router.get("/", getDeployments);
+router.post("/", createDeployment);
+router.post("/:deploymentId", deploy);
+router.delete("/", deleteDeployments);
+
+
+module.exports = { setDatabase, router };

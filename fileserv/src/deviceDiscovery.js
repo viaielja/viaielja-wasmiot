@@ -173,11 +173,32 @@ class DeviceDiscovery {
         .on("error", handleError);
     }
 
+    /**
+     * Refresh (i.e., reset and rerun) device discovery so that devices already
+     * discovered and running will be discovered again. TODO: Implement probing
+     * of devices that are still alive and change into "refresh" (i.e., update
+     * address based on name and forget missing ones in scanner) instead of
+     * "reset" (i.e., reinitialize scanning entirely).
+     *
+     * NOTE: Throws if re-initializing fails.
+     */
+    refresh() {
+        this.destroy();
+        this.bonjourInstance = new bonjour.Bonjour();
+        this.run();
+    }
+
     destroy() {
         this.bonjourInstance.destroy();
     }
 }
 
+class MockDeviceDiscovery {
+    run() { console.log("Running mock device discovery..."); };
+    destroy() { console.log("Destroyed mock device discovery."); };
+}
+
 module.exports = {
     DeviceDiscovery,
+    MockDeviceDiscovery,
 };
