@@ -1,4 +1,4 @@
-const path = require('path');
+const http = require('http');
 
 
 /// Perform boilerplate tasks when responding with a file read from filesystem.
@@ -110,6 +110,43 @@ async function callDeviceFuncHttp(url, options, onResponse, onError) {
 }
 
 /**
+ * Send a message to device with HTTP.
+ * @param {*} device Struct containing device address and port.
+ * @param {*} path Path to send the message to.
+ * @param {*} jsonStr Message content in a JSON string.
+ * @param {*} method HTTP method to use.
+ */
+function messageDevice(device, path, jsonStr, method="POST") {
+    // Select where and how to send this particular deployment.
+    let requestOptions = {
+        method: method,
+        protocol: "http:",
+        host: device.addresses[0],
+        port: device.port,
+        path: path,
+        headers: {
+            "Content-type": "application/json",
+            "Content-length": Buffer.byteLength(jsonStr),
+        }
+    };
+
+    // TODO: Refactor into promises to await for them in bulk and respond to
+    // the top request.
+    let req = http.request(
+        requestOptions,
+        (res) => {
+            console.log(`Device '${device.name}' ${path} responded ${res.statusCode}`);
+        }
+    );
+    req.on("error", e => {
+        console.log(`Error while posting to device '${JSON.stringify(device, null, 2)}' ${path}: `, e);
+    })
+
+    req.write(jsonStr);
+    req.end();
+}
+
+/**
  * "Enum variant" for an error with result containing some data.
  */
 class Error {
@@ -132,6 +169,7 @@ module.exports = {
     callDeviceFuncSingleIntegerArgument,
     callDeviceFuncRaw,
     callDeviceFuncHttp,
+    messageDevice,
     Error,
     Success,
 };

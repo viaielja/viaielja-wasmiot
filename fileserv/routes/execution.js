@@ -95,7 +95,10 @@ router.post("/:deploymentId", async (request, response) => {
                         (intBytes[2] << 16) | 
                         (intBytes[1] <<  8) | 
                         (intBytes[0]);
-                    response.json(new utils.Success(classIndex));
+                    response.json(new utils.Success({
+                        message: `Responded with ${classIndex}`,
+                        value: classIndex
+                    }));
                     return;
                 case "image/jpeg":
                     const CHAIN_RESULT_IMAGE_PATH = "./files/chainResultImg.jpeg";
@@ -105,10 +108,12 @@ router.post("/:deploymentId", async (request, response) => {
                         CHAIN_RESULT_IMAGE_PATH,
                         Buffer.from(await res.arrayBuffer()),
                     );
-                    response.json(new utils.Success("Saved JPEG to "+CHAIN_RESULT_IMAGE_PATH));
+                    response.json(new utils.Success({
+                        message: `Saved JPEG to ${CHAIN_RESULT_IMAGE_PATH}`
+                    }));
                     return;
                 default:
-                    response.json(new Error("Unsupported content type"+res.headers["Content-type"]));
+                    response.json(new utils.Error("Unsupported content type"+res.headers["Content-type"]));
             }
 
             //let jsonResponse;
@@ -127,7 +132,7 @@ router.post("/:deploymentId", async (request, response) => {
             console.log(`Error while posting to URL'${url}':`, err);
             // TODO: What is correct status code here (technically device
             // could have failed, not orchestrator)?
-            response.status(500).json({ err: err });
+            response.status(500).json(new utils.Error(err));
         }
     );
 });

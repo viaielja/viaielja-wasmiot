@@ -3,6 +3,7 @@ const { Router } = require("express");
 
 const { getDb } = require("../server.js");
 const { MODULE_DIR } = require("../constants.js");
+const utils = require("../utils.js");
 
 
 const router = Router();
@@ -77,7 +78,7 @@ router.post("/", async (request, response) => {
     if (exists) {
         console.log(`Tried to write module with existing name: '${request.body.name}'`);
         let errmsg = `Module with name ' ${request.body.name}' already exists`;
-        response.status(400).json({ err: errmsg });
+        response.status(400).json(new utils.Error(errmsg));
         return;
     }
 
@@ -85,7 +86,7 @@ router.post("/", async (request, response) => {
         .insertedIds[0];
 
     // Wasm-files are identified by their database-id.
-    response.status(201).json({ success: "Uploaded module with id: "+ moduleId });
+    response.status(201).json(new utils.Success({ message: "Uploaded module with id: "+ moduleId }));
 });
 
 /**
@@ -106,24 +107,6 @@ router.post("/", async (request, response) => {
 router.post("/upload", fileUpload, validateFileFormSubmission, async (request, response) => {
     let filter = { _id: request.body.id };
     let fileExtension = request.file.originalname.split(".").pop();
-
-    /**
-     * Helper to update fields in callbacks based on the file extension of upload.
-     * @param {*} fields The database fields to update on the module.
-     * @returns {*} [ status: status, { err: error | undefined, success: success | undefined } ]
-     */
-    async function update(fields) {
-        let result = await getDb().update("module", filter, fields);
-        if (result.acknowledged) {
-            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(fields, null, 2)}`;
-            console.log(request.body.id + ": " + msg);
-            return [ 200, { success: msg, type: Object.keys(fields)[0], exports: fields["exports"] } ];
-        } else {
-            let msg = "Failed attaching a file to module";
-            console.log(msg + ". Tried adding data: " + JSON.stringify(fields, null, 2));
-            return [ 500, { err: msg } ];
-        }
-    }
 
     let updateObj = {}
     // Add additional fields initially from the file-upload and save to
@@ -149,7 +132,7 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
                 try {
                     await parseWasmModule(data, updateObj)
                 } catch (err) {
-                    console.log("failed compiling Wasm");
+                    console.error("failed compiling Wasm", err);
                     response.status(500).json({err: `couldn't compile Wasm: ${err}`});
                     return;
                 }
@@ -162,8 +145,27 @@ router.post("/upload", fileUpload, validateFileFormSubmission, async (request, r
         }
 
         // Now actually update the database-document.
-        let updateRes = await update(updateObj);
-        response.status(updateRes[0]).json(updateRes[1]);
+        try {
+            await updateModule(filter, updateObj);
+
+            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(updateObj, null, 2)}`;
+            let success = new utils.Success({ 
+                message: msg,
+                type: fileExtension,
+                fields: updateObj
+            });
+            response.status(200).json(success);
+
+            console.log(msg);
+
+            // Tell devices to fetch updated files on modules.
+            notifyModuleFileUpdate(request.body.id);
+        } catch (err) {
+            let msg = "Failed attaching a file to module: " + err;
+            response.status(500).json(new utils.Error(msg));
+
+            console.log(msg + ". Tried adding data: " + JSON.stringify(updateObj, null, 2));
+        }
     });
 });
 
@@ -178,15 +180,20 @@ async function parseWasmModule(data, outFields) {
     let wasmModule = await WebAssembly.compile(data);
 
     let importData = WebAssembly.Module.imports(wasmModule)
-        // Just get the names of functions(?) for now.
-        .filter(x => x.kind === "function")
-        .map(x => x.name);
+        // Just get the functions for now.
+        .filter(x => x.kind === "function");
 
+    // Each import goes under its module name.
+    let importObj = Object.fromEntries(importData.map(x => [x.module, {}]));
+    for (let x of importData) {
+        // Fake the imports for instantiation.
+        importObj[x.module][x.name] = () => {};
+    }
     // An instance is needed for more information about exported functions,
     // although not much can be (currently?) extracted (for example types would
     // probably require more specific parsing of the binary and they are just
     // the Wasm primitives anyway)...
-    let instance = await WebAssembly.instantiate(wasmModule);
+    let instance = await WebAssembly.instantiate(wasmModule, importObj);
     let exportData =  WebAssembly.Module.exports(wasmModule)
         // Just get the names of functions for now; the
         // interface description attached to created modules is
@@ -207,6 +214,56 @@ router.delete("/", /*authenticationMiddleware,*/ (request, response) => {
         .status(202) // Accepted.
         .json({ success: "deleting all modules" });
 });
+
+/**
+ * Notify devices that a module previously deployed has been updated.
+ * @param {*} moduleId ID of the module that has been updated.
+ */
+async function notifyModuleFileUpdate(moduleId) {
+    // Find devices that have the module deployed and the matching deployment manifests.
+    let deployments = (await getDb().read("deployment"));
+    let devicesToUpdatedManifests = {};
+    for (let deployment of deployments) {
+        // Unpack the mapping of device-id to manifest sent to it.
+        let [deviceId, manifest] = Object.entries(deployment.fullManifest)[0];
+
+        if (manifest.modules.some(x => x.id.toString() === moduleId)) {
+            if (devicesToUpdatedManifests[deviceId] === undefined) {
+                devicesToUpdatedManifests[deviceId] = [];
+            }
+            devicesToUpdatedManifests[deviceId].push(manifest);
+        }
+    }
+
+    // Deploy all the manifests again, which has the same effect as the first
+    // time (following the idempotence of ReST).
+    for (let [deviceId, manifests] of Object.entries(devicesToUpdatedManifests)) {
+        let device = (await getDb()
+            .read("device", { _id: deviceId }))[0];
+
+        if (!device) {
+            response.status(404).json(new utils.Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
+            return;
+        }
+
+        for (let manifest of manifests) {
+            let deploymentJson = JSON.stringify(manifest, null, 2);
+            utils.messageDevice(device, "/deploy", deploymentJson);
+        }
+    }
+}
+
+/**
+ * Update the modules matched by filter with the given fields.
+ * @param {*} filter To match the modules to update.
+ * @param {*} fields To add to the matched modules.
+ */
+async function updateModule(filter, fields) {
+    let updateRes = await getDb().update("module", filter, fields, false);
+    if (updateRes.matchedCount === 0) {
+        throw "no module matched the filter";
+    }
+}
 
 /**
  * Middleware to confirm existence of an incoming file from a user-submitted
