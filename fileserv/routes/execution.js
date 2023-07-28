@@ -1,22 +1,22 @@
-const http = require('http');
-
 const express = require("express");
 
-const { getDb } = require("../server.js");
 const utils = require("../utils.js");
 
 
-const router = express.Router();
+let database = null
 
-module.exports = { router };
+function setDatabase(db) {
+    database = db;
+}
+
 
 /**
  * Send data to the first device in the deployment-sequence in order to
  * kickstart the application execution.
  */
-router.post("/:deploymentId", async (request, response) => {
+const execute = async (request, response) => {
     // 1. get the deployment and other execution related data from db.
-    let deployment = (await getDb().read("deployment", { _id: request.params.deploymentId }))[0];
+    let deployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
     
     // Pick the starting point based on sequence's first device and function.
     let startEndpoint = deployment
@@ -135,4 +135,10 @@ router.post("/:deploymentId", async (request, response) => {
             response.status(500).json(new utils.Error(err));
         }
     );
-});
+}
+
+const router = express.Router();
+router.post("/:deploymentId", execute);
+
+
+module.exports = { setDatabase, router };
