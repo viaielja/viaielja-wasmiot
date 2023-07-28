@@ -4,7 +4,7 @@
 
 const supertest = require('supertest');
 
-const { app } = require('../server');
+const app = require('../server');
 const PRIMITIVE_MODULE_DESCRIPTION = require("./testData/moduleDescription/primitive");
 
 
@@ -37,29 +37,26 @@ describe("module", () => {
 });
 
 describe("end to end", () => {
-  test("creation, deployment and execution of an 'increment' function-module succeeds", async () => {
+  test("creation, deployment and execution of a primitive typed function", async () => {
     let moduleCreationResult = await orchestratorApi
         .post("/file/module")
         .send(PRIMITIVE_MODULE_DESCRIPTION)
         .expect(201);
-        // TODO: Test that response has the id in JSON.
+
+    expect(moduleCreationResult.body).toHaveProperty("_id");
     
-    let createdModuleId = moduleCreationResult.body["success"]
-      .substring(moduleCreationResult.body["success"].lastIndexOf(":") + 1)
-      .trim();
+    let createdModuleId = moduleCreationResult.body["_id"];
     
     let wasmUploadResponse = await orchestratorApi
-      .post("/file/module/upload")
-      .field("id", createdModuleId)
+      .post(`/file/module/${createdModuleId}/upload`)
       .attach("module", PRIMITIVE_MODULE_PATH)
       .expect(200);
 
-    expect(wasmUploadResponse.body).toHaveProperty("success");
-    expect(wasmUploadResponse.body["success"]).toHaveProperty("type");
-    expect(wasmUploadResponse.body["success"]["type"]).toEqual("wasm");
-    expect(wasmUploadResponse.body["success"]).toHaveProperty("fields");
+    expect(wasmUploadResponse.body).toHaveProperty("type");
+    expect(wasmUploadResponse.body["type"]).toEqual("wasm");
+    expect(wasmUploadResponse.body).toHaveProperty("fields");
 
-    let fields = wasmUploadResponse.body["success"]["fields"];
+    let fields = wasmUploadResponse.body["fields"];
     expect(fields).toHaveProperty("exports");
     expect(fields["exports"].length).toBeGreaterThan(0);
     expect(fields["exports"][0])

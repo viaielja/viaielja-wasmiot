@@ -10,6 +10,10 @@ const { MongoDatabase, MockDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
 const Orchestrator = require("./src/orchestrator");
 
+/**
+ * The Express app.
+ */
+let app;
 
 /**
  * The underlying nodejs http-server that app.listen() returns.
@@ -32,12 +36,6 @@ let deviceDiscovery;
  */
 let orchestrator;
 
-
-module.exports = {
-    database,
-    deviceDiscovery
-};
-
 // Set working directory to this file's root in order to use relative paths
 // (i.e. "./foo/bar"). TODO Find out if the problem is with incompatible Node
 // versions (16 vs 18).
@@ -59,7 +57,8 @@ const config = {
 
 
 ///////////
-// RUN MAIN
+// RUN MAIN:
+
 async function main() {
     console.log("Orchestrator starting...")
 
@@ -90,16 +89,8 @@ main()
     });
 
 
-///////////
-// EXPORTS.
-
-module.exports = {
-    getDb: () => database,
-
-};
-
 //////////////////////////
-// INITIALIZATION HELPERS.
+// INITIALIZATION HELPERS:
 
 /*
 * Initialize and connect to the database.
@@ -155,8 +146,10 @@ function initServer() {
     });
 }
 
+
 ////////////
 // SHUTDOWN:
+
 process.on("SIGTERM", shutDown);
 // Handle CTRL-C gracefully; from
 // https://stackoverflow.com/questions/43003870/how-do-i-shut-down-my-express-server-gracefully-when-its-process-is-killed
@@ -185,3 +178,6 @@ async function shutDown() {
     console.log("Finished shutting down.");
     process.exit();
 }
+
+
+module.exports = app;
