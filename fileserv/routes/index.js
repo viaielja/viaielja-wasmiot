@@ -17,6 +17,7 @@ function init(routeDependencies) {
     modules.setDatabase(routeDependencies.database);
 
     deployment.setDatabase(routeDependencies.database);
+    deployment.setOrchestrator(routeDependencies.orchestrator);
 
     execution.setDatabase(routeDependencies.database);
 

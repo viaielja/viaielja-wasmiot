@@ -4,10 +4,12 @@
 
 const { chdir } = require('process');
 
+const { MONGO_URI, PUBLIC_PORT, PUBLIC_BASE_URI, DEVICE_TYPE } = require("./constants.js");
 const { init: initApp } = require("./src/app");
 const { MongoDatabase, MockDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
-const { MONGO_URI, PUBLIC_PORT, PUBLIC_BASE_URI, DEVICE_TYPE } = require("./constants.js");
+const Orchestrator = require("./src/orchestrator");
+
 
 /**
  * The underlying nodejs http-server that app.listen() returns.
@@ -23,6 +25,12 @@ let database;
  * Thing to use for searching and listing services found (by mDNS).
  */
 let deviceDiscovery;
+
+/**
+ * The thing responsible of and containing logic on orchestrating deployments of
+ * modules on devices.
+ */
+let orchestrator;
 
 
 module.exports = {
@@ -64,7 +72,9 @@ async function main() {
         throw e;
     }
 
-    app = initApp({ database, deviceDiscovery, testing });
+    orchestrator = new Orchestrator({ database, deviceDiscovery }, { packageManagerBaseUrl: PUBLIC_BASE_URI });
+
+    app = initApp({ database, deviceDiscovery, orchestrator, testing });
 
     // Must (successfully) wait for database before starting to listen for
     // web-clients or scanning devices.
