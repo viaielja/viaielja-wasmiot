@@ -121,12 +121,13 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
     // According to deployment manifest describing the composed
     // application-calls, create a structure to represent the expected behaviour
     // and flow of data between nodes.
-    for (let i in updatedSequence) {
-        let deviceId = updatedSequence[i].device._id;
+    for (let i = 0; i < updatedSequence.length; i++) {
+        let deviceIdStr = updatedSequence[i].device._id.toString();
 
         let forwardEndpoint;
         let forwardFunc = updatedSequence[i + 1]?.func;
-        let forwardDeployment = deploymentsToDevices[updatedSequence[i + 1]?.device._id];
+        let forwardDeviceIdStr = updatedSequence[i + 1]?.device._id.toString();
+        let forwardDeployment = deploymentsToDevices[forwardDeviceIdStr];
 
         if (forwardFunc === undefined || forwardDeployment === undefined) {
             forwardEndpoint = null;
@@ -157,7 +158,7 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
         };
 
         // Attach the created details of deployment to matching device.
-        deploymentsToDevices[deviceId].instructions.push(instruction);
+        deploymentsToDevices[deviceIdStr].instructions.push(instruction);
     }
 
     let sequenceAsIds = Array.from(updatedSequence)
@@ -201,22 +202,28 @@ function sequenceFromResources(sequence, availableDevices) {
             throw `Failed to find function '${funcName}' from requested module: ${modulee}`;
         }
 
-        if (device) {
-            selectedDevices.push(device);
-        } else {
-            // Search for a device that could run the module.
-            let match = availableDevices.find(
-                d => modulee.requirements.every(
-                    requirement => d.description.supervisorInterfaces.includes(requirement)
+        function deviceSatisfiesModule(d, m) {
+            return m.requirements.every(
+                r => d.description.supervisorInterfaces.find(
+                    interface => interface === r.name // i.kind === r.kind && i.module === r.module
                 )
             );
-
-            if (!match) {
-                throw `Failed to satisfy module '${JSON.stringify(modulee, null, 2)}': No matching device`;
-            }
-
-            selectedDevices.push(match);
         }
+
+        if (device) {
+            // Check that the device actually can run module and function.
+            if (!deviceSatisfiesModule(device, modulee)) {
+                throw `device '${device.name}' does not satisfy module's requirements`;
+            }
+        } else {
+            // Search for a device that could run the module.
+            device = availableDevices.find(d => deviceSatisfiesModule(d, modulee));
+
+            if (!device) {
+                throw `no matching device satisfying all requirements: ${JSON.stringify(modulee.requirements, null, 2)}`;
+            }
+        }
+        selectedDevices.push(device);
     }
 
     // Check that length of all the different lists matches (i.e., for every
@@ -235,7 +242,7 @@ function sequenceFromResources(sequence, availableDevices) {
     // update the deployment sequence's devices in database with the ones
     // selected (handles possibly 'null' devices).
     let updatedSequence = Array.from(sequence);
-    for (let i in updatedSequence) {
+    for (let i = 0; i < updatedSequence.length; i++) {
         updatedSequence[i].device = selectedDevices[i];
         updatedSequence[i].module = selectedModules[i];
         updatedSequence[i].func   = sequence[i].func;
@@ -300,8 +307,8 @@ function endpointDescription(deploymentId, node) {
     let urlString = node.module.openapi.servers[0].url;
     // FIXME hardcoded: "url" field assumed to be template "http://{serverIp}:{port}".
     urlString = urlString
-        .replace("{serverIp}", node.device.addresses[0])
-        .replace("{port}", node.device.port);
+        .replace("{serverIp}", node.device.communication.addresses[0])
+        .replace("{port}", node.device.communication.port);
     let url = new URL(urlString);
 
     // FIXME hardcoded: "paths" field assumed to contain template "/{deployment}/modules/{module}/<thisFuncName>".
