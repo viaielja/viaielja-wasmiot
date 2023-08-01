@@ -22,9 +22,6 @@ class DeviceManager {
         this.bonjourInstance = new bonjour.Bonjour();
         this.browser = null;
         this.database = database;
-        // This is where the needed data on available devices is stored TODO: is
-        // the database even needed then?
-        this.devices = [];
         this.queryOptions = { type };
     }
 
@@ -41,7 +38,14 @@ class DeviceManager {
         // Check the status of the services every 2 minutes. (NOTE: This is
         // because the library used does not seem to support re-querying the
         // services on its own).
-        this.healthCheckId = setInterval(this.healthCheck.bind(this), 5000);
+        let healthCheckBound = this.healthCheck.bind(this);
+        this.healthCheckId = setInterval(
+            async () => {
+                let healthyCount = await healthCheckBound();
+                console.log((new Date()).toISOString(), "# of healthy devices:", healthyCount);
+            },
+            5000
+        );
     }
 
     /**
@@ -79,8 +83,8 @@ class DeviceManager {
      * additional information like WoT-description and platform.
      * @param {*} serviceData Object containing needed data of the service discovered via mDNS.
      */
-    #saveDevice(serviceData) {
-        let newDevice = this.#addNewDevice(serviceData);
+    async #saveDevice(serviceData) {
+        let newDevice = await this.#addNewDevice(serviceData);
         // Check for duplicate or unknown (i.e., non-queried) device.
         if (!newDevice) {
             console.log(`Service '${serviceData.name}' is already known!`);
@@ -93,29 +97,30 @@ class DeviceManager {
     /**
      * Based on found service, create a device entry of it if the device is not
      * already known.
-     * @param {*} serviceData 
+     * @param {*} serviceData
      * @returns The device entry created or null if the device is already fully
      * known.
      */
-    #addNewDevice(serviceData) {
-        if (!this.devices[serviceData.name]) {
+    async #addNewDevice(serviceData) {
+        let device = (await this.database.read("device", { name: serviceData.name }))[0];
+        if (!device) {
             // Transform the service into usable device data.
-            this.devices[serviceData.name] = {
+            device = {
                 // Devices are identified by their "fully qualified" name.
-                id: serviceData.name,
+                name: serviceData.name,
                 communication: {
                     addresses: serviceData.addresses,
                     port: serviceData.port,
                 }
             };
+            this.database.create("device", [device]);
         } else {
-            let device = this.devices[serviceData.name];
             if (device.description && device.description.platform) {
                 return null;
             }
         }
 
-        return this.devices[serviceData.name];
+        return device;
     }
 
     /**
@@ -130,7 +135,7 @@ class DeviceManager {
                 // Find and forget the service in question whose advertised
                 // host failed to answer to HTTP-GET.
                 console.log(" Error in device introduction: ", errorMsg);
-                this.#forgetDevice(device.id);
+                this.#forgetDevice(device.name);
             })
             .bind(this);
 
@@ -158,12 +163,12 @@ class DeviceManager {
             return;
         }
 
-        this.devices[device.id].description = deviceDescription;
+        this.database.update("device", { name: device.name }, { description: deviceDescription });
 
-        console.log(`Added description for device '${device.id}'`);
+        console.log(`Added description for device '${device.name}'`);
 
         // Do an initial health check on the new device.
-        this.healthCheck(device.id);
+        this.healthCheck(device.name);
     }
 
     /**
@@ -178,58 +183,71 @@ class DeviceManager {
         this.healthCheckId = null;
 
         this.bonjourInstance.destroy();
-        this.devices = {};
     }
 
     /**
      * Check and update "health" of currently known devices.
      * TODO: This should be restful in that the one running in interval should
      * not clash with direct calls.
-     * @param {*} deviceId Id of the device to check. If not given, check all.
+     * @param {*} deviceName Identifying name of the device to check. If not
+     * given, check all.
      */
-    async healthCheck( deviceId) {
-        let devices = deviceId ? [this.devices[deviceId]] : Object.values(this.devices);
+    async healthCheck(deviceName) {
+        let devices = await this.database.read("device", deviceName ? { name: deviceName } : {});
 
         let date = new Date();
         let healthChecks = devices.map(x => ({
-                device: x.id,
+                device: x.name,
                 // Gather promises to be awaited.
                 check: this.#healthCheckDevice(x),
                 timestamp: date,
             }));
 
+        let healthyCount = 0;
         for (let x of healthChecks) {
+            let health;
             try {
-                let health = await x.check;
-                this.devices[x.device].health = {
-                    report: health,
-                    timeOfQuery: x.timestamp,
-                };
+                health = await x.check;
+                healthyCount++;
             } catch (e) {
-                console.log(`Forgetting device '${x.device}' with health problems:`, e);
+                console.log(
+                    `Forgetting device with health problems (device: ${x.device}, timestamp: ${x.timestamp.toISOString()}):`, e.message
+                );
                 this.#forgetDevice(x.device);
+                continue;
             }
-        }
 
-        console.log("[", date, "] current number of devices: ", Object.keys(this.devices).length); 
+            this.database.update(
+                "device",
+                { name: x.device },
+                {
+                    health: {
+                        report: health,
+                        timeOfQuery: x.timestamp,
+                    }
+                }
+            );
+        }
+        return healthyCount;
     }
 
 
     /**
      * Forget a device based on an identifier or one derived from mDNS service data.
-     * @param {*} x The string-identifier or service data of the device to forget. 
+     * @param {*} x The string-identifier or service data (i.e., name) of the
+     * device to forget. 
      */
     #forgetDevice(x) {
-        let key = null;
+        let name = null;
         if (typeof x === "string") {
-            key = x;
+            name = x;
         } else {
             console.log(`Service '${service.name}' seems to have emitted 'goodbye'`);
             // Assume the service data from mDNS is used to remove a device.
-            key = x.name;
+            name = x.name;
         }
 
-        delete this.devices[key];
+        this.database.delete("device", { name: name });
     }
 
 
