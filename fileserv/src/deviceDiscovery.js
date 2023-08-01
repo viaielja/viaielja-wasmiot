@@ -34,21 +34,44 @@ class DeviceManager {
      * discovery's reach.
      */
     startDiscovery() {
-        // Bonjour/mDNS sends the queries on its own; no need to send updates
-        // manually.
-        this.browser = this.bonjourInstance.find(this.queryOptions);
- 
-        // This is needed in order to refer to outer "this" instead of the
-        // bonjour-browser-"this" inside the callback...
-        this.browser.on("up", this.#saveDevice.bind(this));
-        this.browser.on("down", this.#forgetDevice.bind(this));
-
+        // Continuously do new scans for devices in an interval.
+        let scanBound = this.startScan.bind(this);
+        scanBound(2000);
+        this.scannerId = setInterval(() => scanBound(2000), 5000);
         // Check the status of the services every 2 minutes. (NOTE: This is
         // because the library used does not seem to support re-querying the
         // services on its own).
-        setInterval(this.healthCheck.bind(this), 120000);
+        this.healthCheckId = setInterval(this.healthCheck.bind(this), 5000);
+    }
 
-        console.log("mDNS initialized; searching for hosts with ", this.queryOptions);
+    /**
+     * Do a scan for devices for a duration of time.
+     * @param {*} duration The (maximum) amount of time to scan for devices in
+     * milliseconds.
+     */
+    startScan(duration=10000) {
+        console.log("Scanning for devices", this.queryOptions, "...");
+
+        // Use a single browser at a time for simplicity. Save it in order to
+        // end its life when required.
+        this.browser = this.bonjourInstance.find(this.queryOptions);
+ 
+        // Binding the callbacks is needed in order to refer to outer "this"
+        // instead of the bonjour-browser-"this" inside the callback...
+        this.browser.on("up", this.#saveDevice.bind(this));
+        this.browser.on("down", this.#forgetDevice.bind(this));
+
+        setTimeout(this.stopScan.bind(this), duration);
+    }
+
+    /**
+     * Stop and reset scanning.
+     */
+    stopScan() {
+        this.browser.stop();
+        this.browser = null;
+
+        console.log("Stopped scanning for devices.");
     }
 
     /**
@@ -144,19 +167,16 @@ class DeviceManager {
     }
 
     /**
-     * Force refresh of device discovery so that devices already discovered and
-     * running will be discovered again.
-     * 
-     * @throws If re-initializing scanning fails.
+     * Stop and clean up the device discovery process and currently active
+     * callbacks for device health.
      */
-    refresh() {
-        this.destroy();
-
-        this.bonjourInstance = new bonjour.Bonjour();
-        this.startDiscovery();
-    }
-
     destroy() {
+        clearInterval(this.scannerId);
+        this.scannerId = null;
+
+        clearInterval(this.healthCheckId);
+        this.healthCheckId = null;
+
         this.bonjourInstance.destroy();
         this.devices = {};
     }
@@ -168,7 +188,7 @@ class DeviceManager {
      * @param {*} deviceId Id of the device to check. If not given, check all.
      */
     async healthCheck( deviceId) {
-        let devices = deviceId ? [this.devices[deviceId]] : this.devices;
+        let devices = deviceId ? [this.devices[deviceId]] : Object.values(this.devices);
 
         let date = new Date();
         let healthChecks = devices.map(x => ({
