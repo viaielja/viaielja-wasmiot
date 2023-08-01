@@ -129,7 +129,7 @@ const execute = async (request, response) => {
             response.json({"foo": "bar"});
         },
         function(err) {
-            console.log(`Error while posting to URL'${url}':`, err);
+            console.error(`Error while posting to URL'${url}':`, err);
             // TODO: What is correct status code here (technically device
             // could have failed, not orchestrator)?
             response.status(500).json(new utils.Error(err));

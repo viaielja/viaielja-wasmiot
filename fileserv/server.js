@@ -122,7 +122,7 @@ function initAndRunDeviceDiscovery() {
         console.log("Device discovery initialization failed: ", e);
         throw e;
     }
-    deviceDiscovery.run();
+    deviceDiscovery.startDiscovery();
 }
 
 /**

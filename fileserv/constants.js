@@ -28,6 +28,7 @@ const DEVICE_TYPE = "webthing";
 // TODO: Use dot after "local" or no?
 const DEVICE_DESC_ROUTE = "/.well-known/wasmiot-device-description";
 const DEVICE_WOT_ROUTE = "/.well-known/wot-thing-description";
+const DEVICE_HEALTH_ROUTE = "/health";
 
 
 
@@ -39,6 +40,7 @@ module.exports = {
     PUBLIC_BASE_URI,
     MODULE_DIR,
     DEVICE_DESC_ROUTE,
+    DEVICE_HEALTH_ROUTE,
     DEVICE_TYPE,
     FRONT_END_DIR,
 };

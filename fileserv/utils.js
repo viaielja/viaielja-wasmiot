@@ -39,7 +39,7 @@ function callDeviceFuncSingleIntegerArgument(
     let path = `/modules/${funcData.module.name}/${funcData.name}`;
     let input = `param1=${inputInt}`;
 
-    let url = new URL(`http://${device.addresses[0]}:${device.port}`);
+    let url = new URL(`http://${device.communication.addresses[0]}:${device.communication.port}`);
     url.pathname = path;
     url.search = input;
 
@@ -121,8 +121,8 @@ function messageDevice(device, path, jsonStr, method="POST") {
     let requestOptions = {
         method: method,
         protocol: "http:",
-        host: device.addresses[0],
-        port: device.port,
+        host: device.communication.addresses[0],
+        port: device.communication.port,
         path: path,
         headers: {
             "Content-type": "application/json",
