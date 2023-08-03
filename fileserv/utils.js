@@ -146,21 +146,19 @@ function messageDevice(device, path, jsonStr, method="POST") {
     req.end();
 }
 
-/**
- * "Enum variant" for an error with result containing some data.
- */
-class Error {
-    constructor(data) {
-        this.error = data;
-    }
-}
 
 /**
- * "Enum variant" for a success with result containing some data.
+ * Generic representation of an error response from the API.
+ *
+ * Fields:
+ * - `errorText` Human friendly description of the error that client could
+ * choose to display.
+ * - `error` The concrete error object.
  */
-class Success {
-    constructor(data) {
-        this.success = data;
+class ApiError {
+    constructor(errorText, error) {
+        this.errorText = errorText;
+        this.error = error;
     }
 }
 
@@ -170,6 +168,5 @@ module.exports = {
     callDeviceFuncRaw,
     callDeviceFuncHttp,
     messageDevice,
-    Error,
-    Success,
+    Error: ApiError,
 };
