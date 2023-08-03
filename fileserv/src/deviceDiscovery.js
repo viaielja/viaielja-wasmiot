@@ -1,5 +1,5 @@
 const bonjour = require("bonjour-service");
-const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE } = require("../constants.js");
+const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE, DEVICE_HEALTH_CHECK_INTERVAL_MS, DEVICE_SCAN_DURATION_MS, DEVICE_SCAN_INTERVAL_MS } = require("../constants.js");
 
 
 /**
@@ -23,6 +23,10 @@ class DeviceManager {
         this.browser = null;
         this.database = database;
         this.queryOptions = { type };
+
+        this.deviceScanDuration = DEVICE_SCAN_DURATION_MS;
+        this.deviceScanInterval = DEVICE_SCAN_INTERVAL_MS;
+        this.deviceHealthCheckInterval = DEVICE_HEALTH_CHECK_INTERVAL_MS;
     }
 
     /**
@@ -33,8 +37,8 @@ class DeviceManager {
     startDiscovery() {
         // Continuously do new scans for devices in an interval.
         let scanBound = this.startScan.bind(this);
-        scanBound(2000);
-        this.scannerId = setInterval(() => scanBound(2000), 5000);
+        scanBound(this.deviceScanDuration);
+        this.scannerId = setInterval(() => scanBound(this.deviceScanDuration), this.deviceScanInterval);
         // Check the status of the services every 2 minutes. (NOTE: This is
         // because the library used does not seem to support re-querying the
         // services on its own).
@@ -44,7 +48,7 @@ class DeviceManager {
                 let healthyCount = await healthCheckBound();
                 console.log((new Date()).toISOString(), "# of healthy devices:", healthyCount);
             },
-            5000
+            this.deviceHealthCheckInterval
         );
     }
 
