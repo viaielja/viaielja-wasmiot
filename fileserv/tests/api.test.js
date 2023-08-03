@@ -15,40 +15,82 @@ const orchestratorApi = supertest(app);
 
 describe("module", () => {
   test("creation success", async () => {
-    await orchestratorApi
+    let moduleCreationResponse = await orchestratorApi
       .post("/file/module")
       .send({
-        name: "foo",
-        openapi: {
-          bar: "baz"
-        }
+        name: "a",
+        openapi: {}
       })
-      .expect(201);
+      .expect(201)
+      .expect("Content-Type", /application\/json/);
+    
+    expect(moduleCreationResponse.body).toHaveProperty("id");
+  });
+
+  test("listing success", async () => {
+    await orchestratorApi
+        .post("/file/module")
+        .send({name: "b", openapi: {}});
+
+    await orchestratorApi
+        .post("/file/module")
+        .send({name: "c", openapi: {}});
 
     let moduleListResponse = await orchestratorApi
       .get("/file/module/")
       .expect(200)
       .expect("Content-Type", /application\/json/);
     
-    expect(moduleListResponse.body).toHaveLength(1);
-    expect(moduleListResponse.body[0]["name"]).toEqual("foo");
-    expect(moduleListResponse.body[0]["openapi"]).toEqual({ bar: "baz" });
+    // NOTE: Not testing exact length, because it would require resetting app
+    // (database) state on top of reliably running tests sequentially.
+    expect(moduleListResponse.body).toHaveProperty("length");
+    expect(moduleListResponse.body.length).toBeGreaterThan(1);
   });
-});
 
-describe("end to end", () => {
-  test("creation, deployment and execution of a primitive typed function", async () => {
-    let moduleCreationResult = await orchestratorApi
+  test("fetched by ID", async () => {
+    let dId = (await orchestratorApi
+        .post("/file/module")
+        .send({name: "d", openapi: {}})
+      ).body["id"];
+ 
+    let dGetResponse = await orchestratorApi.get(`/file/module/${dId}`)
+      .expect(200)
+      .expect("Content-Type", /application\/json/);
+
+    expect(dGetResponse.body).toHaveProperty("name");
+    expect(dGetResponse.body["name"]).toEqual("d");
+    expect(dGetResponse.body).toHaveProperty("openapi");
+    expect(dGetResponse.body["openapi"]).toEqual({});
+  });
+
+  test("identified by ID", async () => {
+    let eId = (await orchestratorApi
+        .post("/file/module")
+        .send({name: "e", openapi: {}})
+      ).body["id"];
+    
+    let fId = (await orchestratorApi
+        .post("/file/module")
+        .send({name: "f", openapi: {}})
+      ).body["id"];
+
+
+    let eGetResponse = await orchestratorApi.get(`/file/module/${eId}`);
+    expect(eGetResponse.body["name"]).toEqual("e");
+
+    let fGetResponse = await orchestratorApi.get(`/file/module/${fId}`);
+    expect(fGetResponse.body["name"]).toEqual("f");
+  });
+
+  test("wasm upload success", async () => {
+    let primitiveId = (await orchestratorApi
         .post("/file/module")
         .send(PRIMITIVE_MODULE_DESCRIPTION)
-        .expect(201);
+      ).body["id"];
 
-    expect(moduleCreationResult.body).toHaveProperty("_id");
-    
-    let createdModuleId = moduleCreationResult.body["_id"];
-    
     let wasmUploadResponse = await orchestratorApi
-      .post(`/file/module/${createdModuleId}/upload`)
+      // TODO: PUT or PATCH would be ReSTfuller...
+      .post(`/file/module/${primitiveId}/upload`)
       .attach("module", PRIMITIVE_MODULE_PATH)
       .expect(200);
 
@@ -58,11 +100,45 @@ describe("end to end", () => {
 
     let fields = wasmUploadResponse.body["fields"];
     expect(fields).toHaveProperty("exports");
+    expect(fields["exports"]).toHaveProperty(length);
     expect(fields["exports"].length).toBeGreaterThan(0);
     expect(fields["exports"][0])
         .toEqual({ "name": "add1", "parameterCount": 1 });
+  });
 
-    // TODO: The rest of the test (deployment and execution with a fake device (use `jest.fn()`?)).
-    console.error("!!! NOTE: This test is currently unfinished !!!");
+  test("creation then individual deletion success", async () => {
+    let gId = (await orchestratorApi
+        .post("/file/module")
+        .send({
+          name: "g",
+          openapi: {}
+        })
+      ).body["id"];
+
+    await orchestratorApi.get(`/file/module/${gId}`).expect(200);
+
+    await orchestratorApi.delete(`/file/module/${gId}`).expect(204);
+
+    await orchestratorApi.get(`/file/module/${gId}`).expect(404);
+  });
+
+  test("full deletion success", async () => {
+    await orchestratorApi
+        .post("/file/module")
+        .send({
+          name: "h",
+          openapi: {}
+        });
+
+    let moduleListResponse = await orchestratorApi.get("/file/module/");
+    expect(moduleListResponse.length).toBeGreaterThan(0);
+    
+    let moduleDeleteResponse = await orchestratorApi.delete(`/file/module/`)
+      .expect(200);
+
+    // NOTE: Not testing for exact match or if anything can fetched after full
+    // deletion, because of test synchronization ambiguity.
+    expect(moduleDeleteResponse).toHaveProperty("deletedCount");
+    expect(moduleDeleteResponse["deletedCount"]).toBeGreaterThan(0);
   });
 });
