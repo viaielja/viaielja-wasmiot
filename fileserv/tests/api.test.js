@@ -42,7 +42,7 @@ describe("module", () => {
       .expect("Content-Type", /application\/json/);
     
     // NOTE: Not testing exact length, because it would require resetting app
-    // (database) state on top of reliably running tests sequentially.
+    // (database) state (on top of reliably running tests sequentially).
     expect(moduleListResponse.body).toHaveProperty("length");
     expect(moduleListResponse.body.length).toBeGreaterThan(1);
   });
@@ -99,7 +99,7 @@ describe("module", () => {
     expect(wasmUploadResponse.body).toHaveProperty("exports");
 
     let exports = wasmUploadResponse.body["exports"];
-    expect(exports).toHaveProperty(length);
+    expect(exports).toHaveProperty("length");
     expect(exports.length).toBeGreaterThan(0);
     expect(exports[0])
         .toEqual({ "name": "add1", "parameterCount": 1 });
@@ -130,14 +130,14 @@ describe("module", () => {
         });
 
     let moduleListResponse = await orchestratorApi.get("/file/module/");
-    expect(moduleListResponse.length).toBeGreaterThan(0);
+    expect(moduleListResponse.body.length).toBeGreaterThan(0);
     
     let moduleDeleteResponse = await orchestratorApi.delete(`/file/module/`)
       .expect(200);
 
     // NOTE: Not testing for exact match or if anything can fetched after full
     // deletion, because of test synchronization ambiguity.
-    expect(moduleDeleteResponse).toHaveProperty("deletedCount");
-    expect(moduleDeleteResponse["deletedCount"]).toBeGreaterThan(0);
+    expect(moduleDeleteResponse.body).toHaveProperty("deletedCount");
+    expect(moduleDeleteResponse.body["deletedCount"]).toBeGreaterThan(0);
   });
 });
