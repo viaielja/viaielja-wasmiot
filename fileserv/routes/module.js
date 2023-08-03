@@ -11,19 +11,68 @@ function setDatabase(db) {
     database = db;
 }
 
+class ModuleCreated {
+    constructor(id) {
+        this.id = id;
+    }
+}
+
+class WasmFileUploaded {
+    constructor(exports) {
+        this.type = "wasm";
+        this.exports = exports;
+    }
+}
+
+class PbFileUploaded {
+    constructor() {
+        this.type = "pb";
+    }
+}
+
+
 /**
- * GET a Wasm-module; used by IoT-devices.
+ * GET a single or all available Wasm-modules.
  */
 const getModule = async (request, response) => {
-    // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = (await database.read("module", { _id: request.params.moduleId }))[0];
-    if (doc) {
-        console.log("Sending metadata of module: " + doc.name);
-        response.json(doc);
+    // Common database query in any case.
+    let getAllModules = request.params.moduleId === undefined;
+    let matches;
+    try {
+        let filter = getAllModules ? {} : { _id: request.params.moduleId };
+        matches = await database.read("module", filter);
+    } catch (e) {
+        let err = ["database query failed", e];
+        console.error(...err);
+        response
+            .status(500)
+            .json(new utils.Error(...err));
+        return;
+    }
+
+    if (getAllModules) {
+        // Return all modules.
+        console.log("Sending metadata of all modules");
+        response.json(matches);
     } else {
-        let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
-        console.log(errmsg);
-        response.status(400).send(errmsg);
+        // Return the module identified by given ID.
+        if (matches.length === 0) {
+            let err = `no matches for ID ${request.params.moduleId}`;
+            console.log(err);
+            response
+                .status(404)
+                .json(new utils.Error(err));
+        } else if (matches.length > 1) {
+            let err = `too many matches for ID ${request.params.moduleId}`;
+            console.error(err);
+            response
+                .status(500)
+                .json(new utils.Error(err));
+        } else {
+            let doc = matches[0];
+            console.log("Sending metadata of module: ", doc.name);
+            response.json(doc);
+        }
     }
 }
 
@@ -57,33 +106,24 @@ const getModuleFile = async (request, response) => {
 }
 
 /**
- * GET list of all Wasm-modules; used by Actors in constructing a deployment.
- */
-const getModules = async (request, response) => {
-    // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await database.read("module"));
-}
-
-/**
  * Save metadata of a Wasm-module to database and leave information about the
  * concrete file to be patched by another upload-request. This separates
  * between requests with pure JSON or binary bodies.
  */
 const createModule = async (request, response) => {
-    // Prevent using the same name twice for a module.
-    let exists = (await database.read("module", { name: request.body.name }))[0];
-    if (exists) {
-        console.log(`Tried to write module with existing name: '${request.body.name}'`);
-        let errmsg = `Module with name ' ${request.body.name}' already exists`;
-        response.status(400).json(new utils.Error(errmsg));
+    let moduleId;
+    try {
+        moduleId = (await database.create("module", [request.body]))
+            .insertedIds[0];
+    } catch (e) {
+        response.status(400).json(new utils.Error(undefined, e));
         return;
     }
 
-    const moduleId = (await database.create("module", [request.body]))
-        .insertedIds[0];
-
     // Wasm-files are identified by their database-id.
-    response.status(201).json(new utils.Success({ message: "Uploaded module with id: "+ moduleId }));
+    response
+        .status(201)
+        .json(new ModuleCreated(moduleId));
 }
 
 /**
@@ -102,7 +142,7 @@ const createModule = async (request, response) => {
  * multipart/form-data at the frontend), use POST.
  */
 const addModuleFile = async (request, response) => {
-    let filter = { _id: request.body.id };
+    let filter = { _id: request.params.moduleId };
     let fileExtension = request.file.originalname.split(".").pop();
 
     let updateObj = {}
@@ -124,6 +164,7 @@ const addModuleFile = async (request, response) => {
 
         // Perform actions specific for the filetype to update
         // non-filepath-related metadata fields.
+        let success;
         switch (fileExtension) {
             case "wasm":
                 try {
@@ -133,47 +174,52 @@ const addModuleFile = async (request, response) => {
                     response.status(500).json({err: `couldn't compile Wasm: ${err}`});
                     return;
                 }
+                success = new WasmFileUploaded(updateObj.exports);
                 break;
             case "pb":
                 // Model weights etc. for an ML-application.
+                success = new PbFileUploaded();
                 break;
             default:
-                response.status(400).json({ err: `unsupported file extension '${fileExtension}'` });
+                let err = `unsupported file extension: '${fileExtension}'`;
+                console.error(err);
+                response
+                    .status(500)
+                    .json(new utils.Error(err));
         }
 
         // Now actually update the database-document.
         try {
             await updateModule(filter, updateObj);
 
-            let msg = `Updated module '${request.body.id}' with data: ${JSON.stringify(updateObj, null, 2)}`;
-            let success = new utils.Success({ 
-                message: msg,
-                type: fileExtension,
-                fields: updateObj
-            });
-            response.status(200).json(success);
+            console.log(`Updated module '${request.body.id}' with data:`, updateObj);
 
-            console.log(msg);
+            response.json(success);
 
             // Tell devices to fetch updated files on modules.
             notifyModuleFileUpdate(request.body.id);
-        } catch (err) {
-            let msg = "Failed attaching a file to module: " + err;
-            response.status(500).json(new utils.Error(msg));
-
-            console.log(msg + ". Tried adding data: " + JSON.stringify(updateObj, null, 2));
+        } catch (e) {
+            let err = ["Failed attaching a file to module", e];
+            console.error(...err);
+            response
+                .status(500)
+                .json(new utils.Error(...err));
         }
     });
 }
 
 /**
- * Delete all the modules from database (for debugging purposes).
+ * DELETE a single or all available Wasm-modules.
  */
-const deleteModules = (request, response) => {
-    database.delete("module");
-    response
-        .status(202) // Accepted.
-        .json({ success: "deleting all modules" });
+const deleteModule = async (request, response) => {
+    let deleteAllModules = request.params.moduleId === undefined;
+    let filter = deleteAllModules ? {} : { _id: request.params.moduleId };
+    let deletedCount = (await database.delete("module", filter)).deletedCount;
+    if (deleteAllModules) {
+        response.json({ deletedCount: deletedCount });
+    } else {
+        response.status(204).send();
+    }
 }
 
 
@@ -290,12 +336,11 @@ class Func {
 }
 
 const router = express.Router();
-router.get("/:moduleId", getModule);
-router.get("/:moduleId/:fileExtension", getModuleFile);
-router.get("/", getModules);
 router.post("/", createModule);
-router.post("/upload", fileUpload, validateFileFormSubmission, addModuleFile);
-router.delete("/", /*authenticationMiddleware,*/ deleteModules);
+router.post("/:moduleId/upload", fileUpload, validateFileFormSubmission, addModuleFile);
+router.get("/:moduleId?", getModule);
+router.get("/:moduleId/:fileExtension", getModuleFile);
+router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
 
 
 module.exports = { setDatabase, router };
