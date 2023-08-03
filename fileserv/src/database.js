@@ -49,6 +49,7 @@ class Database {
     /*
     * R
     * @returns Array of filter matches.
+    * @throws IFF the database connection fails.
     */
     async read(collectionName, filter)
     { throw "read not implemented"; }
@@ -91,6 +92,8 @@ class MongoDatabase extends Database {
     }
 
     async read(collectionName, filter) {
+        // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
+
         this.wrapId(filter); 
 
         return (this.db
@@ -162,7 +165,7 @@ class MockDatabase extends Database {
         // Create the collection if needed.
         if (!(collectionName in this.db)) {
             console.log(`MockDB creating collection '${collectionName}'`);
-            this.db[collectionName] = [];
+            this.db[collectionName] = {};
         }
 
         // Prepare bulk inserts.
@@ -172,7 +175,8 @@ class MockDatabase extends Database {
                 throw `cannot create new document with an existing ${Database.idField} field ${values}`;
             }
 
-            values[Database.idField] = this.runningId;
+            // Use strings for easier filters.
+            values[Database.idField] = String(this.runningId);
             this.runningId += 1;
             console.log("MockDB creating new document with values", values);
 
@@ -180,73 +184,86 @@ class MockDatabase extends Database {
         }
 
         for (let insert of inserts) {
-            this.db[collectionName].push(insert);
+            this.db[collectionName][insert[Database.idField]] = insert;
         }
 
         return { acknowledged: true, insertedIds: inserts.map(x => x[Database.idField]) };
     }
 
+    /**
+     * NOTE: Filters only on `Database.idField`!
+     * @returns List of matches.
+     */
     async read(collectionName, filter) {
-        if (filter) {
-            try {
-                this.checkIdField(filter);
-                let result = this.db[collectionName].filter(this.equals(filter));
-                console.log(result);
-                return result;
-            } catch(_) {
-                return [];
-            }
-        }
-        console.log(this.db[collectionName]);
-        return this.db[collectionName];
-    }
-
-    async update(collectionName, filter, fields, upsert=true) {
-        if (filter) { this.checkIdField(filter) } else { filter = {} };
-
-        let matches = this.db[collectionName].filter(this.equals(filter))
-
-        if (matches.length === 0) {
-            // Upsert.
-            await this.create(collectionName, fields);
-        } else {
-            for (let match of matches) {
-                for (let [key, value] of Object.entries(fields)) {
-                    match[key] = value;
-                }
-            }
+        // TODO: This should be checked every time a collection is referenced.
+        if (this.db[collectionName] === undefined) {
+            this.db[collectionName] = {};
         }
 
-        return { acknowledged: true, matchedCount: matches.length };
-    }
-
-    async delete(collectionName, filter) {
-        let deletables;
-        if (filter) {
-            deletables = (await this.read(collectionName, filter));
-        } else {
-            // Delete all.
-            deletables = this.db[collectionName];
+        let emptyFilter = filter ? Object.keys(filter).length === 0 : true;
+        if (emptyFilter) {
+            return Object.values(this.db[collectionName]);
         }
 
-        // Can't delete just the actual objects, so have to index the parent object with IDs.
-        for (let deletableId of deletables.map(x => x[Database.idField])) {
-            delete this.db[collectionName].find(x => x[idField] === deletableId);
+        try {
+            this.checkIdField(filter);
+            let result = this.db[collectionName][filter[Database.idField]];
+            return result ? [result] : [];
+        } catch(_) {
+            return [];
         }
     }
 
     /**
-     * Return a function that compares equality with filter and an object (i.e.,
-     * a doc in db).
+     * NOTE: Filters only on `Database.idField` and upserts otherwise (i.e., no
+     * 'updateMany'-type behaviour)!
+     * @returns Information on the updates made.
      */
-    equals(filter) {
-        // The comparison here is non-strict on purpose.
-        return (x) => filter[Database.idField] == x[Database.idField];
+    async update(collectionName, filter, fields, upsert=true) {
+        let matches = [];
+        try {
+            this.checkIdField(filter)
+            matches = [this.db[collectionName][filter[Database.idField]]];
+        } catch(e) {
+            if (upsert) {
+                let insertedId = (await this.create(collectionName, {})).insertedIds[0];
+                matches = [this.db[collectionName][insertedId]];
+            }
+        }
+
+        for (let match of matches) {
+            for (let [key, value] of Object.entries(fields)) {
+                if (key === Database.idField) {
+                    throw `changing the ID-field '${Database.idField}' is not allowed`;
+                }
+                match[key] = value;
+            }
+        }
+
+        return { matchedCount: matches.length };
+    }
+
+    /**
+     * NOTE: Filters only on `Database.idField`!
+     */
+    async delete(collectionName, filter) {
+        let emptyFilter = filter ? Object.keys(filter).length === 0 : true;
+        let deletedCount = 0;
+        if (emptyFilter) {
+            // Delete all.
+            deletedCount = Object.keys(this.db[collectionName]).length;
+            delete this.db[collectionName];
+        } else {
+            deletedCount = 1;
+            delete this.db[collectionName][filter[Database.idField]];
+        }
+
+        return { deletedCount: deletedCount };
     }
 
     checkIdField(filter) {
         if (!(Database.idField in filter)) {
-            throw `cannot query mock database without an id-field '${Database.idField}'`;
+            throw `querying with other than the ID-field '${Database.idField}' is not possible`;
         }
     }
 }
