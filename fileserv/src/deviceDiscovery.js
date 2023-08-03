@@ -269,7 +269,7 @@ class DeviceManager {
 }
 
 class MockDeviceDiscovery {
-    run() { console.log("Running mock device discovery..."); };
+    startDiscovery() { console.log("Running mock device discovery..."); };
     destroy() { console.log("Destroyed mock device discovery."); };
 }
 

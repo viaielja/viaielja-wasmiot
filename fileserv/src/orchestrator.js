@@ -205,7 +205,7 @@ function sequenceFromResources(sequence, availableDevices) {
         function deviceSatisfiesModule(d, m) {
             return m.requirements.every(
                 r => d.description.supervisorInterfaces.find(
-                    interface => interface === r.name // i.kind === r.kind && i.module === r.module
+                    interfacee => interfacee === r.name // i.kind === r.kind && i.module === r.module
                 )
             );
         }
