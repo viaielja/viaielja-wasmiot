@@ -96,17 +96,16 @@ describe("module", () => {
 
     expect(wasmUploadResponse.body).toHaveProperty("type");
     expect(wasmUploadResponse.body["type"]).toEqual("wasm");
-    expect(wasmUploadResponse.body).toHaveProperty("fields");
+    expect(wasmUploadResponse.body).toHaveProperty("exports");
 
-    let fields = wasmUploadResponse.body["fields"];
-    expect(fields).toHaveProperty("exports");
-    expect(fields["exports"]).toHaveProperty(length);
-    expect(fields["exports"].length).toBeGreaterThan(0);
-    expect(fields["exports"][0])
+    let exports = wasmUploadResponse.body["exports"];
+    expect(exports).toHaveProperty(length);
+    expect(exports.length).toBeGreaterThan(0);
+    expect(exports[0])
         .toEqual({ "name": "add1", "parameterCount": 1 });
   });
 
-  test("creation then individual deletion success", async () => {
+  test("individual deletion success", async () => {
     let gId = (await orchestratorApi
         .post("/file/module")
         .send({
