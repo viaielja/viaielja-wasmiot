@@ -62,7 +62,7 @@ const createDeployment = async (request, response) => {
     try {
         let deploymentId = await orchestrator.solve(deployment);
 
-        response.json(new utils.Success(`Manifest ${deploymentId} added`));
+        response.status(201).json({ id: deploymentId });
 
     } catch (err) {
         errorMsg = "Failed constructing manifest for deployment: " + err;
@@ -89,25 +89,23 @@ const deploy = async (request, response) => {
         return;
     }
 
-    let deploymentSolution = deploymentDoc.fullManifest;
-
-    // Make the requests on each device.
-    // POST-making from example snippet at:
-    // https://nodejs.org/api/http.html#httprequesturl-options-callback
-    for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
-        // TODO: Use database-reference instead of using device id from field.
-        let device = (await database
-            .read("device", { _id: deviceId }))[0];
-
-        if (!device) {
-            response.status(404).json(new utils.Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
-            return;
+    try {
+        await orchestrator.deploy(deploymentDoc);
+        response.status(204).send();
+    } catch(e) {
+        switch (e.name) {
+            case "DeviceNotFound":
+                response
+                    .status(404)
+                    .json(new utils.Error(undefined, e));
+                break;
+            default:
+                response
+                    .status(500)
+                    .json(new utils.Error("unknown error while deploying: ", e));
+                break;
         }
-
-        let deploymentJson = JSON.stringify(manifest, null, 2);
-        utils.messageDevice(device, "/deploy", deploymentJson);
     }
-    response.json(new utils.Success(`Deployed '${deploymentDoc.name}'!`));
 }
 
 /**
