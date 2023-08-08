@@ -3,6 +3,24 @@ const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE, DEVICE_HEALTH_CHECK_INTERVAL_MS,
 
 
 /**
+ * Thing running the Wasm-IoT supervisor.
+ */
+class Device {
+    constructor(name, addresses, port, supervisorInterfaces) {
+        // Devices are identified by their "fully qualified" name.
+        this.name = name,
+        this.communication = {
+            addresses: addresses,
+            port: port,
+        };
+        // This is set by querying the device later.
+        this.description = {
+            supervisorInterfaces: supervisorInterfaces
+        };
+    }
+}
+
+/**
  * Interface to list available devices and send them messages.
  *
  * "Device" is used as a term for a thing running the Wasm-IoT supervisor.
@@ -109,14 +127,7 @@ class DeviceManager {
         let device = (await this.database.read("device", { name: serviceData.name }))[0];
         if (!device) {
             // Transform the service into usable device data.
-            device = {
-                // Devices are identified by their "fully qualified" name.
-                name: serviceData.name,
-                communication: {
-                    addresses: serviceData.addresses,
-                    port: serviceData.port,
-                }
-            };
+            device = new Device(serviceData.name, serviceData.addresses, serviceData.port);
             this.database.create("device", [device]);
         } else {
             if (device.description && device.description.platform) {
@@ -273,7 +284,26 @@ class DeviceManager {
 }
 
 class MockDeviceDiscovery {
-    startDiscovery() { console.log("Running mock device discovery..."); };
+    /**
+     * A fully queried device.
+     */
+    static mockDevice = new Device(
+        "a",
+        ["localhost"],
+        8080,
+        []
+    );
+    constructor(type, database) {
+        this.database = database;
+    }
+
+    startDiscovery() {
+        console.log("Running mock device discovery...");
+
+        console.log("Adding mock device:", MockDeviceDiscovery.mockDevice);
+        this.database.update("device", {}, MockDeviceDiscovery.mockDevice);
+    }
+
     destroy() { console.log("Destroyed mock device discovery."); };
 }
 
