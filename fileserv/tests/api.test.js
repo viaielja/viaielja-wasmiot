@@ -141,3 +141,125 @@ describe("module", () => {
     expect(moduleDeleteResponse.body["deletedCount"]).toBeGreaterThan(0);
   });
 });
+
+
+describe("deployment", () => {
+  test("simple sequence creation success", async () => {
+    // Get (and check) the id of the test device.
+    let deviceId = (await orchestratorApi.get("/file/device")
+      .expect(200)
+      ).body[0]["_id"];
+
+    let moduleId = await testCreatePrimitiveModule();
+
+    let deploymentCreationResponse = await orchestratorApi
+      .post("/file/manifest")
+      .send({
+        name: "b",
+        sequence: [
+          {
+            device: deviceId,
+            module: moduleId,
+            function: "add1",
+          }
+        ]
+      })
+      .expect(201)
+      .expect("Content-Type", /application\/json/);
+    
+    expect(deploymentCreationResponse.body).toHaveProperty("id");
+    // TODO: Could check the "manifest" created by the orchestrator, but the
+    // format is probably frequently changing.
+  });
+
+  test("listing success", async () => {
+    let deviceId = (await orchestratorApi.get("/file/device")
+      .expect(200)
+      ).body[0]["_id"];
+
+    let moduleId = await testCreatePrimitiveModule();
+
+    await orchestratorApi
+      .post("/file/manifest")
+      .send({
+        name: "b",
+        sequence: [
+          {
+            device: deviceId,
+            module: moduleId,
+            function: "add1",
+          }
+        ]
+      })
+      .expect(201);
+
+    await orchestratorApi
+      .post("/file/manifest")
+      .send({
+        name: "c",
+        sequence: [
+          {
+            device: deviceId,
+            module: moduleId,
+            function: "add1",
+          }
+        ]
+      })
+      .expect(201);
+
+    let deploymentListResponse = await orchestratorApi
+      .get("/file/manifest")
+      .expect(200)
+      .expect("Content-Type", /application\/json/);
+    
+    expect(deploymentListResponse.body).toHaveProperty("length");
+    expect(deploymentListResponse.body.length).toBeGreaterThan(1);
+  });
+
+  test("fetched by ID", async () => {
+    let deviceId = (await orchestratorApi.get("/file/device")
+      .expect(200)
+      ).body[0]["_id"];
+
+    let moduleId = await testCreatePrimitiveModule();
+
+    let dId = (await orchestratorApi
+      .post("/file/manifest")
+      .send({
+        name: "d",
+        sequence: [
+          {
+            device: deviceId,
+            module: moduleId,
+            function: "add1",
+          }
+        ]
+      })
+      .expect(201)
+    ).body["id"];
+
+    let dGetResponse = await orchestratorApi.get(`/file/manifest/${dId}`)
+      .expect(200)
+      .expect("Content-Type", /application\/json/);
+
+    expect(dGetResponse.body).toHaveProperty("name");
+    expect(dGetResponse.body["name"]).toEqual("d");
+  });
+});
+
+async function testCreatePrimitiveModule() {
+    // Create and upload a deployable module.
+    let moduleId = (await orchestratorApi
+      .post("/file/module")
+      .send(PRIMITIVE_MODULE_DESCRIPTION)
+      .expect(201)
+      ).body["id"];
+
+    await orchestratorApi
+      // TODO: PUT or PATCH would be ReSTfuller...
+      .post(`/file/module/${moduleId}/upload`)
+      .attach("module", PRIMITIVE_MODULE_PATH)
+      .expect(200);
+
+    return moduleId;
+}
