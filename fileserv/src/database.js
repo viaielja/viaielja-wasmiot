@@ -226,7 +226,7 @@ class MockDatabase extends Database {
             matches = [this.db[collectionName][filter[Database.idField]]];
         } catch(e) {
             if (upsert) {
-                let insertedId = (await this.create(collectionName, {})).insertedIds[0];
+                let insertedId = (await this.create(collectionName, [{}])).insertedIds[0];
                 matches = [this.db[collectionName][insertedId]];
             }
         }
