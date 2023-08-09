@@ -1,3 +1,8 @@
+/**
+ * Module for discovering and monitoring devices running the Wasm-IoT
+ * supervisor.
+ */
+
 const bonjour = require("bonjour-service");
 const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE, DEVICE_HEALTH_CHECK_INTERVAL_MS, DEVICE_SCAN_DURATION_MS, DEVICE_SCAN_INTERVAL_MS } = require("../constants.js");
 
@@ -293,6 +298,7 @@ class MockDeviceDiscovery {
         8080,
         []
     );
+    
     constructor(type, database) {
         this.database = database;
     }

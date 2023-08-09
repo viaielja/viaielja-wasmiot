@@ -144,3 +144,6 @@ example/**/modules/
 *.wasm
 Cargo.lock
 target/
+
+# VSCode NodeJS profiling file.
+*.cpuprofile
