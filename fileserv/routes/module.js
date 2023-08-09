@@ -164,43 +164,48 @@ const addModuleFile = async (request, response) => {
 
         // Perform actions specific for the filetype to update
         // non-filepath-related metadata fields.
-        let success;
+        let statusCode = 200;
+        let result;
         switch (fileExtension) {
             case "wasm":
                 try {
                     await parseWasmModule(data, updateObj)
-                } catch (err) {
-                    console.error("failed compiling Wasm", err);
-                    response.status(500).json({err: `couldn't compile Wasm: ${err}`});
-                    return;
+                } catch (e) {
+                    let err = ["failed compiling Wasm", e]
+                    console.error(...err);
+                    statusCode = 500;
+                    result = new utils.Error(...err);
                 }
-                success = new WasmFileUploaded(updateObj.exports);
+                result = new WasmFileUploaded(updateObj.exports);
                 break;
             case "pb":
                 // Model weights etc. for an ML-application.
-                success = new PbFileUploaded();
+                result = new PbFileUploaded();
                 break;
             default:
                 let err = `unsupported file extension: '${fileExtension}'`;
+                statusCode = 500;
+                result = new utils.Error(err);
                 console.error(err);
-                response
-                    .status(500)
-                    .json(new utils.Error(err));
+                break;
         }
 
-        // Now actually update the database-document.
+        // Now actually update the database-document, devices and respond to
+        // caller.
         try {
             await updateModule(filter, updateObj);
 
             console.log(`Updated module '${request.body.id}' with data:`, updateObj);
 
-            response.json(success);
-
             // Tell devices to fetch updated files on modules.
-            notifyModuleFileUpdate(request.body.id);
+            await notifyModuleFileUpdate(request.body.id);
+            response
+                .status(statusCode)
+                .json(result);
         } catch (e) {
             let err = ["Failed attaching a file to module", e];
             console.error(...err);
+            // TODO Handle device not found on update.
             response
                 .status(500)
                 .json(new utils.Error(...err));
@@ -286,12 +291,11 @@ async function notifyModuleFileUpdate(moduleId) {
             .read("device", { _id: deviceId }))[0];
 
         if (!device) {
-            response.status(404).json(new utils.Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`));
-            return;
+            throw new utils.Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`);
         }
 
         for (let manifest of manifests) {
-            utils.messageDevice(device, "/deploy", manifest);
+            await utils.messageDevice(device, "/deploy", manifest);
         }
     }
 }
