@@ -26,7 +26,9 @@ services:
     #   # 5000 is the default Flask-port that is probably used.
     #   - 0:5000 # ::OVERRIDE::
     volumes:
-      - ./wasmiot-supervisor/host_app:/app/host_app:bind
+      - type: bind
+        source: ./wasmiot-supervisor/host_app
+        target: /app/host_app
 
   adequate-webcam-laptop:
     extends: device-base
