@@ -34,7 +34,8 @@
 		"vscode": {
 			"extensions": [
 				"ms-azuretools.vscode-docker",
-				"dtsvet.vscode-wasm"
+				"dtsvet.vscode-wasm",
+				"GitHub.copilot"
 			]
 		}
 	},

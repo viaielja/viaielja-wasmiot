@@ -1,11 +1,12 @@
 const constants = require("../constants.js");
+const utils = require("../utils.js");
 
 
-class SolutionError extends Error {
-    constructor(message, dId, dName) {
-        super(message);
-        this.name = "SolutionError";
-        this.deployment = { _id: dId, name: dName };
+class DeviceNotFound extends Error {
+    constructor(dId) {
+        super("device not found");
+        this.name = "DeviceNotFound";
+        this.device = { id: dId };
     }
 }
 
@@ -44,6 +45,10 @@ class Orchestrator {
     constructor(dependencies, options) {
         this.database = dependencies.database;
         this.packageManagerBaseUrl = options.packageManagerBaseUrl || constants.PUBLIC_BASE_URI;
+        if (!options.deviceMessagingFunction) {
+            throw new utils.Error("method for communicating to devices not given");
+        }
+        this.messageDevice = options.deviceMessagingFunction;
     }
 
     async solve(deployment) {
@@ -78,6 +83,124 @@ class Orchestrator {
         );
 
         return deploymentId;
+    }
+
+    async deploy(deployment) {
+        let deploymentSolution = deployment.fullManifest;
+
+        let requests = [];
+        for (let [deviceId, manifest] of Object.entries(deploymentSolution)) {
+            let device = (await this.database
+                .read("device", { _id: deviceId }))[0];
+
+            if (!device) {
+                throw new DeviceNotFound("", deviceId);
+            }
+
+            // Start the deployment requests on each device.
+            requests.push([deviceId, this.messageDevice(device, "/deploy", manifest)]);
+        }
+
+        // Return devices mapped to their awaited deployment responses.
+        return Object.fromEntries(await Promise.all(
+            requests.map(async ([deviceId, request]) => {
+                // Attach the device information to the response.
+                let response = await request;
+                return [deviceId, response];
+            })
+        ));
+    }
+
+    async schedule(deployment, params) {
+        // Pick the starting point based on sequence's first device and function.
+        let startEndpoint = deployment
+            .fullManifest[deployment.sequence[0].device]
+            .endpoints[deployment.sequence[0].func];
+
+        // FIXME hardcoded: selecting first(s) from list(s).
+        let url = new URL(startEndpoint.servers[0].url);
+        // FIXME hardcoded: Selecting 0 because paths expected to contain only a
+        // single item selected at creation of deployment manifest.
+        let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
+
+        // Prepare given data for sending to device.
+        // Build the SELECTED METHOD'S parameters for the request according to the
+        // description.
+        let method = Object.keys(pathObj).includes("get") ? "get" : "post";
+        for (let param of pathObj[method].parameters) {
+            if (!(param.name in params)) {
+                response.status(400).json({ err:`Missing argument '${param.name}'` });
+                return;
+            }
+
+            let argument = params[param.name];
+            switch (param.in) {
+                case "path":
+                    // NOTE/FIXME: This might have already been resolved in
+                    // deployment phase for each device to self-configure strictly
+                    // (e.g., no generic paths "/mod/func" but concrete (and bit
+                    // safer(?)) "/fibomod/fibofunc") according to orchestrator's
+                    // solution.
+                    pathName = pathName.replace(param.name, argument);
+                    break;
+                case "query":
+                    // FIXME: What about URL-encoding?
+                    url.searchParams.append(param.name, argument);
+                    break;
+                default:
+                    response.status(500).json({ err:`This parameter location not supported: '${param.in}'` });
+                    return;
+            }
+        }
+
+        // NOTE: The URL should not contain any path before this point.
+        url.pathname = pathName;
+
+        let options = { method: method };
+        // Request with GET/HEAD method cannot have body.
+        if (!(["GET", "HEAD"].includes(method.toUpperCase()))) {
+            // Body is set as is; the request is propagated. FIXME: duplication of
+            // input data?
+            options.body = params;
+        }
+
+        // Message the first device and return its reaction response.
+        let response = await fetch(url, options);
+
+        if (!response.ok) {
+            throw new utils.Error(`request to ${url} failed`);
+        }
+
+        switch (response.headers.get("content-type")) {
+            case "application/json":
+                // FIXME: Assuming the return is LE-bytes list for 32 bit
+                // integer.
+                let intBytes = await response.json();
+                let classIndex = 
+                    (intBytes[3] << 24) | 
+                    (intBytes[2] << 16) | 
+                    (intBytes[1] <<  8) | 
+                    (intBytes[0]);
+
+                return {
+                    message: `Responded with ${classIndex}`,
+                    value: classIndex
+                };
+            case "image/jpeg":
+                const CHAIN_RESULT_IMAGE_PATH = "./files/chainResultImg.jpeg";
+                // Write image to a file to see results.
+                const fs = require("fs");
+                fs.writeFileSync(
+                    CHAIN_RESULT_IMAGE_PATH,
+                    Buffer.from(await res.arrayBuffer()),
+                );
+
+                return {
+                    message: `Saved JPEG to ${CHAIN_RESULT_IMAGE_PATH}`
+                };
+            default:
+                throw new utils.Error("Unsupported content type"+res.headers["Content-type"]);
+        }
     }
 }
 
@@ -205,7 +328,7 @@ function sequenceFromResources(sequence, availableDevices) {
         function deviceSatisfiesModule(d, m) {
             return m.requirements.every(
                 r => d.description.supervisorInterfaces.find(
-                    interface => interface === r.name // i.kind === r.kind && i.module === r.module
+                    interfacee => interfacee === r.name // i.kind === r.kind && i.module === r.module
                 )
             );
         }

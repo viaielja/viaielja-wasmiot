@@ -1,6 +1,29 @@
-const bonjour = require("bonjour-service");
-const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE } = require("../constants.js");
+/**
+ * Module for discovering and monitoring devices running the Wasm-IoT
+ * supervisor.
+ */
 
+const bonjour = require("bonjour-service");
+const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE, DEVICE_HEALTH_CHECK_INTERVAL_MS, DEVICE_SCAN_DURATION_MS, DEVICE_SCAN_INTERVAL_MS } = require("../constants.js");
+
+
+/**
+ * Thing running the Wasm-IoT supervisor.
+ */
+class Device {
+    constructor(name, addresses, port, supervisorInterfaces) {
+        // Devices are identified by their "fully qualified" name.
+        this.name = name,
+        this.communication = {
+            addresses: addresses,
+            port: port,
+        };
+        // This is set by querying the device later.
+        this.description = {
+            supervisorInterfaces: supervisorInterfaces
+        };
+    }
+}
 
 /**
  * Interface to list available devices and send them messages.
@@ -23,6 +46,10 @@ class DeviceManager {
         this.browser = null;
         this.database = database;
         this.queryOptions = { type };
+
+        this.deviceScanDuration = DEVICE_SCAN_DURATION_MS;
+        this.deviceScanInterval = DEVICE_SCAN_INTERVAL_MS;
+        this.deviceHealthCheckInterval = DEVICE_HEALTH_CHECK_INTERVAL_MS;
     }
 
     /**
@@ -33,8 +60,8 @@ class DeviceManager {
     startDiscovery() {
         // Continuously do new scans for devices in an interval.
         let scanBound = this.startScan.bind(this);
-        scanBound(2000);
-        this.scannerId = setInterval(() => scanBound(2000), 5000);
+        scanBound(this.deviceScanDuration);
+        this.scannerId = setInterval(() => scanBound(this.deviceScanDuration), this.deviceScanInterval);
         // Check the status of the services every 2 minutes. (NOTE: This is
         // because the library used does not seem to support re-querying the
         // services on its own).
@@ -44,7 +71,7 @@ class DeviceManager {
                 let healthyCount = await healthCheckBound();
                 console.log((new Date()).toISOString(), "# of healthy devices:", healthyCount);
             },
-            5000
+            this.deviceHealthCheckInterval
         );
     }
 
@@ -105,14 +132,7 @@ class DeviceManager {
         let device = (await this.database.read("device", { name: serviceData.name }))[0];
         if (!device) {
             // Transform the service into usable device data.
-            device = {
-                // Devices are identified by their "fully qualified" name.
-                name: serviceData.name,
-                communication: {
-                    addresses: serviceData.addresses,
-                    port: serviceData.port,
-                }
-            };
+            device = new Device(serviceData.name, serviceData.addresses, serviceData.port);
             this.database.create("device", [device]);
         } else {
             if (device.description && device.description.platform) {
@@ -269,7 +289,27 @@ class DeviceManager {
 }
 
 class MockDeviceDiscovery {
-    run() { console.log("Running mock device discovery..."); };
+    /**
+     * A fully queried device.
+     */
+    static mockDevice = new Device(
+        "a",
+        ["localhost"],
+        8080,
+        []
+    );
+    
+    constructor(type, database) {
+        this.database = database;
+    }
+
+    startDiscovery() {
+        console.log("Running mock device discovery...");
+
+        console.log("Adding mock device:", MockDeviceDiscovery.mockDevice);
+        this.database.update("device", {}, MockDeviceDiscovery.mockDevice);
+    }
+
     destroy() { console.log("Destroyed mock device discovery."); };
 }
 

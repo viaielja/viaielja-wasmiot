@@ -186,7 +186,8 @@ function submitFile(url) {
         // Add the metadata found in the form.
         // NOTE: Forms that are more complicated than just containing text
         // inputs or that are hierarchical/deeper are not handled.
-        for (let [key, value] of Object.entries(formToObject(formSubmitEvent.target))) {
+        let formObj = formToObject(formSubmitEvent.target);
+        for (let [key, value] of Object.entries(formObj)) {
             switch (typeof (value)) {
                 case "string":
                     formData.append(key, value);
@@ -200,7 +201,10 @@ function submitFile(url) {
         // Add the actual file.
         formData.append(fileField.name, fileField.files[0]);
 
-        fetch(url, { method: "POST", body: formData })
+        // NOTE: Hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
+        let idUrl = url.replace(":id", formObj["id"]);
+
+        fetch(idUrl, { method: "POST", body: formData })
             .then((resp) => resp.json())
             .then(result => {
                 setStatus(result);
@@ -447,7 +451,7 @@ window.onload = async function () {
         .querySelector("#module-json-form")
         .addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
 
-    document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/upload"));
+    document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/:id/upload"));
 
     // Deployment forms:
 

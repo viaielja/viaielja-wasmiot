@@ -20,6 +20,7 @@ function init(routeDependencies) {
     deployment.setOrchestrator(routeDependencies.orchestrator);
 
     execution.setDatabase(routeDependencies.database);
+    execution.setOrchestrator(routeDependencies.orchestrator);
 
     return {
         device: device.router,

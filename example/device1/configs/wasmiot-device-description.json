@@ -17,6 +17,11 @@
         "println",
         "printInt",
         "rpcCall",
-        "takeImage"
+        "takeImage",
+        "fd_write",
+        "random_get",
+        "environ_sizes_get",
+        "proc_exit",
+        "environ_get"
     ]
 }
