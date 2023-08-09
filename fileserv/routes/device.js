@@ -34,24 +34,18 @@ const deleteDevices = (request, response) => {
 }
 
 /**
- * NOTE TEMPORARY route to easily refresh the devices stored in discovery.
- * Natural to use when doing device deletion.
- * TODO Name to "refresh"
+ * Start a new device scan without waiting for a scanning timeout.
  */
-const resetDeviceDiscovery = (request, response) => {
-    try {
-        deviceDiscovery.refresh();
-    } catch(e) {
-        response.status(500).json({ err: e });
-    }
+const rescanDevices = (request, response) => {
+    deviceDiscovery.startScan();
 
-    response.json({ success: "Device discovery reset!" });
+    response.status(204).send();
 }
 
 const router = express.Router();
 router.get("/", getDevices);
 router.delete("/", deleteDevices);
-router.post("/discovery/reset", resetDeviceDiscovery);
+router.post("/discovery/reset", rescanDevices);
 
 
 module.exports = { setDatabase, setDeviceDiscovery, router };

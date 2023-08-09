@@ -83,8 +83,12 @@ class DeviceManager {
     startScan(duration=10000) {
         console.log("Scanning for devices", this.queryOptions, "...");
 
-        // Use a single browser at a time for simplicity. Save it in order to
-        // end its life when required.
+        // Do not start again, if already scanning.
+        if (this.browser) {
+            return;
+        }
+
+        // Save browser in order to end its life when required.
         this.browser = this.bonjourInstance.find(this.queryOptions);
  
         // Binding the callbacks is needed in order to refer to outer "this"
@@ -92,13 +96,13 @@ class DeviceManager {
         this.browser.on("up", this.#saveDevice.bind(this));
         this.browser.on("down", this.#forgetDevice.bind(this));
 
-        setTimeout(this.stopScan.bind(this), duration);
+        setTimeout(this.#stopScan.bind(this), duration);
     }
 
     /**
      * Stop and reset scanning.
      */
-    stopScan() {
+    #stopScan() {
         this.browser.stop();
         this.browser = null;
 
