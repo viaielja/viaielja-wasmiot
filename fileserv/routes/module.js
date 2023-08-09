@@ -291,8 +291,7 @@ async function notifyModuleFileUpdate(moduleId) {
         }
 
         for (let manifest of manifests) {
-            let deploymentJson = JSON.stringify(manifest, null, 2);
-            utils.messageDevice(device, "/deploy", deploymentJson);
+            utils.messageDevice(device, "/deploy", manifest);
         }
     }
 }

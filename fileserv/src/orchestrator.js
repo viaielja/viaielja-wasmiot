@@ -45,6 +45,10 @@ class Orchestrator {
     constructor(dependencies, options) {
         this.database = dependencies.database;
         this.packageManagerBaseUrl = options.packageManagerBaseUrl || constants.PUBLIC_BASE_URI;
+        if (!options.deviceMessagingFunction) {
+            throw new utils.Error("method for communicating to devices not given");
+        }
+        this.messageDevice = options.deviceMessagingFunction;
     }
 
     async solve(deployment) {
@@ -84,7 +88,8 @@ class Orchestrator {
     async deploy(deployment) {
         let deploymentSolution = deployment.fullManifest;
 
-        for (let [i, [deviceId, manifest]] of Object.entries(deploymentSolution).entries()) {
+        let requests = [];
+        for (let [deviceId, manifest] of Object.entries(deploymentSolution)) {
             let device = (await this.database
                 .read("device", { _id: deviceId }))[0];
 
@@ -92,9 +97,18 @@ class Orchestrator {
                 throw new DeviceNotFound("", deviceId);
             }
 
-            let deploymentJson = JSON.stringify(manifest, null, 2);
-            utils.messageDevice(device, "/deploy", deploymentJson);
+            // Start the deployment requests on each device.
+            requests.push([deviceId, this.messageDevice(device, "/deploy", manifest)]);
         }
+
+        // Return devices mapped to their awaited deployment responses.
+        return Object.fromEntries(await Promise.all(
+            requests.map(async ([deviceId, request]) => {
+                // Attach the device information to the response.
+                let response = await request;
+                return [deviceId, response];
+            })
+        ));
     }
 
     async schedule(deployment, params) {
@@ -154,7 +168,7 @@ class Orchestrator {
         let response = await fetch(url, options);
 
         if (!response.ok) {
-            throw new Error(`request to ${url} failed`);
+            throw new utils.Error(`request to ${url} failed`);
         }
 
         switch (response.headers.get("content-type")) {

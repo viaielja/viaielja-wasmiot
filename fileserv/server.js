@@ -9,6 +9,7 @@ const { init: initApp } = require("./src/app");
 const { MongoDatabase, MockDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
 const Orchestrator = require("./src/orchestrator");
+const utils = require("./utils.js");
 
 /**
  * The Express app.
@@ -51,8 +52,9 @@ if (testing) {
  * Configuration for the orchestrator to use between testing and "production".
  */
 const config = {
-    databaseType: testing ? MockDatabase : MongoDatabase,
-    deviceDiscoveryType: testing ? discovery.MockDeviceDiscovery : discovery.DeviceDiscovery,
+    databaseType:            testing ? MockDatabase                  : MongoDatabase,
+    deviceDiscoveryType:     testing ? discovery.MockDeviceDiscovery : discovery.DeviceDiscovery,
+    deviceMessagingFunction: testing ? async (_) => ({ a: "test" })  : utils.messageDevice
 };
 
 
@@ -71,7 +73,12 @@ async function main() {
         throw e;
     }
 
-    orchestrator = new Orchestrator({ database, deviceDiscovery }, { packageManagerBaseUrl: PUBLIC_BASE_URI });
+    orchestrator = new Orchestrator(
+        { database, deviceDiscovery },
+        {
+            packageManagerBaseUrl: PUBLIC_BASE_URI,
+            deviceMessagingFunction: config.deviceMessagingFunction
+        });
 
     app = initApp({ database, deviceDiscovery, orchestrator, testing });
 

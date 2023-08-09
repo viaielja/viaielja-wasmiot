@@ -85,24 +85,32 @@ const deploy = async (request, response) => {
         .read("deployment", { _id: request.params.deploymentId }))[0];
 
     if (!deploymentDoc) {
-        response.status(404).json(new utils.Error(`No deployment found for '${request.params.deploymentId}'`));
+        response
+            .status(404)
+            .json(new utils.Error(`no deployment matches ID '${request.params.deploymentId}'`));
         return;
     }
 
     try {
-        await orchestrator.deploy(deploymentDoc);
-        response.status(204).send();
+        let responses = await orchestrator.deploy(deploymentDoc);
+
+        console.log("Deploy-responses from devices: ", responses);
+
+        response.json({ deviceResponses: responses });
     } catch(e) {
         switch (e.name) {
             case "DeviceNotFound":
+                console.error("device not found", e);
                 response
                     .status(404)
                     .json(new utils.Error(undefined, e));
                 break;
             default:
+                let err = ["unknown error while deploying", e];
+                console.error(...err);
                 response
                     .status(500)
-                    .json(new utils.Error("unknown error while deploying: ", e));
+                    .json(new utils.Error(...err));
                 break;
         }
     }
@@ -111,12 +119,9 @@ const deploy = async (request, response) => {
 /**
  * Delete all the deployment manifests from database.
  */
-const deleteDeployments = (request, response) => {
-    database.delete("deployment");
-    response
-        .status(202) // Accepted.
-        .json(new utils.Success("deleting all deployment manifests"));
-    
+const deleteDeployments = async (request, response) => {
+    await database.delete("deployment");
+    response.status(204).send();
 }
 
 const router = express.Router();
