@@ -145,27 +145,9 @@ describe("module", () => {
 
 describe("deployment", () => {
   test("simple sequence creation success", async () => {
-    // Get (and check) the id of the test device.
-    let deviceId = (await orchestratorApi.get("/file/device")
-      .expect(200)
-      ).body[0]["_id"];
+    let { deviceId, moduleId } = await prepareSimpleDeploymentTest();
 
-    let moduleId = await testCreatePrimitiveModule();
-
-    let deploymentCreationResponse = await orchestratorApi
-      .post("/file/manifest")
-      .send({
-        name: "b",
-        sequence: [
-          {
-            device: deviceId,
-            module: moduleId,
-            function: "add1",
-          }
-        ]
-      })
-      .expect(201)
-      .expect("Content-Type", /application\/json/);
+    let deploymentCreationResponse = await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "a" });
     
     expect(deploymentCreationResponse.body).toHaveProperty("id");
     // TODO: Could check the "manifest" created by the orchestrator, but the
@@ -173,39 +155,9 @@ describe("deployment", () => {
   });
 
   test("listing success", async () => {
-    let deviceId = (await orchestratorApi.get("/file/device")
-      .expect(200)
-      ).body[0]["_id"];
-
-    let moduleId = await testCreatePrimitiveModule();
-
-    await orchestratorApi
-      .post("/file/manifest")
-      .send({
-        name: "b",
-        sequence: [
-          {
-            device: deviceId,
-            module: moduleId,
-            function: "add1",
-          }
-        ]
-      })
-      .expect(201);
-
-    await orchestratorApi
-      .post("/file/manifest")
-      .send({
-        name: "c",
-        sequence: [
-          {
-            device: deviceId,
-            module: moduleId,
-            function: "add1",
-          }
-        ]
-      })
-      .expect(201);
+    let { deviceId, moduleId } = await prepareSimpleDeploymentTest();
+    await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "b" });
+    await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "c" });
 
     let deploymentListResponse = await orchestratorApi
       .get("/file/manifest")
@@ -217,26 +169,8 @@ describe("deployment", () => {
   });
 
   test("fetched by ID", async () => {
-    let deviceId = (await orchestratorApi.get("/file/device")
-      .expect(200)
-      ).body[0]["_id"];
-
-    let moduleId = await testCreatePrimitiveModule();
-
-    let dId = (await orchestratorApi
-      .post("/file/manifest")
-      .send({
-        name: "d",
-        sequence: [
-          {
-            device: deviceId,
-            module: moduleId,
-            function: "add1",
-          }
-        ]
-      })
-      .expect(201)
-    ).body["id"];
+    let { deviceId, moduleId } = await prepareSimpleDeploymentTest();
+    let dId = (await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "d" })).body["id"];
 
     let dGetResponse = await orchestratorApi.get(`/file/manifest/${dId}`)
       .expect(200)
@@ -245,9 +179,33 @@ describe("deployment", () => {
     expect(dGetResponse.body).toHaveProperty("name");
     expect(dGetResponse.body["name"]).toEqual("d");
   });
+
+  test("simple sequence deployment success", async () => {
+    let { deviceId, moduleId } = await prepareSimpleDeploymentTest();
+    let dId = (await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "e" })).body["id"];
+
+    let deploymentResponse = await orchestratorApi
+      .post(`/file/manifest/${dId}`)
+      .expect(200)
+      .expect("Content-Type", /application\/json/);
+
+    expect(deploymentResponse.body).toHaveProperty("deviceResponses");
+    expect(deploymentResponse.body["deviceResponses"]).toHaveProperty(deviceId);
+    // NOTE: Accurately testing what the devices answer should be supervisor's
+    // responsibility. Orchestrator should then just be adapted to what ever the
+    // format is.
+  });
 });
 
-async function testCreatePrimitiveModule() {
+/* Get (and check) the id of the test device */
+async function getTestDeviceId() {
+  return (await orchestratorApi.get("/file/device")
+      .expect(200)
+      ).body[0]["_id"];
+}
+
+/* @returns Created module ID */
+async function expectApiCreatePrimitiveModule() {
     // Create and upload a deployable module.
     let moduleId = (await orchestratorApi
       .post("/file/module")
@@ -262,4 +220,28 @@ async function testCreatePrimitiveModule() {
       .expect(200);
 
     return moduleId;
+}
+
+/* @returns Created deployment response */
+async function expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, options) {
+    return await orchestratorApi
+      .post("/file/manifest")
+      .send({
+        name: options?.["name"] || "testDeploymentName",
+        sequence: [
+          {
+            device: deviceId,
+            module: moduleId,
+            function: "add1",
+          }
+        ]
+      })
+      .expect(201)
+      .expect("Content-Type", /application\/json/);
+}
+
+async function prepareSimpleDeploymentTest() {
+    let deviceId = await getTestDeviceId();
+    let moduleId = await expectApiCreatePrimitiveModule();
+    return { deviceId, moduleId };
 }
