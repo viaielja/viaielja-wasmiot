@@ -118,6 +118,12 @@ This assumes that both the orchestrator and the supervisor are in the same local
     docker compose -f docker-compose.lan.yml up --build
     ```
 
+  If you encounter a weird issue where the container of the orchestrator does not have an open port, you can try the setup with a Nginx proxy in front of the orchestrator:
+
+    ```bash
+    docker compose -f docker-compose.nginx.yml up --build
+    ```
+
 - The discovery and deployment with a supervisor instance running in a separate device has only been tested when the supervisor has been started locally as a Python application. See the [Supervisor repository](https://github.com/LiquidAI-project/wasmiot-supervisor) for installation instructions.
 
 ## Help and known issues
@@ -125,9 +131,9 @@ This assumes that both the orchestrator and the supervisor are in the same local
     The docker network `wasmiot-net` should be automatically created when composing up, but can be created manually with the command:
     ```
     docker network create wasmiot-net
-    ``` 
+    ```
 - __Project root under `/fileserv` in devcontainer__ :
     In the VSCode devcontainer, the __whole__ project should be visible (e.g., `.vscode` or the `.yml` compose files at the root),
     but sometimes the container opens up inside the subdirectory `/fileserv` with `*.js` etc. files at the root.
-    
+
     Removing old containers and images has seemed to fix this in the past.
