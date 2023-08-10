@@ -5,9 +5,11 @@ services:
     extends:
       file: docker-compose.yml
       service: orchestrator-base
+    restart: always
     networks:
       default:
       dockeripvlan:
+      nginx-net:
     env_file:
       - ./.env.example
       - ./.env
@@ -17,6 +19,16 @@ services:
       file: docker-compose.yml
       service: mongo
 
+  nginx:
+    image: nginx:1.25
+    restart: unless-stopped
+    ports:
+      - ${PUBLIC_PORT:-3000}:3000
+    volumes:
+      - ./nginx:/etc/nginx:ro
+    networks:
+      nginx-net:
+
 volumes:
   mongo-config:
   mongo-db:
@@ -24,6 +36,9 @@ volumes:
 networks:
   default:
     name: wasmiot-net
+  nginx-net:
+    # network for forwarding requests from outside to the orchestrator
+    name: wasmiot-nginx
   dockeripvlan:
     # Network for connecting orchestrator server and device discovery to
     # outside from Docker.
@@ -34,6 +49,3 @@ networks:
     ipam:
       config:
         - subnet: "${NETWORK_IP_BASE}.0/24"
-        #  TODO Are these two needed?
-        #  ip_range: "10.0.0.0/16"
-        #  gateway: "10.0.0.1"
