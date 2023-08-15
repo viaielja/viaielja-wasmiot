@@ -30,51 +30,55 @@ class PbFileUploaded {
     }
 }
 
-
-/**
- * GET a single or all available Wasm-modules.
- */
-const getModule = async (request, response) => {
+const getModuleBy = async (moduleId) => {
     // Common database query in any case.
-    let getAllModules = request.params.moduleId === undefined;
+    let getAllModules = moduleId === undefined;
     let matches;
     try {
-        let filter = getAllModules ? {} : { _id: request.params.moduleId };
+        let filter = getAllModules ? {} : { _id: moduleId };
         matches = await database.read("module", filter);
     } catch (e) {
         let err = ["database query failed", e];
-        console.error(...err);
-        response
-            .status(500)
-            .json(new utils.Error(...err));
-        return;
+        return [false, err];
     }
 
     if (getAllModules) {
         // Return all modules.
-        console.log("Sending metadata of all modules");
-        response.json(matches);
+        return [0, matches];
     } else {
         // Return the module identified by given ID.
         if (matches.length === 0) {
             let err = `no matches for ID ${request.params.moduleId}`;
-            console.log(err);
-            response
-                .status(404)
-                .json(new utils.Error(err));
+            return [404, err];
         } else if (matches.length > 1) {
             let err = `too many matches for ID ${request.params.moduleId}`;
-            console.error(err);
-            response
-                .status(500)
-                .json(new utils.Error(err));
+            return [500, err];
         } else {
             let doc = matches[0];
-            console.log("Sending metadata of module: ", doc.name);
-            response.json(doc);
+            return [0, [doc]];
         }
     }
-}
+};
+
+/**
+ * GET a single or all available Wasm-modules.
+ */
+const getModule = (justDescription) => (async (request, response) => {
+    let [failCode, value] = await getModuleBy(request.params.moduleId);
+    if (failCode) {
+        console.error(...value);
+        response.status(failCode).json(new utils.Error(value));
+    } else {
+        if (justDescription) {
+            console.log("Sending description of module: ", value[0].name);
+            // Return the description specifically.
+            response.json(value[0].openapi)
+        } else {
+            console.log("Sending metadata of modules: ", value.map(x => x.name));
+            response.json(value);
+        }
+    }
+});
 
 /**
  * Serve the a file relate to a module based on module ID and file extension.
@@ -341,7 +345,8 @@ class Func {
 const router = express.Router();
 router.post("/", createModule);
 router.post("/:moduleId/upload", fileUpload, validateFileFormSubmission, addModuleFile);
-router.get("/:moduleId?", getModule);
+router.get("/:moduleId?", getModule(false));
+router.get("/:moduleId/description", getModule(true));
 router.get("/:moduleId/:fileExtension", getModuleFile);
 router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
 

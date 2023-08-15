@@ -389,7 +389,7 @@ function moduleData(modulee, packageBaseUrl) {
     binaryUrl.pathname = `/file/module/${modulee._id}/wasm`;
     let descriptionUrl;
     descriptionUrl = new URL(packageBaseUrl);
-    descriptionUrl.pathname = `/file/module/${modulee._id}`;
+    descriptionUrl.pathname = `/file/module/${modulee._id}/description`;
 
     // This is for any other files related to execution of module's
     // functions on device e.g., ML-models etc.
