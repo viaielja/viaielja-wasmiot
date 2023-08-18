@@ -11,6 +11,25 @@ class DeviceNotFound extends Error {
 }
 
 /**
+ * Fields for instruction about reacting to calls to modules and functions on a
+ * device.
+ */
+class Instructions {
+    constructor() {
+        this.modules = {};
+    }
+
+    add(moduleId, funcName, instruction) {
+        if (!this.modules[moduleId]) {
+            this.modules[moduleId] = {};
+        }
+        // Initialize each function to match to an
+        // instruction object.
+        this.modules[moduleId][funcName] = instruction;
+    }
+}
+
+/**
  * Struct for storing information that a single node (i.e. a device) needs for
  * deployment.
  */
@@ -27,7 +46,7 @@ class DeploymentNode {
         // The instructions the device needs to follow the execution
         // sequence i.e., where to forward computation results initiated by
         // which arriving request.
-        this.instructions = [];
+        this.instructions = new Instructions();
     }
 }
 
@@ -72,12 +91,12 @@ class Orchestrator {
         // construct the instructions on devices.
         let deploymentId = (await this.database.create("deployment", [deployment]))
             .insertedIds[0];
-        
+
         let solution = createSolution(deploymentId, updatedSequence, this.packageManagerBaseUrl)
 
         // Update the deployment with the created solution.
         this.database.update(
-            "deployment", 
+            "deployment",
             { _id: deployment._id },
             solution
         );
@@ -176,10 +195,10 @@ class Orchestrator {
                 // FIXME: Assuming the return is LE-bytes list for 32 bit
                 // integer.
                 let intBytes = await response.json();
-                let classIndex = 
-                    (intBytes[3] << 24) | 
-                    (intBytes[2] << 16) | 
-                    (intBytes[1] <<  8) | 
+                let classIndex =
+                    (intBytes[3] << 24) |
+                    (intBytes[2] << 16) |
+                    (intBytes[1] <<  8) |
                     (intBytes[0]);
 
                 return {
@@ -245,13 +264,15 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
     // application-calls, create a structure to represent the expected behaviour
     // and flow of data between nodes.
     for (let i = 0; i < updatedSequence.length; i++) {
-        let deviceIdStr = updatedSequence[i].device._id.toString();
+        const [device, modulee, func] = Object.values(updatedSequence[i]);
 
-        let forwardEndpoint;
+        let deviceIdStr = device._id.toString();
+
         let forwardFunc = updatedSequence[i + 1]?.func;
         let forwardDeviceIdStr = updatedSequence[i + 1]?.device._id.toString();
         let forwardDeployment = deploymentsToDevices[forwardDeviceIdStr];
 
+        let forwardEndpoint;
         if (forwardFunc === undefined || forwardDeployment === undefined) {
             forwardEndpoint = null;
         } else {
@@ -262,26 +283,11 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
         }
 
         let instruction = {
-            // Set where in the execution sequence is this configuration expected to
-            // be used at. Value of 0 signifies beginning of the sequence and caller
-            // can be any party with an access. This __MIGHT__ be useful to prevent
-            // recursion at supervisor when a function with same input and output is
-            // chained to itself e.g. deployment fibo -> fibo would result in
-            //     fiboLimit2_0(7) -> 13 -> fiboLimit2_1(13) -> 233 -> <end result 233>
-            // versus
-            //     fibo(7)         -> 13 -> fibo(13)         -> 233 -> fibo(233) -> <loop forever>
-            // NOTE: Atm just the list indices would work the same, but maybe graphs
-            // used in future?
-            // TODO: How about this being a handle or other reference to the
-            // matching installed endpoint on supervisor?
-            // TODO: Will this sort of sequence-identification prevent
-            // supporting events (which are inherently "autonomous")?
-            sequence: i,
             to: forwardEndpoint,
         };
 
         // Attach the created details of deployment to matching device.
-        deploymentsToDevices[deviceIdStr].instructions.push(instruction);
+        deploymentsToDevices[deviceIdStr].instructions.add(modulee._id, func, instruction);
     }
 
     let sequenceAsIds = Array.from(updatedSequence)
