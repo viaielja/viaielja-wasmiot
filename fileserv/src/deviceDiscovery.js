@@ -90,7 +90,7 @@ class DeviceManager {
 
         // Save browser in order to end its life when required.
         this.browser = this.bonjourInstance.find(this.queryOptions);
- 
+
         // Binding the callbacks is needed in order to refer to outer "this"
         // instead of the bonjour-browser-"this" inside the callback...
         this.browser.on("up", this.#saveDevice.bind(this));
@@ -149,7 +149,7 @@ class DeviceManager {
 
     /**
      * Perform tasks for device introduction.
-     * 
+     *
      * Query device __for 'data'-events__ on its description path and if fails,
      * remove from mDNS-cache.
      * @param {*} device The device to introduce.
@@ -169,11 +169,17 @@ class DeviceManager {
 
         console.log("Querying device description via GET", url.toString());
 
-        let res = await fetch(url);
-        if (res.status !== 200) {
-            handleIntroductionErrorBound(
-                `${JSON.stringify(device.communication, null, 2)} responded ${res.status} ${res.statusText}`
-            );
+        let res;
+        try {
+            res = await fetch(url);
+            if (res.status !== 200) {
+                handleIntroductionErrorBound(
+                    `${JSON.stringify(device.communication, null, 2)} responded ${res.status} ${res.statusText}`
+                );
+                return;
+            }
+        } catch (error) {
+            handleIntroductionErrorBound(`fetch error with url ${url}: ${error}`);
             return;
         }
 
@@ -259,7 +265,7 @@ class DeviceManager {
     /**
      * Forget a device based on an identifier or one derived from mDNS service data.
      * @param {*} x The string-identifier or service data (i.e., name) of the
-     * device to forget. 
+     * device to forget.
      */
     #forgetDevice(x) {
         let name = null;
@@ -302,7 +308,7 @@ class MockDeviceDiscovery {
         8080,
         []
     );
-    
+
     constructor(type, database) {
         this.database = database;
     }
