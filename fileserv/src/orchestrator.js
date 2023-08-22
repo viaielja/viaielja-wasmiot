@@ -10,6 +10,17 @@ class DeviceNotFound extends Error {
     }
 }
 
+class ParameterMissing extends Error {
+    constructor(dId, execPath, param) {
+        super("parameter missing");
+        this.name = "ParameterMissing";
+        this.deployment = { id: dId };
+        this.execPath = execPath;
+        this.param = param;
+    }
+}
+
+
 /**
  * Fields for instruction about reacting to calls to modules and functions on a
  * device.
@@ -24,7 +35,9 @@ class Instructions {
             this.modules[moduleId] = {};
         }
         // Initialize each function to match to an
-        // instruction object.
+        // instruction object. NOTE: This makes it so that each function in a
+        // module can only be chained to one function other than itself (i.e. no
+        // recursion).
         this.modules[moduleId][funcName] = instruction;
     }
 }
@@ -130,96 +143,55 @@ class Orchestrator {
         ));
     }
 
+    /**
+     * Start the execution of a deployment with inputs.
+     * @param {*} deployment The deployment to execute.
+     * @param {*} params The inputs to the deployment. Includes files as well.
+     * @returns Promise of the response from the first device in the deployment
+     * sequence.
+     */
     async schedule(deployment, params) {
         // Pick the starting point based on sequence's first device and function.
-        let startEndpoint = deployment
-            .fullManifest[deployment.sequence[0].device]
-            .endpoints[deployment.sequence[0].func];
+        const { url, path, method, operationObj: operation } = utils.getStartEndpoint(deployment);
 
-        // FIXME hardcoded: selecting first(s) from list(s).
-        let url = new URL(startEndpoint.servers[0].url);
-        // FIXME hardcoded: Selecting 0 because paths expected to contain only a
-        // single item selected at creation of deployment manifest.
-        let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
-
-        // Prepare given data for sending to device.
-        // Build the SELECTED METHOD'S parameters for the request according to the
-        // description.
-        let method = Object.keys(pathObj).includes("get") ? "get" : "post";
-        for (let param of pathObj[method].parameters) {
+        // OpenAPI Operation Object's parameters.
+        for (let param of operation.parameters) {
             if (!(param.name in params)) {
-                response.status(400).json({ err:`Missing argument '${param.name}'` });
-                return;
+                throw new ParameterMissing(deployment._id, path, param);
             }
 
             let argument = params[param.name];
             switch (param.in) {
                 case "path":
-                    // NOTE/FIXME: This might have already been resolved in
-                    // deployment phase for each device to self-configure strictly
-                    // (e.g., no generic paths "/mod/func" but concrete (and bit
-                    // safer(?)) "/fibomod/fibofunc") according to orchestrator's
-                    // solution.
-                    pathName = pathName.replace(param.name, argument);
+                    path = path.replace(param.name, argument);
                     break;
                 case "query":
-                    // FIXME: What about URL-encoding?
                     url.searchParams.append(param.name, argument);
                     break;
                 default:
-                    response.status(500).json({ err:`This parameter location not supported: '${param.in}'` });
-                    return;
+                    throw `parameter location not supported: '${param.in}'`;
             }
         }
-
         // NOTE: The URL should not contain any path before this point.
-        url.pathname = pathName;
+        url.pathname = path;
 
         let options = { method: method };
+
+        // OpenAPI Operation Object's requestBody (including files as input).
+        if (operation.requestBody) {
+            let contents = Object.entries(operation.requestBody.content);
+            console.assert(contents.length === 1, "expected one and only one media type");
+            let [mediaType, mediaTypeObj] = contents[0];
+            options.headers = { "Content-type": mediaType };
+        }
+
         // Request with GET/HEAD method cannot have body.
-        if (!(["GET", "HEAD"].includes(method.toUpperCase()))) {
-            // Body is set as is; the request is propagated. FIXME: duplication of
-            // input data?
+        if (!(["get", "head"].includes(method.toLowerCase()))) {
             options.body = params;
         }
 
         // Message the first device and return its reaction response.
-        let response = await fetch(url, options);
-
-        if (!response.ok) {
-            throw new utils.Error(`request to ${url} failed`);
-        }
-
-        switch (response.headers.get("content-type")) {
-            case "application/json":
-                // FIXME: Assuming the return is LE-bytes list for 32 bit
-                // integer.
-                let intBytes = await response.json();
-                let classIndex =
-                    (intBytes[3] << 24) |
-                    (intBytes[2] << 16) |
-                    (intBytes[1] <<  8) |
-                    (intBytes[0]);
-
-                return {
-                    message: `Responded with ${classIndex}`,
-                    value: classIndex
-                };
-            case "image/jpeg":
-                const CHAIN_RESULT_IMAGE_PATH = "./files/chainResultImg.jpeg";
-                // Write image to a file to see results.
-                const fs = require("fs");
-                fs.writeFileSync(
-                    CHAIN_RESULT_IMAGE_PATH,
-                    Buffer.from(await res.arrayBuffer()),
-                );
-
-                return {
-                    message: `Saved JPEG to ${CHAIN_RESULT_IMAGE_PATH}`
-                };
-            default:
-                throw new utils.Error("Unsupported content type"+res.headers["Content-type"]);
-        }
+        return fetch(url, options);
     }
 }
 
@@ -441,8 +413,7 @@ function endpointDescription(deploymentId, node) {
     let url = new URL(urlString);
 
     // FIXME hardcoded: "paths" field assumed to contain template "/{deployment}/modules/{module}/<thisFuncName>".
-    // FIXME: URL-encode the names.
-    const funcPathKey = Object.keys(node.module.openapi.paths)[0];//`/{deployment}/modules/{module}/${node.func}`;
+    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
     // TODO: Iterate all the paths.
     let funcPath = node.module.openapi.paths[funcPathKey];
     let filledFuncPathKey = funcPathKey
@@ -458,7 +429,7 @@ function endpointDescription(deploymentId, node) {
     preFilledOpenapiDoc.paths[filledFuncPathKey] = funcPath;
 
     // Remove unnecessary fields.
-    delete preFilledOpenapiDoc.paths[filledFuncPathKey].parameters
+    delete preFilledOpenapiDoc.paths[funcPathKey].parameters
     // FIXME hardcoded: selecting first address.
     delete preFilledOpenapiDoc.servers[0].variables;
     // TODO: See above about filtering out unnecessary paths (= based on funcs).
