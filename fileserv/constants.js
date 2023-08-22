@@ -20,7 +20,9 @@ const PUBLIC_PORT = process.env.PUBLIC_PORT || "3000";
 const PUBLIC_BASE_URI = `${public_host}:${PUBLIC_PORT}/`;
 
 const MODULE_DIR = path.join(__dirname, "files", "wasm");
+const EXECUTION_INPUT_DIR = path.join(__dirname, "files", "exec-input");
 const FRONT_END_DIR = path.join(__dirname, "frontend");
+const UTILS_PATH = path.join(__dirname, "./utils.js");
 
 // NOTE: "webthing" is what the JS-library returns as type for Flask-host's
 // "_webthing._tcp.local.", soooo search for those.
@@ -46,4 +48,6 @@ module.exports = {
     DEVICE_SCAN_DURATION_MS: 5*1000,
     DEVICE_SCAN_INTERVAL_MS: 120*1000,
     DEVICE_HEALTH_CHECK_INTERVAL_MS: 180*1000,
+    EXECUTION_INPUT_DIR,
+    UTILS_PATH,
 };

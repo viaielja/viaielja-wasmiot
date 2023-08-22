@@ -24,24 +24,53 @@ async function tryFetchWithStatusUpdate(path) {
     }
 }
 
+function OpenApi3_1_0_SchemaToInputType(schema) {
+    switch (schema.type) {
+        case "integer":
+            return "number";
+        default:
+            throw `Unsupported schema type '${schema.type}'`;
+    }
+}
+
 async function generateModuleFuncInputForm(event) {
     let deploymentId = event.target.value;
     let deployment = await tryFetchWithStatusUpdate(`/file/manifest/${deploymentId}`);
 
-    // TODO: This is configured only for executing the fibonacci function atm
-    // and should ideally be automated to construct the needed fields from any
-    // Wasm-func's description...
+    // Get the data to build a form.
+    let { operationObj: operation } = getStartEndpoint(deployment);
+
+    // Build the form.
     let formTopDiv = document.querySelector("#execution-form fieldset > div");
-    let inputFieldDiv = document.createElement("div");
-    let inputFieldLabel = document.createElement("label");
-    inputFieldLabel.textContent = "Iteration count for fibonacci sequence";
-    let inputField = document.createElement("input");
-    inputField.type = "number";
-    inputField.defaultValue = "7";
-    inputField.name = "iterations";
-    inputFieldLabel.appendChild(inputField);
-    inputFieldDiv.appendChild(inputFieldLabel);
-    formTopDiv.appendChild(inputFieldDiv);
+    for (let param of operation.parameters) {
+        // Create elems.
+        let inputFieldDiv = document.createElement("div");
+        let inputFieldLabel = document.createElement("label");
+        let inputField = document.createElement("input");
+
+        // Fill with data.
+        inputFieldLabel.textContent = param.description
+        inputField.type = OpenApi3_1_0_SchemaToInputType(param.schema);
+        inputField.name = param.name;
+
+        // Add to form.
+        inputFieldLabel.appendChild(inputField);
+        inputFieldDiv.appendChild(inputFieldLabel);
+        formTopDiv.appendChild(inputFieldDiv);
+    }
+
+    // (Single) File upload based on media type.
+    let [fileMediaType, _fileSchema] = Object.entries(operation.requestBody?.content)[0];
+    let fileInputDiv = document.createElement("div");
+    let fileInputFieldLabel = document.createElement("label");
+    let fileInputField = document.createElement("input");
+    // Data.
+    fileInputFieldLabel.textContent = `Upload file (${fileMediaType}):`;
+    fileInputField.type = "file";
+    fileInputField.name = "inputFile";
+    // Add to form.
+    fileInputFieldLabel.appendChild(fileInputField);
+    fileInputDiv.appendChild(fileInputFieldLabel);
 }
 
 function addProcedureRow(listId) {
@@ -172,7 +201,7 @@ function submitJsonTextarea(url, successCallback) {
  * Return a handler that submits (POST) a form with the
  * 'enctype="multipart/form-data"' to the url. Used for uploading files
  * along with some metadata that the server needs.
- * 
+ *
  * See:
  * https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#uploading_a_file
  */
