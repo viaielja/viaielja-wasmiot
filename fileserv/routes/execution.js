@@ -33,7 +33,11 @@ const execute = async (request, response) => {
             args[INPUT_FILE_FIELD] = request.file;
         }
         let startResponse = await orchestrator.schedule(deployment, args);
-        response.json(startResponse.body);
+        if (!startResponse.ok) {
+            throw JSON.stringify(await startResponse.json());
+        }
+        let startResponseJson = await startResponse.json();
+        response.json(startResponseJson);
     } catch (e) {
         response
             .status(500)
