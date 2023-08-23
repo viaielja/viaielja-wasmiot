@@ -49,7 +49,7 @@ function messageDevice(device, path, body, method="POST") {
 class ApiError {
     constructor(errorText, error) {
         this.errorText = errorText;
-        this.error = error;
+        this.error = error || "error";
     }
 }
 
