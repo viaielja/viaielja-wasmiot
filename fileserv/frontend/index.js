@@ -407,17 +407,14 @@ function setStatus(result) {
         return;
     }
 
-    if (result.success) {
-        msg = result.success.message;
-        classs = "success";
-    } else if (result.result) {
-        msg = result.result;
-        classs = "result";
-    } else {
+    if (result.error) {
         // Empty the message if result is malformed.
-        msg = result.error ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
+        msg = result.errorText ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
         // Default the style to error.
         classs = "error"
+    } else {
+        msg = JSON.stringify(result);
+        classs = "success";
     }
     focusBar.textContent = msg;
     focusBar.classList.add(classs);
@@ -522,10 +519,6 @@ window.onload = async function () {
             (event) => {
                 event.preventDefault();
                 let deploymentObj = formToObject(event.target);
-                // TODO: The way I see it atm, because this makes calls to other
-                // hosts (devices) and all that, it should preferrably be in a
-                // path like '/deploy/' to separate from CRUD-operations of
-                // different resources.
                 fetch(`/file/manifest/${deploymentObj.id}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -552,8 +545,7 @@ window.onload = async function () {
                     body: JSON.stringify(deploymentObj)
                 })
                     .then(resp => resp.json())
-                    .then(setStatus)
-                    .catch(setStatus);
+                    .then(setStatus);
             }
         );
 
