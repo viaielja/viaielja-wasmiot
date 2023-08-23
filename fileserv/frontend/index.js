@@ -71,6 +71,7 @@ async function generateModuleFuncInputForm(event) {
     // Add to form.
     fileInputFieldLabel.appendChild(fileInputField);
     fileInputDiv.appendChild(fileInputFieldLabel);
+    formTopDiv.appendChild(fileInputDiv);
 }
 
 function addProcedureRow(listId) {
