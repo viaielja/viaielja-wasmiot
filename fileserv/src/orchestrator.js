@@ -254,7 +254,12 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
             forwardEndpoint = forwardDeployment.endpoints[forwardFunc];
         }
 
+        // This is needed at device to figure out how to interpret WebAssembly
+        // function's result.
+        let sourceEndpointPaths = deploymentsToDevices[deviceIdStr].endpoints[func].paths;
+
         let instruction = {
+            paths: sourceEndpointPaths,
             to: forwardEndpoint,
         };
 
