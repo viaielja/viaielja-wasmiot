@@ -135,6 +135,9 @@ dist
 # Place where the orchestrator saves uploaded WASM-modules.
 fileserv/files/wasm/
 
+# Place where the orchestrator saves uploaded input files.
+fileserv/files/exec/
+
 # Place where the example devices saves downloaded WASM-modules.
 example/**/modules/
 

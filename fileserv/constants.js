@@ -20,7 +20,7 @@ const PUBLIC_PORT = process.env.PUBLIC_PORT || "3000";
 const PUBLIC_BASE_URI = `${public_host}:${PUBLIC_PORT}/`;
 
 const MODULE_DIR = path.join(__dirname, "files", "wasm");
-const EXECUTION_INPUT_DIR = path.join(__dirname, "files", "exec-input");
+const EXECUTION_INPUT_DIR = path.join(__dirname, "files", "exec");
 const FRONT_END_DIR = path.join(__dirname, "frontend");
 const UTILS_PATH = path.join(__dirname, "./utils.js");
 

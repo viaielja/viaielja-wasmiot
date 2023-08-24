@@ -1,3 +1,5 @@
+const fs = require("fs");
+
 const constants = require("../constants.js");
 const utils = require("../utils.js");
 
@@ -146,21 +148,22 @@ class Orchestrator {
     /**
      * Start the execution of a deployment with inputs.
      * @param {*} deployment The deployment to execute.
-     * @param {*} params The inputs to the deployment. Includes files as well.
+     * @param {*} {body, files} The inputs to the deployment. Includes local
+     * system filepaths as well.
      * @returns Promise of the response from the first device in the deployment
      * sequence.
      */
-    async schedule(deployment, params) {
+    async schedule(deployment, { body, files }) {
         // Pick the starting point based on sequence's first device and function.
         const { url, path, method, operationObj: operation } = utils.getStartEndpoint(deployment);
 
         // OpenAPI Operation Object's parameters.
         for (let param of operation.parameters) {
-            if (!(param.name in params)) {
+            if (!(param.name in body)) {
                 throw new ParameterMissing(deployment._id, path, param);
             }
 
-            let argument = params[param.name];
+            let argument = body[param.name];
             switch (param.in) {
                 case "path":
                     path = path.replace(param.name, argument);
@@ -181,13 +184,16 @@ class Orchestrator {
         if (operation.requestBody) {
             let contents = Object.entries(operation.requestBody.content);
             console.assert(contents.length === 1, "expected one and only one media type");
+            /*
             let [mediaType, mediaTypeObj] = contents[0];
             options.headers = { "Content-type": mediaType };
-        }
-
-        // Request with GET/HEAD method cannot have body.
-        if (!(["get", "head"].includes(method.toLowerCase()))) {
-            options.body = params;
+            */
+            let formData = new FormData();
+            formData.append("data", new Blob([fs.readFileSync(files[0])]), "inputfilename");
+            options.body = formData;
+        } else if (!(["get", "head"].includes(method.toLowerCase()))) {
+            // Request with GET/HEAD method cannot have body.
+            options.body = body;
         }
 
         // Message the first device and return its reaction response.

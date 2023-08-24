@@ -1,3 +1,6 @@
+const multer = require("multer");
+
+
 /// Perform boilerplate tasks when responding with a file read from filesystem.
 function respondWithFile(response, filePath, contentType) {
     response.status(200)
@@ -78,7 +81,7 @@ function validateFileFormSubmission(request, response, next) {
  * @param {*} formFieldName
  * @returns Middleware for saving an incoming file.
  */
-const fileUpload = (destinationFilePath, formFieldName) => require("multer")({ dest: destinationFilePath }).single(formFieldName);
+const fileUpload = (destinationFilePath, formFieldName) => multer({ dest: destinationFilePath }).single(formFieldName);
 
 /**
  * Return the main OpenAPI 3.1.0 operation of a deployment manifest starting

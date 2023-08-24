@@ -25,12 +25,10 @@ const execute = async (request, response) => {
     let deployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
 
     try {
-        let args = request.body;
+        let args = {}
+        args.body = request.body;
         if (request.file) {
-            if (args[INPUT_FILE_FIELD]) {
-                throw `expected a file in request body field '${INPUT_FILE_FIELD}'`;
-            }
-            args[INPUT_FILE_FIELD] = request.file;
+            args.files = [request.file.path];
         }
         let startResponse = await orchestrator.schedule(deployment, args);
         if (!startResponse.ok) {

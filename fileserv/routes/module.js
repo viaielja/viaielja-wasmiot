@@ -164,7 +164,7 @@ const addModuleFile = async (request, response) => {
             // TODO: Should this really be considered server-side error (500)?
             response.status(500).json({err: `Bad Wasm file: ${err}`});
             return;
-        };
+        }
 
         // Perform actions specific for the filetype to update
         // non-filepath-related metadata fields.
