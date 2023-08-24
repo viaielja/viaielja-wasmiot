@@ -65,12 +65,16 @@ async function generateModuleFuncInputForm(event) {
     let fileInputFieldLabel = document.createElement("label");
     let fileInputField = document.createElement("input");
     // Data.
+    let executeFileFieldName = "inputFile";
+    let executeFileUploadId = `execute-form-${fileMediaType}-${executeFileFieldName}`;
     fileInputFieldLabel.textContent = `Upload file (${fileMediaType}):`;
+    fileInputFieldLabel.htmlFor = executeFileUploadId;
+    fileInputField.id = executeFileUploadId;
+    fileInputField.name = executeFileFieldName;
     fileInputField.type = "file";
-    fileInputField.name = "inputFile";
     // Add to form.
-    fileInputFieldLabel.appendChild(fileInputField);
     fileInputDiv.appendChild(fileInputFieldLabel);
+    fileInputDiv.appendChild(fileInputField);
     formTopDiv.appendChild(fileInputDiv);
 }
 
@@ -535,20 +539,7 @@ window.onload = async function () {
 
     document
         .querySelector("#execution-form")
-        .addEventListener(
-            "submit",
-            (event) => {
-                event.preventDefault();
-                let deploymentObj = formToObject(event.target);
-                fetch(`/execute/${deploymentObj.id}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(deploymentObj)
-                })
-                    .then(resp => resp.json())
-                    .then(setStatus);
-            }
-        );
+        .addEventListener("submit", submitFile("/execute/:id"));
 
     // Database listings:
 
