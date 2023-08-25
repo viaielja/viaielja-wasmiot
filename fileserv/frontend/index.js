@@ -214,8 +214,6 @@ function submitFile(url) {
     function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault()
         let formData = new FormData();
-        // NOTE: only one (1) file is sent.
-        let fileField = formSubmitEvent.target.querySelector("input[type=file]");
 
         // Add the metadata found in the form.
         // NOTE: Forms that are more complicated than just containing text
@@ -232,8 +230,11 @@ function submitFile(url) {
             }
         }
 
-        // Add the actual file.
-        formData.append(fileField.name, fileField.files[0]);
+        // NOTE: only one (1) file is sent.
+        let fileField = formSubmitEvent.target.querySelector("input[type=file]");
+        if (fileField) {
+            formData.append(fileField.name, fileField.files[0]);
+        }
 
         // NOTE: Hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
         let idUrl = url.replace(":id", formObj["id"]);
