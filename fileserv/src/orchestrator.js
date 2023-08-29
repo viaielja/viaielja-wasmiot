@@ -32,15 +32,15 @@ class Instructions {
         this.modules = {};
     }
 
-    add(moduleId, funcName, instruction) {
-        if (!this.modules[moduleId]) {
-            this.modules[moduleId] = {};
+    add(moduleName, funcName, instruction) {
+        if (!this.modules[moduleName]) {
+            this.modules[moduleName] = {};
         }
         // Initialize each function to match to an
         // instruction object. NOTE: This makes it so that each function in a
         // module can only be chained to one function other than itself (i.e. no
         // recursion).
-        this.modules[moduleId][funcName] = instruction;
+        this.modules[moduleName][funcName] = instruction;
     }
 }
 
@@ -270,7 +270,7 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
         };
 
         // Attach the created details of deployment to matching device.
-        deploymentsToDevices[deviceIdStr].instructions.add(modulee._id, func, instruction);
+        deploymentsToDevices[deviceIdStr].instructions.add(modulee.name, func, instruction);
     }
 
     let sequenceAsIds = Array.from(updatedSequence)
