@@ -580,17 +580,20 @@ window.onload = async function () {
             .then(setStatus);
     });
 
-    // Toggle visibility of UI controls.
-    let controlElems = document.querySelectorAll("#selector > ul li");
-    for (let elem of controlElems) {
+    // Toggle visibility of UI tabs.
+    let tabElems = document.querySelectorAll("#selector button");
+    for (let elem of tabElems) {
         elem.addEventListener("click", function (event) {
-            let previousControl = document.querySelector("#control-container > .selected");
-            previousControl.classList.remove("selected");
-            previousControl.classList.add("hidden");
+            let previousTab = document.querySelector("#tab-container > .selected");
+            previousTab.classList.remove("selected");
+            previousTab.classList.add("hidden");
+            let previousTabSelector = document.querySelector(`[data-tab-id="${previousTab.id}"]`);
+            previousTabSelector.classList.remove("depressed");
 
-            let targetControl = document.getElementById(event.target.dataset.controlId);
-            targetControl.classList.remove("hidden");
-            targetControl.classList.add("selected");
+            let targetTab = document.getElementById(event.target.dataset.tabId);
+            targetTab.classList.remove("hidden");
+            targetTab.classList.add("selected");
+            elem.classList.add("depressed");
         });
     }
 };
