@@ -1,4 +1,12 @@
-const multer = require("multer");
+// Hack to make this file work in both Node.js and browser without erroring.
+let runningInBrowser = false;
+let multer = undefined;
+try {
+    multer = require("multer");
+} catch (e) {
+    console.log("Importing with 'require' failed; assuming we're in a browser");
+    runningInBrowser = true;
+}
 
 
 /// Perform boilerplate tasks when responding with a file read from filesystem.
@@ -114,11 +122,13 @@ function getStartEndpoint(deployment) {
 }
 
 
-module.exports = {
-    respondWithFile,
-    messageDevice,
-    Error: ApiError,
-    validateFileFormSubmission,
-    fileUpload,
-    getStartEndpoint,
-};
+if (!runningInBrowser) {
+    module.exports = {
+        respondWithFile,
+        messageDevice,
+        Error: ApiError,
+        validateFileFormSubmission,
+        fileUpload,
+        getStartEndpoint,
+    };
+}
