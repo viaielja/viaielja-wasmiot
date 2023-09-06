@@ -437,6 +437,31 @@ async function populateDeploymentFormDeployments() {
 }
 
 window.onload = async function () {
+    // Open up the currently selected tab.
+    let selectedTab = document.querySelector('#selector input[name="tab-selector"]:checked')
+        || document.querySelector('#selector input[name="tab-selector"]');
+    let selectedTabId = selectedTab.dataset.tabId;
+    let initialTabToShow = document.getElementById(selectedTabId);
+    initialTabToShow.classList.remove("hidden");
+    initialTabToShow.classList.add("selected");
+    // Also ensure the matching radiobutton is always checked.
+    selectedTab.checked = true;
+
+    // Add event handlers for showing and hiding different tabs.
+    let tabElems = document.querySelectorAll("#selector input");
+    for (let elem of tabElems) {
+        console.log(elem);
+        elem.addEventListener("input", function (event) {
+            let previousTab = document.querySelector("#tab-container > .selected");
+            previousTab.classList.remove("selected");
+            previousTab.classList.add("hidden");
+
+            let tabToShow = document.getElementById(event.target.dataset.tabId);
+            tabToShow.classList.remove("hidden");
+            tabToShow.classList.add("selected");
+        });
+    }
+
     // Populate different kinds of lists when page loads.
     populateWasmFormModules();
     await populateExecutionFormDeployments();
@@ -579,21 +604,4 @@ window.onload = async function () {
             .then(resp => resp.json())
             .then(setStatus);
     });
-
-    // Toggle visibility of UI tabs.
-    let tabElems = document.querySelectorAll("#selector button");
-    for (let elem of tabElems) {
-        elem.addEventListener("click", function (event) {
-            let previousTab = document.querySelector("#tab-container > .selected");
-            previousTab.classList.remove("selected");
-            previousTab.classList.add("hidden");
-            let previousTabSelector = document.querySelector(`[data-tab-id="${previousTab.id}"]`);
-            previousTabSelector.classList.remove("depressed");
-
-            let targetTab = document.getElementById(event.target.dataset.tabId);
-            targetTab.classList.remove("hidden");
-            targetTab.classList.add("selected");
-            elem.classList.add("depressed");
-        });
-    }
 };

@@ -1,6 +1,19 @@
+button,input[type="submit"],.tab-selector:hover {
+    background-color: white;
+    cursor: pointer;
+}
+
 html {
     background-color: black;
-    color: rgba(128, 255, 128, 0.8);
+}
+
+ul {
+    list-style-type: none;
+}
+
+.container {
+    display: flex;
+    justify-content: space-around;
 }
 
 .error {
@@ -15,67 +28,17 @@ html {
     display: none;
 }
 
-.terminal {
-    position: relative;
-    box-sizing: border-box;
-    background-color: #000000;
-    background-image: radial-gradient(#11581E, #041607);
-    background-repeat: no-repeat;
-    background-size: cover;
-    font-family: 'Inconsolata', Helvetica, sans-serif;
-    color: rgba(108, 235, 108, 0.8);
-    text-shadow:
-        0 0 11px rgba(31, 235, 31, 1),
-        0 0 2px rgba(255, 235, 235, 0.8);
-
-    text-transform: uppercase;
-    padding-left: 2%;
-    padding-right: 2%;
-
-    border-style: ridge;
-    border-radius: 1%;
-    border-width: 5px;
-    border-color: #243627;
+.tab-selector {
+    background-color: whitesmoke;
+    padding: 0;
+    margin: 1%;
+    box-shadow: 1px 1px 3px;
+    margin-right: 10%;
 }
 
-button.terminal {
+.tab-selector label {
     width: 100%;
-}
-
-button.terminal:hover {
-    color: rgba(128, 255, 128, 0.8);
-    text-shadow:
-        0 0 11px rgba(51, 255, 51, 1),
-        0 0 2px rgba(255, 255, 255, 0.8);
-
-    background-image: radial-gradient(#21784E,#041607);
-
-    border-style: groove;
-    border-radius: 1%;
-    border-width: 5px;
-}
-
-.depressed {
-    color: rgba(128, 255, 128, 0.8);
-    text-shadow:
-        0 0 11px rgba(51, 255, 51, 1),
-        0 0 2px rgba(255, 255, 255, 0.8);
-
-    background-image: radial-gradient(#21784E,#041607);
-
-    border-style: groove;
-    border-radius: 1%;
-    border-width: 5px;
-}
-
-.container {
-    display: flex;
-    justify-content: space-around;
-}
-
-#header {
-    display: flex;
-    justify-content: space-around;
+    height: 100%;
 }
 
 #content {
@@ -89,16 +52,19 @@ button.terminal:hover {
     flex-grow: 1;
 }
 
-button,input[type="submit"]:hover {
-    cursor: pointer;
+#content *,#header {
+    background-color: white;
+    margin: 1%;
 }
 
-div {
-    font-family: 'Inconsolata', Helvetica, sans-serif;
-    color: rgba(128, 255, 128, 0.8);
-    text-shadow:
-        0 0 11px rgba(51, 255, 51, 1),
-        0 0 2px rgba(255, 255, 255, 0.8);
+#header {
+    display: flex;
+    justify-content: space-around;
+}
+
+#selector-list {
+    display: flex;
+    flex-direction: column;
 }
 
 @media (max-width: 1000px) {

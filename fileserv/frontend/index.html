@@ -28,43 +28,37 @@
 
   <div id="content">
     <div id="selector">
-      <h2  class="container">
+      <h2 class="container">
         <div>
           Open a tab
         </div>
       </h2>
-      <ul>
-        <li>
-          <button type="button" class="terminal" data-tab-id="resource-listing">
-            Resources
-          </button>
-        </li>
-        <li>
-          <button type="button" class="terminal" data-tab-id="module-create">
-            Module creation
-          </button>
-        </li>
-        <li>
-          <button type="button" class="terminal" data-tab-id="module-upload">
-            Module upload
-          </button>
-        </li>
-        <li>
-          <button type="button" class="terminal" data-tab-id="deployment-create">
-            Deployment manifest creation
-          </button>
-        </li>
-        <li>
-          <button type="button" class="terminal" data-tab-id="deployment-action">
-            Deployment of deployment manifests
-          </button>
-        </li>
-        <li>
-          <button type="button" class="terminal" data-tab-id="execution-start">
-            Execution
-          </button>
-        </li>
-      </ul>
+      <div id="selector-list">
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="resource-listing">
+          Resources
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="module-create">
+          Module creation
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="module-upload">
+          Module upload
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="deployment-create">
+          Deployment manifest creation
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="deployment-action">
+          Deployment of deployment manifests
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="execution-start">
+          Execution
+        </label>
+      </div>
     </div>
 
     <div id="tab-container">
@@ -106,7 +100,7 @@
       </div>
 
       <!-- Module creation (JSON and HTML-form). -->
-      <div id="module-create" class="tab selected">
+      <div id="module-create" class="tab hidden">
         <div>
           <form id="module-form">
             <fieldset>
