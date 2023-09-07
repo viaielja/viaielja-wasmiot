@@ -48,10 +48,10 @@ const getModuleBy = async (moduleId) => {
     } else {
         // Return the module identified by given ID.
         if (matches.length === 0) {
-            let err = `no matches for ID ${request.params.moduleId}`;
+            let err = `no matches for ID ${moduleId}`;
             return [404, err];
         } else if (matches.length > 1) {
-            let err = `too many matches for ID ${request.params.moduleId}`;
+            let err = `too many matches for ID ${moduleId}`;
             return [500, err];
         } else {
             let doc = matches[0];
@@ -61,7 +61,10 @@ const getModuleBy = async (moduleId) => {
 };
 
 /**
- * GET a single or all available Wasm-modules.
+ * GET
+ * - a single Wasm-module's whole metadata (moduleId)
+ * - a single Wasm-module's whole OpenAPI description (moduleId/description)
+ * - all available Wasm-modules' metadata (no moduleId)
  */
 const getModule = (justDescription) => (async (request, response) => {
     let [failCode, value] = await getModuleBy(request.params.moduleId);
@@ -132,7 +135,7 @@ const createModule = async (request, response) => {
 
 /**
  * Attach a file to the previously created module.
- * 
+ *
  * Saves the file to the server filesystem and references to it into module's
  * database-entry matching a module-ID given in the body.
  *
@@ -140,7 +143,7 @@ const createModule = async (request, response) => {
  * "-- the PATCH method is the correct choice for partially updating an existing
  * resource, and you should only use PUT if you’re replacing a resource in its
  * entirety."
- * 
+ *
  * IMO using PATCH would fit this, but as this route will technically _create_ a
  * new resource (the file) (and the method is not supported with
  * multipart/form-data at the frontend), use POST.
@@ -164,7 +167,7 @@ const addModuleFile = async (request, response) => {
             // TODO: Should this really be considered server-side error (500)?
             response.status(500).json({err: `Bad Wasm file: ${err}`});
             return;
-        };
+        }
 
         // Perform actions specific for the filetype to update
         // non-filepath-related metadata fields.
@@ -199,10 +202,10 @@ const addModuleFile = async (request, response) => {
         try {
             await updateModule(filter, updateObj);
 
-            console.log(`Updated module '${request.body.id}' with data:`, updateObj);
+            console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, updateObj);
 
             // Tell devices to fetch updated files on modules.
-            await notifyModuleFileUpdate(request.body.id);
+            await notifyModuleFileUpdate(filter._id);
             response
                 .status(statusCode)
                 .json(result);
@@ -316,25 +319,6 @@ async function updateModule(filter, fields) {
     }
 }
 
-/**
-* Middleware to confirm existence of an incoming file from a user-submitted
-* form (which apparently `multer` does not do itself...).
-*/
-function validateFileFormSubmission(request, response, next) {
-    if (request.method !== "POST") { next(); return; }
-
-    // Check that request contains a file upload.
-    if (!request.hasOwnProperty("file")) {
-        response.status(400).send("file-submission missing");
-        console.log("Bad request; needs a file-input for the module field");
-        return;
-    }
-    next();
-}
-// Set where the wasm-binaries will be saved into on the filesystem.
-// From: https://www.twilio.com/blog/handle-file-uploads-node-express
-const fileUpload = require("multer")({ dest: MODULE_DIR }).single("module");
-
 class Func {
     constructor(name, parameterCount) {
         this.name = name;
@@ -342,13 +326,15 @@ class Func {
     }
 }
 
+const fileUpload = utils.fileUpload(MODULE_DIR, "module");
+
+
 const router = express.Router();
 router.post("/", createModule);
-router.post("/:moduleId/upload", fileUpload, validateFileFormSubmission, addModuleFile);
+router.post("/:moduleId/upload", fileUpload, utils.validateFileFormSubmission, addModuleFile);
 router.get("/:moduleId?", getModule(false));
 router.get("/:moduleId/description", getModule(true));
 router.get("/:moduleId/:fileExtension", getModuleFile);
 router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
-
 
 module.exports = { setDatabase, router };

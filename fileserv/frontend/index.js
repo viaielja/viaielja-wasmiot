@@ -24,24 +24,60 @@ async function tryFetchWithStatusUpdate(path) {
     }
 }
 
+function OpenApi3_1_0_SchemaToInputType(schema) {
+    switch (schema.type) {
+        case "integer":
+            return "number";
+        default:
+            throw `Unsupported schema type '${schema.type}'`;
+    }
+}
+
 async function generateModuleFuncInputForm(event) {
     let deploymentId = event.target.value;
     let deployment = await tryFetchWithStatusUpdate(`/file/manifest/${deploymentId}`);
 
-    // TODO: This is configured only for executing the fibonacci function atm
-    // and should ideally be automated to construct the needed fields from any
-    // Wasm-func's description...
+    // Get the data to build a form.
+    let { operationObj: operation } = getStartEndpoint(deployment);
+
+    // Build the form.
     let formTopDiv = document.querySelector("#execution-form fieldset > div");
-    let inputFieldDiv = document.createElement("div");
-    let inputFieldLabel = document.createElement("label");
-    inputFieldLabel.textContent = "Iteration count for fibonacci sequence";
-    let inputField = document.createElement("input");
-    inputField.type = "number";
-    inputField.defaultValue = "7";
-    inputField.name = "iterations";
-    inputFieldLabel.appendChild(inputField);
-    inputFieldDiv.appendChild(inputFieldLabel);
-    formTopDiv.appendChild(inputFieldDiv);
+    for (let param of operation.parameters) {
+        // Create elems.
+        let inputFieldDiv = document.createElement("div");
+        let inputFieldLabel = document.createElement("label");
+        let inputField = document.createElement("input");
+
+        // Fill with data.
+        inputFieldLabel.textContent = param.description
+        inputField.type = OpenApi3_1_0_SchemaToInputType(param.schema);
+        inputField.name = param.name;
+
+        // Add to form.
+        inputFieldLabel.appendChild(inputField);
+        inputFieldDiv.appendChild(inputFieldLabel);
+        formTopDiv.appendChild(inputFieldDiv);
+    }
+
+    // (Single) File upload based on media type.
+    if (operation.requestBody) {
+        let [fileMediaType, _fileSchema] = Object.entries(operation.requestBody.content)[0];
+        let fileInputDiv = document.createElement("div");
+        let fileInputFieldLabel = document.createElement("label");
+        let fileInputField = document.createElement("input");
+        // Data.
+        let executeFileFieldName = "inputFile";
+        let executeFileUploadId = `execute-form-${fileMediaType}-${executeFileFieldName}`;
+        fileInputFieldLabel.textContent = `Upload file (${fileMediaType}):`;
+        fileInputFieldLabel.htmlFor = executeFileUploadId;
+        fileInputField.id = executeFileUploadId;
+        fileInputField.name = executeFileFieldName;
+        fileInputField.type = "file";
+        // Add to form.
+        fileInputDiv.appendChild(fileInputFieldLabel);
+        fileInputDiv.appendChild(fileInputField);
+        formTopDiv.appendChild(fileInputDiv);
+    }
 }
 
 function addProcedureRow(listId) {
@@ -172,7 +208,7 @@ function submitJsonTextarea(url, successCallback) {
  * Return a handler that submits (POST) a form with the
  * 'enctype="multipart/form-data"' to the url. Used for uploading files
  * along with some metadata that the server needs.
- * 
+ *
  * See:
  * https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#uploading_a_file
  */
@@ -180,8 +216,6 @@ function submitFile(url) {
     function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault()
         let formData = new FormData();
-        // NOTE: only one (1) file is sent.
-        let fileField = formSubmitEvent.target.querySelector("input[type=file]");
 
         // Add the metadata found in the form.
         // NOTE: Forms that are more complicated than just containing text
@@ -198,8 +232,11 @@ function submitFile(url) {
             }
         }
 
-        // Add the actual file.
-        formData.append(fileField.name, fileField.files[0]);
+        // NOTE: only one (1) file is sent.
+        let fileField = formSubmitEvent.target.querySelector("input[type=file]");
+        if (fileField) {
+            formData.append(fileField.name, fileField.files[0]);
+        }
 
         // NOTE: Hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
         let idUrl = url.replace(":id", formObj["id"]);
@@ -378,17 +415,14 @@ function setStatus(result) {
         return;
     }
 
-    if (result.success) {
-        msg = result.success.message;
-        classs = "success";
-    } else if (result.result) {
-        msg = result.result;
-        classs = "result";
-    } else {
+    if (result.error) {
         // Empty the message if result is malformed.
-        msg = result.error ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
+        msg = result.errorText ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
         // Default the style to error.
         classs = "error"
+    } else {
+        msg = JSON.stringify(result);
+        classs = "success";
     }
     focusBar.textContent = msg;
     focusBar.classList.add(classs);
@@ -405,6 +439,30 @@ async function populateDeploymentFormDeployments() {
 }
 
 window.onload = async function () {
+    // Open up the currently selected tab.
+    let selectedTab = document.querySelector('#selector input[name="tab-selector"]:checked')
+        || document.querySelector('#selector input[name="tab-selector"]');
+    let selectedTabId = selectedTab.dataset.tabId;
+    let initialTabToShow = document.getElementById(selectedTabId);
+    initialTabToShow.classList.remove("hidden");
+    initialTabToShow.classList.add("selected");
+    // Also ensure the matching radiobutton is always checked.
+    selectedTab.checked = true;
+
+    // Add event handlers for showing and hiding different tabs.
+    let tabElems = document.querySelectorAll("#selector input");
+    for (let elem of tabElems) {
+        elem.addEventListener("input", function (event) {
+            let previousTab = document.querySelector("#tab-container > .selected");
+            previousTab.classList.remove("selected");
+            previousTab.classList.add("hidden");
+
+            let tabToShow = document.getElementById(event.target.dataset.tabId);
+            tabToShow.classList.remove("hidden");
+            tabToShow.classList.add("selected");
+        });
+    }
+
     // Populate different kinds of lists when page loads.
     populateWasmFormModules();
     await populateExecutionFormDeployments();
@@ -493,10 +551,6 @@ window.onload = async function () {
             (event) => {
                 event.preventDefault();
                 let deploymentObj = formToObject(event.target);
-                // TODO: The way I see it atm, because this makes calls to other
-                // hosts (devices) and all that, it should preferrably be in a
-                // path like '/deploy/' to separate from CRUD-operations of
-                // different resources.
                 fetch(`/file/manifest/${deploymentObj.id}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -512,21 +566,7 @@ window.onload = async function () {
 
     document
         .querySelector("#execution-form")
-        .addEventListener(
-            "submit",
-            (event) => {
-                event.preventDefault();
-                let deploymentObj = formToObject(event.target);
-                fetch(`/execute/${deploymentObj.id}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(deploymentObj)
-                })
-                    .then(resp => resp.json())
-                    .then(setStatus)
-                    .catch(setStatus);
-            }
-        );
+        .addEventListener("submit", submitFile("/execute/:id"));
 
     // Database listings:
 
@@ -565,18 +605,4 @@ window.onload = async function () {
             .then(resp => resp.json())
             .then(setStatus);
     });
-
-    // Toggle visibility of UI controls.
-    let controlElems = document.querySelectorAll("#selector > ul li");
-    for (let elem of controlElems) {
-        elem.addEventListener("click", function (event) {
-            let previousControl = document.querySelector("#control-container > .selected");
-            previousControl.classList.remove("selected");
-            previousControl.classList.add("hidden");
-
-            let targetControl = document.getElementById(event.target.dataset.controlId);
-            targetControl.classList.remove("hidden");
-            targetControl.classList.add("selected");
-        });
-    }
 };

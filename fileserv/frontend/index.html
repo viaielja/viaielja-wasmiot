@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
   <meta charset='utf-8'>
-  <link rel="StyleSheet" href="tempstyle.css" type="text/css" />
+  <link rel="StyleSheet" href="style.css" type="text/css" />
   <title>Wasm-IoT</title>
   <!-- Sentry bundle and init -->
   <script src="https://browser.sentry-cdn.com/7.51.2/bundle.tracing.min.js"
           crossorigin="anonymous"></script>
 
   <script src="sentry.js"></script>
+  <script src="/utils.js"></script>
   <script type="text/javascript" src="index.js"></script>
 
 </head>
 <body>
-  
+
   <div id="header">
-    <div  class="container">
-      <div class="overlay"></div>
-      <div class="terminal">
+    <div class="container">
+      <div>
         <h1>WasmIoT - Orchestrator</h1>
         <div>
           <h1 id="status"></h1>
@@ -28,59 +28,49 @@
 
   <div id="content">
     <div id="selector">
-      <h2  class="container">
-        <div class="overlay"></div>
-        <div class="terminal">
-          Open a controller
+      <h2 class="container">
+        <div>
+          Open a tab
         </div>
       </h2>
-      <ul>
-        <li>
-          <div class="overlay"></div>
-          <div class="terminal" data-control-id="resource-listing">
-            Resources
-          </div>
-        </li>
-        <li>
-          <div class="overlay"></div>
-          <div class="terminal" data-control-id="module-create">
-            Module creation
-          </div>
-        </li>
-        <li>
-          <div class="overlay"></div>
-          <div class="terminal" data-control-id="module-upload">
-            Module upload
-          </div>
-        </li>
-        <li>
-          <div class="overlay"></div>
-          <div class="terminal" data-control-id="deployment-create">
-            Deployment manifest creation
-          </div>
-        </li>
-        <li>
-          <div class="overlay"></div>
-          <div class="terminal" data-control-id="deployment-action">
-            Deployment of deployment manifests
-          </div>
-        </li>
-        <li>
-          <div class="overlay"></div>
-          <div class="terminal" data-control-id="execution-start">
-            Execution
-          </div>
-        </li>
-      </ul>
+      <div id="selector-list">
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="resource-listing">
+          Resources
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="module-create">
+          Module creation
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="module-upload">
+          Module upload
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="deployment-create">
+          Deployment manifest creation
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="deployment-action">
+          Deployment of deployment manifests
+        </label>
+        <label class="tab-selector">
+          <input type="radio" name="tab-selector" data-tab-id="execution-start">
+          Execution
+        </label>
+      </div>
     </div>
 
-    <div id="control-container">
-      <!-- Resource listing. -->
-      <div id="resource-listing" class="control hidden">
-        <div class="overlay"></div>
-        <div class="terminal">
+    <div id="tab-container">
+      <h2 class="container">
+        <div>
+          Tab
+        </div>
+      </h2>      <!-- Resource listing. -->
+      <div id="resource-listing" class="tab hidden">
+        <div>
           <ul>
-            <li> 
+            <li>
               <a href="/file/device">Devices</a>
               <div>
                 <form id="device-deleteall-form">
@@ -110,9 +100,8 @@
       </div>
 
       <!-- Module creation (JSON and HTML-form). -->
-      <div id="module-create" class="control selected">
-        <div class="overlay"></div>
-        <div class="terminal">
+      <div id="module-create" class="tab hidden">
+        <div>
           <form id="module-form">
             <fieldset>
               <legend>Fill-in metadata for a new module</legend>
@@ -148,9 +137,8 @@
       </div>
 
       <!-- Module upload. -->
-      <div id="module-upload" class="control hidden">
-        <div class="overlay"></div>
-        <div class="terminal">
+      <div id="module-upload" class="tab hidden">
+        <div>
           <form id="wasm-form">
             <fieldset>
               <legend>Upload a file to attach to a module</legend>
@@ -171,9 +159,8 @@
       </div>
 
       <!-- Deployment manifest creation (JSON and HTML-form). -->
-      <div id="deployment-create" class="control hidden">
-        <div class="overlay"></div>
-        <div class="terminal">
+      <div id="deployment-create" class="tab hidden">
+        <div>
           <form id="deployment-form">
             <fieldset>
                 <legend>Create a deployment manifest</legend>
@@ -209,9 +196,8 @@
       </div>
 
       <!-- Deploying. -->
-      <div id="deployment-action" class="control hidden">
-        <div class="overlay"></div>
-        <div class="terminal">
+      <div id="deployment-action" class="tab hidden">
+        <div>
           <form id="deployment-action-form">
             <fieldset>
               <legend>Deploy</legend>
@@ -230,9 +216,8 @@
       </div>
 
       <!-- Execution. -->
-      <div id="execution-start" class="control hidden">
-        <div class="overlay"></div>
-        <div class="terminal">
+      <div id="execution-start" class="tab hidden">
+        <div>
           <form id="execution-form">
             <fieldset>
               <legend>Execute</legend>

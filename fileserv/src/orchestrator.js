@@ -1,3 +1,5 @@
+const fs = require("fs");
+
 const constants = require("../constants.js");
 const utils = require("../utils.js");
 
@@ -7,6 +9,38 @@ class DeviceNotFound extends Error {
         super("device not found");
         this.name = "DeviceNotFound";
         this.device = { id: dId };
+    }
+}
+
+class ParameterMissing extends Error {
+    constructor(dId, execPath, param) {
+        super("parameter missing");
+        this.name = "ParameterMissing";
+        this.deployment = { id: dId };
+        this.execPath = execPath;
+        this.param = param;
+    }
+}
+
+
+/**
+ * Fields for instruction about reacting to calls to modules and functions on a
+ * device.
+ */
+class Instructions {
+    constructor() {
+        this.modules = {};
+    }
+
+    add(moduleName, funcName, instruction) {
+        if (!this.modules[moduleName]) {
+            this.modules[moduleName] = {};
+        }
+        // Initialize each function to match to an
+        // instruction object. NOTE: This makes it so that each function in a
+        // module can only be chained to one function other than itself (i.e. no
+        // recursion).
+        this.modules[moduleName][funcName] = instruction;
     }
 }
 
@@ -27,7 +61,7 @@ class DeploymentNode {
         // The instructions the device needs to follow the execution
         // sequence i.e., where to forward computation results initiated by
         // which arriving request.
-        this.instructions = [];
+        this.instructions = new Instructions();
     }
 }
 
@@ -72,12 +106,12 @@ class Orchestrator {
         // construct the instructions on devices.
         let deploymentId = (await this.database.create("deployment", [deployment]))
             .insertedIds[0];
-        
+
         let solution = createSolution(deploymentId, updatedSequence, this.packageManagerBaseUrl)
 
         // Update the deployment with the created solution.
         this.database.update(
-            "deployment", 
+            "deployment",
             { _id: deployment._id },
             solution
         );
@@ -111,96 +145,59 @@ class Orchestrator {
         ));
     }
 
-    async schedule(deployment, params) {
+    /**
+     * Start the execution of a deployment with inputs.
+     * @param {*} deployment The deployment to execute.
+     * @param {*} {body, files} The inputs to the deployment. Includes local
+     * system filepaths as well.
+     * @returns Promise of the response from the first device in the deployment
+     * sequence.
+     */
+    async schedule(deployment, { body, files }) {
         // Pick the starting point based on sequence's first device and function.
-        let startEndpoint = deployment
-            .fullManifest[deployment.sequence[0].device]
-            .endpoints[deployment.sequence[0].func];
+        const { url, path, method, operationObj: operation } = utils.getStartEndpoint(deployment);
 
-        // FIXME hardcoded: selecting first(s) from list(s).
-        let url = new URL(startEndpoint.servers[0].url);
-        // FIXME hardcoded: Selecting 0 because paths expected to contain only a
-        // single item selected at creation of deployment manifest.
-        let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
-
-        // Prepare given data for sending to device.
-        // Build the SELECTED METHOD'S parameters for the request according to the
-        // description.
-        let method = Object.keys(pathObj).includes("get") ? "get" : "post";
-        for (let param of pathObj[method].parameters) {
-            if (!(param.name in params)) {
-                response.status(400).json({ err:`Missing argument '${param.name}'` });
-                return;
+        // OpenAPI Operation Object's parameters.
+        for (let param of operation.parameters) {
+            if (!(param.name in body)) {
+                throw new ParameterMissing(deployment._id, path, param);
             }
 
-            let argument = params[param.name];
+            let argument = body[param.name];
             switch (param.in) {
                 case "path":
-                    // NOTE/FIXME: This might have already been resolved in
-                    // deployment phase for each device to self-configure strictly
-                    // (e.g., no generic paths "/mod/func" but concrete (and bit
-                    // safer(?)) "/fibomod/fibofunc") according to orchestrator's
-                    // solution.
-                    pathName = pathName.replace(param.name, argument);
+                    path = path.replace(param.name, argument);
                     break;
                 case "query":
-                    // FIXME: What about URL-encoding?
                     url.searchParams.append(param.name, argument);
                     break;
                 default:
-                    response.status(500).json({ err:`This parameter location not supported: '${param.in}'` });
-                    return;
+                    throw `parameter location not supported: '${param.in}'`;
             }
         }
-
         // NOTE: The URL should not contain any path before this point.
-        url.pathname = pathName;
+        url.pathname = path;
 
         let options = { method: method };
-        // Request with GET/HEAD method cannot have body.
-        if (!(["GET", "HEAD"].includes(method.toUpperCase()))) {
-            // Body is set as is; the request is propagated. FIXME: duplication of
-            // input data?
-            options.body = params;
+
+        // OpenAPI Operation Object's requestBody (including files as input).
+        if (operation.requestBody) {
+            let contents = Object.entries(operation.requestBody.content);
+            console.assert(contents.length === 1, "expected one and only one media type");
+            /*
+            let [mediaType, mediaTypeObj] = contents[0];
+            options.headers = { "Content-type": mediaType };
+            */
+            let formData = new FormData();
+            formData.append("data", new Blob([fs.readFileSync(files[0])]), "inputfilename");
+            options.body = formData;
+        } else if (!(["get", "head"].includes(method.toLowerCase()))) {
+            // Request with GET/HEAD method cannot have body.
+            options.body = body;
         }
 
         // Message the first device and return its reaction response.
-        let response = await fetch(url, options);
-
-        if (!response.ok) {
-            throw new utils.Error(`request to ${url} failed`);
-        }
-
-        switch (response.headers.get("content-type")) {
-            case "application/json":
-                // FIXME: Assuming the return is LE-bytes list for 32 bit
-                // integer.
-                let intBytes = await response.json();
-                let classIndex = 
-                    (intBytes[3] << 24) | 
-                    (intBytes[2] << 16) | 
-                    (intBytes[1] <<  8) | 
-                    (intBytes[0]);
-
-                return {
-                    message: `Responded with ${classIndex}`,
-                    value: classIndex
-                };
-            case "image/jpeg":
-                const CHAIN_RESULT_IMAGE_PATH = "./files/chainResultImg.jpeg";
-                // Write image to a file to see results.
-                const fs = require("fs");
-                fs.writeFileSync(
-                    CHAIN_RESULT_IMAGE_PATH,
-                    Buffer.from(await res.arrayBuffer()),
-                );
-
-                return {
-                    message: `Saved JPEG to ${CHAIN_RESULT_IMAGE_PATH}`
-                };
-            default:
-                throw new utils.Error("Unsupported content type"+res.headers["Content-type"]);
-        }
+        return fetch(url, options);
     }
 }
 
@@ -245,13 +242,15 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
     // application-calls, create a structure to represent the expected behaviour
     // and flow of data between nodes.
     for (let i = 0; i < updatedSequence.length; i++) {
-        let deviceIdStr = updatedSequence[i].device._id.toString();
+        const [device, modulee, func] = Object.values(updatedSequence[i]);
 
-        let forwardEndpoint;
+        let deviceIdStr = device._id.toString();
+
         let forwardFunc = updatedSequence[i + 1]?.func;
         let forwardDeviceIdStr = updatedSequence[i + 1]?.device._id.toString();
         let forwardDeployment = deploymentsToDevices[forwardDeviceIdStr];
 
+        let forwardEndpoint;
         if (forwardFunc === undefined || forwardDeployment === undefined) {
             forwardEndpoint = null;
         } else {
@@ -261,27 +260,17 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
             forwardEndpoint = forwardDeployment.endpoints[forwardFunc];
         }
 
+        // This is needed at device to figure out how to interpret WebAssembly
+        // function's result.
+        let sourceEndpointPaths = deploymentsToDevices[deviceIdStr].endpoints[func].paths;
+
         let instruction = {
-            // Set where in the execution sequence is this configuration expected to
-            // be used at. Value of 0 signifies beginning of the sequence and caller
-            // can be any party with an access. This __MIGHT__ be useful to prevent
-            // recursion at supervisor when a function with same input and output is
-            // chained to itself e.g. deployment fibo -> fibo would result in
-            //     fiboLimit2_0(7) -> 13 -> fiboLimit2_1(13) -> 233 -> <end result 233>
-            // versus
-            //     fibo(7)         -> 13 -> fibo(13)         -> 233 -> fibo(233) -> <loop forever>
-            // NOTE: Atm just the list indices would work the same, but maybe graphs
-            // used in future?
-            // TODO: How about this being a handle or other reference to the
-            // matching installed endpoint on supervisor?
-            // TODO: Will this sort of sequence-identification prevent
-            // supporting events (which are inherently "autonomous")?
-            sequence: i,
+            paths: sourceEndpointPaths,
             to: forwardEndpoint,
         };
 
         // Attach the created details of deployment to matching device.
-        deploymentsToDevices[deviceIdStr].instructions.push(instruction);
+        deploymentsToDevices[deviceIdStr].instructions.add(modulee.name, func, instruction);
     }
 
     let sequenceAsIds = Array.from(updatedSequence)
@@ -434,9 +423,14 @@ function endpointDescription(deploymentId, node) {
         .replace("{port}", node.device.communication.port);
     let url = new URL(urlString);
 
-    // FIXME hardcoded: "paths" field assumed to contain template "/{deployment}/modules/{module}/<thisFuncName>".
-    // FIXME: URL-encode the names.
-    const funcPathKey = Object.keys(node.module.openapi.paths)[0];//`/{deployment}/modules/{module}/${node.func}`;
+    // NOTE: The convention is that "paths" field contains the template
+    // "/{deployment}/modules/{module}/<thisFuncName>". In the future, this
+    // template and the OpenAPI or other description format should be as
+    // internal to orchestrator as possible.
+    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
+    if (!(funcPathKey in node.module.openapi.paths)) {
+        throw `func '${node.func}' not found in module's OpenAPI-doc`;
+    }
     // TODO: Iterate all the paths.
     let funcPath = node.module.openapi.paths[funcPathKey];
     let filledFuncPathKey = funcPathKey
@@ -452,9 +446,15 @@ function endpointDescription(deploymentId, node) {
     preFilledOpenapiDoc.paths[filledFuncPathKey] = funcPath;
 
     // Remove unnecessary fields.
-    delete preFilledOpenapiDoc.paths[filledFuncPathKey].parameters
+    // The path has been filled at this point.
+    if (preFilledOpenapiDoc.paths[funcPathKey].parameters) {
+        delete preFilledOpenapiDoc.paths[funcPathKey].parameters
+    }
+    // The server host and port are already filled out at this point.
     // FIXME hardcoded: selecting first address.
-    delete preFilledOpenapiDoc.servers[0].variables;
+    if (preFilledOpenapiDoc.servers[0].variables) {
+        delete preFilledOpenapiDoc.servers[0].variables;
+    }
     // TODO: See above about filtering out unnecessary paths (= based on funcs).
     for (let unnecessaryPath of Object.keys(preFilledOpenapiDoc.paths).filter(x => x.includes("{module}"))) {
         delete preFilledOpenapiDoc.paths[unnecessaryPath];

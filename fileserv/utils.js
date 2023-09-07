@@ -1,3 +1,14 @@
+// Hack to make this file work in both Node.js and browser without erroring.
+let runningInBrowser = false;
+let multer = undefined;
+try {
+    multer = require("multer");
+} catch (e) {
+    console.log("Importing with 'require' failed; assuming we're in a browser");
+    runningInBrowser = true;
+}
+
+
 /// Perform boilerplate tasks when responding with a file read from filesystem.
 function respondWithFile(response, filePath, contentType) {
     response.status(200)
@@ -49,12 +60,75 @@ function messageDevice(device, path, body, method="POST") {
 class ApiError {
     constructor(errorText, error) {
         this.errorText = errorText;
-        this.error = error;
+        this.error = error || "error";
     }
 }
 
-module.exports = {
-    respondWithFile,
-    messageDevice,
-    Error: ApiError,
-};
+/**
+* Middleware to confirm existence of an incoming file from a user-submitted
+* form (which apparently `multer` does not do itself...).
+*/
+function validateFileFormSubmission(request, response, next) {
+    if (request.method !== "POST") { next(); return; }
+
+    // Check that request contains a file upload.
+    if (!request.hasOwnProperty("file")) {
+        response.status(400).send("file-submission missing");
+        console.log("Bad request; needs a file-input for the module field");
+        return;
+    }
+    next();
+}
+
+/**
+ * Set where a file uploaded from a HTML-form will be saved to on the
+ * filesystem.
+ *
+ * From: https://www.twilio.com/blog/handle-file-uploads-node-express
+ * @param {*} destinationFilePath
+ * @param {*} formFieldName
+ * @returns Middleware for saving an incoming file.
+ */
+const fileUpload = (destinationFilePath, formFieldName) => multer({ dest: destinationFilePath }).single(formFieldName);
+
+/**
+ * Return the main OpenAPI 3.1.0 operation of a deployment manifest starting
+ * endpoint. This defines how a deployment's execution is started.
+ *
+ * @param {*} deployment Object with deployment fields
+ * @returns { url, path, method, operationObj }
+ */
+function getStartEndpoint(deployment) {
+    let startEndpoint = deployment
+        .fullManifest[deployment.sequence[0].device]
+        .endpoints[deployment.sequence[0].func];
+
+    // FIXME hardcoded: selecting first(s) from list(s).
+    let url = new URL(startEndpoint.servers[0].url);
+    // FIXME hardcoded: Selecting 0 because paths expected to contain only a
+    // single item selected at creation of deployment manifest.
+    let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
+
+    // Build the __SINGLE "MAIN" OPERATION'S__ parameters for the request
+    // according to the description.
+    const OPEN_API_3_1_0_OPERATIONS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
+    let operations = Object.entries(pathObj)
+        .filter(([method, _]) => OPEN_API_3_1_0_OPERATIONS.includes(method.toLowerCase()));
+    console.assert(operations.length === 1, "expected one and only one operation");
+
+    let [method, operationObj] = operations[0];
+
+    return { url, path: pathName, method, operationObj };
+}
+
+
+if (!runningInBrowser) {
+    module.exports = {
+        respondWithFile,
+        messageDevice,
+        Error: ApiError,
+        validateFileFormSubmission,
+        fileUpload,
+        getStartEndpoint,
+    };
+}

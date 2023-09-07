@@ -7,7 +7,7 @@ module.exports = {
             }
         ],
         "paths": {
-            "/{deployment}/modules/{module}/primitive": {
+            "/{deployment}/modules/{module}/add1": {
                 "get": {
                     "parameters": [
                         {

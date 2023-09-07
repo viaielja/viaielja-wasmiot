@@ -4,7 +4,7 @@
 
 const express = require("express");
 
-const { FRONT_END_DIR, SENTRY_DSN } = require("../constants.js");
+const { FRONT_END_DIR, SENTRY_DSN, UTILS_PATH } = require("../constants.js");
 
 
 express.static.mime.define({"application/wasm": ["wasm"]});
@@ -15,7 +15,7 @@ let app;
 /**
  * Inject dependencies (e.g., database, device discovery ...) to routes and
  * initialize the app.
- * @param {*} appDependencies 
+ * @param {*} appDependencies
  */
 function init(appDependencies) {
     app = express();
@@ -64,9 +64,10 @@ function setRoutes(routeDependencies) {
         response.sendFile("./files/"+request.params.myPath, { root: "." });
     });
 
-    /**
-     * Direct to error-page when bad URL used.
-     */
+    // Server utils code for frontend.
+    app.get("/utils.js", (_, response) => { response.sendFile(UTILS_PATH); });
+
+    // Direct to error-page when bad URL used.
     app.all("/*", (_, response) => {
         response.status(404).send({ err: "Bad URL" });
     });
@@ -135,7 +136,7 @@ function initSentry() {
 }
 
 /////////////
-// MIDDLEWARE 
+// MIDDLEWARE
 
 /**
  * Middleware to log request methods.
