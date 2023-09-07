@@ -60,22 +60,24 @@ async function generateModuleFuncInputForm(event) {
     }
 
     // (Single) File upload based on media type.
-    let [fileMediaType, _fileSchema] = Object.entries(operation.requestBody?.content)[0];
-    let fileInputDiv = document.createElement("div");
-    let fileInputFieldLabel = document.createElement("label");
-    let fileInputField = document.createElement("input");
-    // Data.
-    let executeFileFieldName = "inputFile";
-    let executeFileUploadId = `execute-form-${fileMediaType}-${executeFileFieldName}`;
-    fileInputFieldLabel.textContent = `Upload file (${fileMediaType}):`;
-    fileInputFieldLabel.htmlFor = executeFileUploadId;
-    fileInputField.id = executeFileUploadId;
-    fileInputField.name = executeFileFieldName;
-    fileInputField.type = "file";
-    // Add to form.
-    fileInputDiv.appendChild(fileInputFieldLabel);
-    fileInputDiv.appendChild(fileInputField);
-    formTopDiv.appendChild(fileInputDiv);
+    if (operation.requestBody) {
+        let [fileMediaType, _fileSchema] = Object.entries(operation.requestBody.content)[0];
+        let fileInputDiv = document.createElement("div");
+        let fileInputFieldLabel = document.createElement("label");
+        let fileInputField = document.createElement("input");
+        // Data.
+        let executeFileFieldName = "inputFile";
+        let executeFileUploadId = `execute-form-${fileMediaType}-${executeFileFieldName}`;
+        fileInputFieldLabel.textContent = `Upload file (${fileMediaType}):`;
+        fileInputFieldLabel.htmlFor = executeFileUploadId;
+        fileInputField.id = executeFileUploadId;
+        fileInputField.name = executeFileFieldName;
+        fileInputField.type = "file";
+        // Add to form.
+        fileInputDiv.appendChild(fileInputFieldLabel);
+        fileInputDiv.appendChild(fileInputField);
+        formTopDiv.appendChild(fileInputDiv);
+    }
 }
 
 function addProcedureRow(listId) {
@@ -450,7 +452,6 @@ window.onload = async function () {
     // Add event handlers for showing and hiding different tabs.
     let tabElems = document.querySelectorAll("#selector input");
     for (let elem of tabElems) {
-        console.log(elem);
         elem.addEventListener("input", function (event) {
             let previousTab = document.querySelector("#tab-container > .selected");
             previousTab.classList.remove("selected");

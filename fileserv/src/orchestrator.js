@@ -423,8 +423,14 @@ function endpointDescription(deploymentId, node) {
         .replace("{port}", node.device.communication.port);
     let url = new URL(urlString);
 
-    // FIXME hardcoded: "paths" field assumed to contain template "/{deployment}/modules/{module}/<thisFuncName>".
+    // NOTE: The convention is that "paths" field contains the template
+    // "/{deployment}/modules/{module}/<thisFuncName>". In the future, this
+    // template and the OpenAPI or other description format should be as
+    // internal to orchestrator as possible.
     const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
+    if (!(funcPathKey in node.module.openapi.paths)) {
+        throw `func '${node.func}' not found in module's OpenAPI-doc`;
+    }
     // TODO: Iterate all the paths.
     let funcPath = node.module.openapi.paths[funcPathKey];
     let filledFuncPathKey = funcPathKey

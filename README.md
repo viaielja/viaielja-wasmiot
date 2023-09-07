@@ -66,6 +66,8 @@ docker compose up --build
 
 The index page should then be up and accessible e.g. with a browser at `localhost:3000`
 
+For more information on using the orchestrator, see the separate [Wasm-IoT Orchestator README](./fileserv/README.md).
+
 ### Devices
 You can test how the orchestrator interacts with the
 [supervisor](/wasmiot-supervisor)-controlled devices by running the

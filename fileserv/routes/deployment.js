@@ -64,7 +64,7 @@ const createDeployment = async (request, response) => {
 
         response.status(201).json({ id: deploymentId });
     } catch (err) {
-        errorMsg = "Failed constructing manifest for deployment";
+        errorMsg = "Failed constructing manifest for deployment" + err;
 
         console.error(errorMsg, err.stack);
 
