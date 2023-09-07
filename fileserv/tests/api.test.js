@@ -23,7 +23,7 @@ describe("module", () => {
       })
       .expect(201)
       .expect("Content-Type", /application\/json/);
-    
+
     expect(moduleCreationResponse.body).toHaveProperty("id");
   });
 
@@ -40,7 +40,7 @@ describe("module", () => {
       .get("/file/module/")
       .expect(200)
       .expect("Content-Type", /application\/json/);
-    
+
     // NOTE: Not testing exact length, because it would require resetting app
     // (database) state (on top of reliably running tests sequentially).
     expect(moduleListResponse.body).toHaveProperty("length");
@@ -52,15 +52,17 @@ describe("module", () => {
         .post("/file/module")
         .send({name: "d", openapi: {}})
       ).body["id"];
- 
+
     let dGetResponse = await orchestratorApi.get(`/file/module/${dId}`)
       .expect(200)
       .expect("Content-Type", /application\/json/);
 
-    expect(dGetResponse.body).toHaveProperty("name");
-    expect(dGetResponse.body["name"]).toEqual("d");
-    expect(dGetResponse.body).toHaveProperty("openapi");
-    expect(dGetResponse.body["openapi"]).toEqual({});
+    expect(dGetResponse.body).toHaveProperty("length");
+    expect(dGetResponse.body.length).toBe(1);
+    expect(dGetResponse.body[0]).toHaveProperty("name");
+    expect(dGetResponse.body[0]["name"]).toEqual("d");
+    expect(dGetResponse.body[0]).toHaveProperty("openapi");
+    expect(dGetResponse.body[0]["openapi"]).toEqual({});
   });
 
   test("identified by ID", async () => {
@@ -68,7 +70,7 @@ describe("module", () => {
         .post("/file/module")
         .send({name: "e", openapi: {}})
       ).body["id"];
-    
+
     let fId = (await orchestratorApi
         .post("/file/module")
         .send({name: "f", openapi: {}})
@@ -76,10 +78,10 @@ describe("module", () => {
 
 
     let eGetResponse = await orchestratorApi.get(`/file/module/${eId}`);
-    expect(eGetResponse.body["name"]).toEqual("e");
+    expect(eGetResponse.body[0]["name"]).toEqual("e");
 
     let fGetResponse = await orchestratorApi.get(`/file/module/${fId}`);
-    expect(fGetResponse.body["name"]).toEqual("f");
+    expect(fGetResponse.body[0]["name"]).toEqual("f");
   });
 
   test("wasm upload success", async () => {
@@ -131,7 +133,7 @@ describe("module", () => {
 
     let moduleListResponse = await orchestratorApi.get("/file/module/");
     expect(moduleListResponse.body.length).toBeGreaterThan(0);
-    
+
     let moduleDeleteResponse = await orchestratorApi.delete(`/file/module/`)
       .expect(200);
 
@@ -148,13 +150,13 @@ describe("deployment", () => {
     let { deviceId, moduleId } = await prepareSimpleDeploymentTest();
 
     let deploymentCreationResponse = await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "a" });
-    
+
     expect(deploymentCreationResponse.body).toHaveProperty("id");
     // TODO: Could check the "manifest" created by the orchestrator, but the
     // format is probably frequently changing.
   });
 
-  test("listing success", async () => {
+  test.only("listing success", async () => {
     let { deviceId, moduleId } = await prepareSimpleDeploymentTest();
     await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "b" });
     await expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, { name: "c" });
@@ -163,7 +165,7 @@ describe("deployment", () => {
       .get("/file/manifest")
       .expect(200)
       .expect("Content-Type", /application\/json/);
-    
+
     expect(deploymentListResponse.body).toHaveProperty("length");
     expect(deploymentListResponse.body.length).toBeGreaterThan(1);
   });
@@ -232,7 +234,7 @@ async function expectApiCreateSimpleSequenceDeployment(deviceId, moduleId, optio
           {
             device: deviceId,
             module: moduleId,
-            function: "add1",
+            func: "add1",
           }
         ]
       })

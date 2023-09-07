@@ -63,11 +63,10 @@ const createDeployment = async (request, response) => {
         let deploymentId = await orchestrator.solve(deployment);
 
         response.status(201).json({ id: deploymentId });
-
     } catch (err) {
-        errorMsg = "Failed constructing manifest for deployment: " + err;
+        errorMsg = "Failed constructing manifest for deployment";
 
-        console.error(errorMsg);
+        console.error(errorMsg, err.stack);
 
         response
             .status(500)

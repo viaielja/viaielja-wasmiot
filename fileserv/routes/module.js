@@ -48,10 +48,10 @@ const getModuleBy = async (moduleId) => {
     } else {
         // Return the module identified by given ID.
         if (matches.length === 0) {
-            let err = `no matches for ID ${request.params.moduleId}`;
+            let err = `no matches for ID ${moduleId}`;
             return [404, err];
         } else if (matches.length > 1) {
-            let err = `too many matches for ID ${request.params.moduleId}`;
+            let err = `too many matches for ID ${moduleId}`;
             return [500, err];
         } else {
             let doc = matches[0];
@@ -61,7 +61,10 @@ const getModuleBy = async (moduleId) => {
 };
 
 /**
- * GET a single or all available Wasm-modules.
+ * GET
+ * - a single Wasm-module's whole metadata (moduleId)
+ * - a single Wasm-module's whole OpenAPI description (moduleId/description)
+ * - all available Wasm-modules' metadata (no moduleId)
  */
 const getModule = (justDescription) => (async (request, response) => {
     let [failCode, value] = await getModuleBy(request.params.moduleId);
@@ -199,10 +202,10 @@ const addModuleFile = async (request, response) => {
         try {
             await updateModule(filter, updateObj);
 
-            console.log(`Updated module '${request.body.id}' with data:`, updateObj);
+            console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, updateObj);
 
             // Tell devices to fetch updated files on modules.
-            await notifyModuleFileUpdate(request.body.id);
+            await notifyModuleFileUpdate(filter._id);
             response
                 .status(statusCode)
                 .json(result);

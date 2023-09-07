@@ -440,9 +440,15 @@ function endpointDescription(deploymentId, node) {
     preFilledOpenapiDoc.paths[filledFuncPathKey] = funcPath;
 
     // Remove unnecessary fields.
-    delete preFilledOpenapiDoc.paths[funcPathKey].parameters
+    // The path has been filled at this point.
+    if (preFilledOpenapiDoc.paths[funcPathKey].parameters) {
+        delete preFilledOpenapiDoc.paths[funcPathKey].parameters
+    }
+    // The server host and port are already filled out at this point.
     // FIXME hardcoded: selecting first address.
-    delete preFilledOpenapiDoc.servers[0].variables;
+    if (preFilledOpenapiDoc.servers[0].variables) {
+        delete preFilledOpenapiDoc.servers[0].variables;
+    }
     // TODO: See above about filtering out unnecessary paths (= based on funcs).
     for (let unnecessaryPath of Object.keys(preFilledOpenapiDoc.paths).filter(x => x.includes("{module}"))) {
         delete preFilledOpenapiDoc.paths[unnecessaryPath];
