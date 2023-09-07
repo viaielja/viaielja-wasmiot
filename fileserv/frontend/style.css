@@ -62,6 +62,13 @@ ul {
     justify-content: space-around;
 }
 
+#header,#selector,#tab-container {
+    box-shadow: 1px 1px 5px white;
+    border-style: solid;
+    border-color: white;
+    border-radius: 2px;
+}
+
 #selector-list {
     display: flex;
     flex-direction: column;
