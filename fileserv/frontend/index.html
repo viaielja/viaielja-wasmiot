@@ -15,58 +15,44 @@
 </head>
 <body>
 
-  <div id="header">
+  <div id="header" class="dull">
     <div class="container">
-      <div>
-        <h1>WasmIoT - Orchestrator</h1>
-        <div>
-          <h1 id="status"></h1>
-        </div>
-      </div>
+      <h2>WasmIoT - Orchestrator</h2>
     </div>
   </div>
 
   <div id="content">
-    <div id="selector">
-      <h2 class="container">
-        <div>
-          Open a tab
-        </div>
-      </h2>
+    <div id="selector" class="dull">
       <div id="selector-list">
-        <label class="tab-selector">
+        <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="resource-listing">
           Resources
         </label>
-        <label class="tab-selector">
+        <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="module-create">
           Module creation
         </label>
-        <label class="tab-selector">
+        <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="module-upload">
           Module upload
         </label>
-        <label class="tab-selector">
+        <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="deployment-create">
           Deployment manifest creation
         </label>
-        <label class="tab-selector">
+        <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="deployment-action">
           Deployment of deployment manifests
         </label>
-        <label class="tab-selector">
+        <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="execution-start">
           Execution
         </label>
       </div>
     </div>
 
-    <div id="tab-container">
-      <h2 class="container">
-        <div>
-          Tab
-        </div>
-      </h2>      <!-- Resource listing. -->
+    <div id="tab-container" class="dull">
+      <!-- Resource listing. -->
       <div id="resource-listing" class="tab hidden">
         <div>
           <ul>
@@ -237,5 +223,12 @@
       </div>
     </div>
   </div>
+
+  <div id="status" class="dull">
+    <div class="container">
+      <p>no output</p>
+    </div>
+  </div>
+
 </body>
 </html>

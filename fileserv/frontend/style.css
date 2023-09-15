@@ -4,11 +4,21 @@ button,input[type="submit"],.tab-selector:hover {
 }
 
 html {
-    background-color: black;
+    background-color: white;
+    font-family: sans-serif;
 }
 
 ul {
     list-style-type: none;
+}
+
+.dull {
+    box-shadow: 2px 2px 5px;
+    background-color: lightgray;
+    border-style: groove;
+    border-color: gray;
+    border-width: 2px;
+    border-radius: 4px;
 }
 
 .container {
@@ -29,10 +39,8 @@ ul {
 }
 
 .tab-selector {
-    background-color: whitesmoke;
     padding: 0;
     margin: 1%;
-    box-shadow: 1px 1px 3px;
     margin-right: 10%;
 }
 
@@ -52,26 +60,22 @@ ul {
     flex-grow: 1;
 }
 
-#content *,#header {
-    background-color: white;
+#content > *,#header,#status {
     margin: 1%;
 }
 
-#header {
+#header,#status {
     display: flex;
     justify-content: space-around;
-}
-
-#header,#selector,#tab-container {
-    box-shadow: 1px 1px 5px white;
-    border-style: solid;
-    border-color: white;
-    border-radius: 2px;
 }
 
 #selector-list {
     display: flex;
     flex-direction: column;
+}
+
+#status {
+    font-family: monospace;
 }
 
 @media (max-width: 1000px) {
