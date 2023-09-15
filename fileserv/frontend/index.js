@@ -62,6 +62,40 @@ function formToObject(form) {
 }
 
 /**
+ * Return object representing the data found in a form (files included) for
+ * submitting it later with body-parameter in `fetch`. Returns also URL where
+ * the form expects to be submitted to.
+ * @param {*} form The form to get the data from.
+ * @returns FormData object
+ */
+function formDataFrom(form) {
+    let formData = new FormData();
+
+    // Add the data found in the form.
+    // NOTE: Only relatively simple forms containing just text
+    // inputs and one "level" are handled.
+    let formObj = formToObject(form);
+    for (let [key, value] of Object.entries(formObj)) {
+        switch (typeof (value)) {
+            case "string":
+                formData.append(key, value);
+                break;
+            default:
+                alert("Submitting the type '" + typeof (value) + "'' is not currently supported!")
+                return;
+        }
+    }
+
+    // NOTE: only one (1) file is sent.
+    let fileField = form.querySelector("input[type=file]");
+    if (fileField) {
+        formData.append(fileField.name, fileField.files[0]);
+    }
+
+    return formData;
+}
+
+/**
  * Return list of options for the sequence-item.
  * @param {*} devicesData [{_id: string, name: string} ..}]
  * @param {*} modulesData [{_id: string, name: string, exports: [{name: string, } ..]} ..]
@@ -276,31 +310,9 @@ function submitJsonTextarea(url, successCallback) {
 function submitFile(url) {
     function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault()
-        let formData = new FormData();
-
-        // Add the data found in the form.
-        // NOTE: Only relatively simple forms containing just text
-        // inputs and one "level" are handled.
-        let formObj = formToObject(formSubmitEvent.target);
-        for (let [key, value] of Object.entries(formObj)) {
-            switch (typeof (value)) {
-                case "string":
-                    formData.append(key, value);
-                    break;
-                default:
-                    alert("Submitting the type '" + typeof (value) + "'' is not currently supported!")
-                    return;
-            }
-        }
-
-        // NOTE: only one (1) file is sent.
-        let fileField = formSubmitEvent.target.querySelector("input[type=file]");
-        if (fileField) {
-            formData.append(fileField.name, fileField.files[0]);
-        }
-
-        // NOTE: Hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
-        let idUrl = url.replace(":id", formObj["id"]);
+        let formData = formDataFrom(formSubmitEvent.target);
+        // NOTE: Semi-hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
+        let idUrl = url.replace(":id", formData.get("id"));
 
         fetch(idUrl, { method: "POST", body: formData })
             .then((resp) => resp.json())
@@ -554,6 +566,15 @@ async function setupExecutionStartTab() {
 }
 
 /*******************************************************************************
+ * Event listeners:
+ */
+
+function handleExecutionSubmit(event) {
+    submitFile("/execute/:id")(event);
+}
+
+
+/*******************************************************************************
  * Page initializations:
  */
 
@@ -693,7 +714,7 @@ function addHandlersToDeploymentForms() {
 function addHandlersToExecutionForms() {
     document
         .querySelector("#execution-form")
-        .addEventListener("submit", submitFile("/execute/:id"));
+        .addEventListener("submit", handleExecutionSubmit);
 }
 
 /**
