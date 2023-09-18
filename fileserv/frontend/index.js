@@ -366,16 +366,16 @@ function fillSelectWith(valueAndTextData, selectElem, removePlaceholder=false) {
  * the keys `error`, `success`, `result` with message as the value.
  */
 function setStatus(result) {
-    let focusBar = document.querySelector("#status");
-    focusBar.classList.remove("error");
-    focusBar.classList.remove("success");
+    let statusText = document.querySelector("#status p");
+    statusText.classList.remove("error");
+    statusText.classList.remove("success");
     // "Result" is the result of execution e.g. `plus(1, 2)` results in `3`.
-    focusBar.classList.remove("result");
-    focusBar.classList.remove("hidden");
+    statusText.classList.remove("result");
+    statusText.classList.remove("hidden");
 
     if (result === null) {
         // Reset the status.
-        focusBar.classList.add("hidden");
+        statusText.classList.add("hidden");
         return;
     }
 
@@ -388,10 +388,47 @@ function setStatus(result) {
         msg = JSON.stringify(result);
         classs = "success";
     }
-    focusBar.textContent = msg;
-    focusBar.classList.add(classs);
+    statusText.textContent = msg;
+    statusText.classList.add(classs);
     // Scroll into view.
-    focusBar.focus();
+    statusText.focus();
+}
+
+/*******************************************************************************
+ * Event listeners:
+ */
+
+function handleExecutionSubmit(event) {
+    submitFile("/execute/:id")(event);
+}
+
+/**
+ * Using the deployment-ID in the event, generate a form for submitting
+ * inputs that start the deployment.
+ * @param {*} event The event that triggered this function.
+ */
+async function setupExecutionParameterFields(event) {
+    // Remove all other elements from the form except for the deployment
+    // selector.
+    let divsWithoutFirst =
+        document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
+    for (div of divsWithoutFirst) {
+        div.remove();
+    }
+
+    // Add new fields based on the selected deployment.
+    let deploymentId = event.target.value;
+    if (!deploymentId) {
+        // Assume the placeholder was selected and thus there is nothing to
+        // show.
+        return;
+    }
+    let deployment = await fetchDeployment(deploymentId);
+
+    let formTopDiv = document.querySelector("#execution-form fieldset > div");
+    for (let div of generateParameterFieldsFor(deployment)) {
+        formTopDiv.appendChild(div);
+    }
 }
 
 /*******************************************************************************
@@ -534,45 +571,12 @@ async function setupExecutionStartTab() {
         document.querySelector("#edeployment-select")
     );
 
-    /**
-     * Using the deployment-ID in the event, generate a form for submitting
-     * inputs that start the deployment.
-     * @param {*} event The event that triggered this function.
-     */
-    async function setupParameterFields(event) {
-        // Remove all other elements from the form except for the deployment
-        // selector.
-        let divsWithoutFirst =
-            document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
-        for (div of divsWithoutFirst) {
-            div.remove();
-        }
-
-        // Add new fields based on the selected deployment.
-        let deploymentId = event.target.value;
-        let deployment = await fetchDeployment(deploymentId);
-
-        let formTopDiv = document.querySelector("#execution-form fieldset > div");
-        for (let div of generateParameterFieldsFor(deployment)) {
-            formTopDiv.appendChild(div);
-        }
-    }
-
     // Now that the selection is populated, add an event handler for selecting
-    // each.
-    for (let option of document.querySelectorAll("#edeployment-select option")) {
-        option.addEventListener("click", setupParameterFields);
-    }
+    // an option from it.
+    document
+        .querySelector("#edeployment-select")
+        .addEventListener("change", setupExecutionParameterFields);
 }
-
-/*******************************************************************************
- * Event listeners:
- */
-
-function handleExecutionSubmit(event) {
-    submitFile("/execute/:id")(event);
-}
-
 
 /*******************************************************************************
  * Page initializations:
