@@ -13,10 +13,10 @@ ul {
 }
 
 .dull {
-    box-shadow: 2px 2px 5px;
+    box-shadow: 2px 2px 5px gray;
     background-color: lightgray;
     border-style: groove;
-    border-color: gray;
+    border-color: whitesmoke;
     border-width: 2px;
     border-radius: 4px;
 }
@@ -27,11 +27,20 @@ ul {
 }
 
 .error {
+    font-weight: bold;
     /* Red glow. */
     color: rgba(210, 39, 48, 0.8);
     text-shadow:
         0 0 11px rgba(200, 51, 51, 1),
         0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.error::before {
+    content: "⚠️ ";
+}
+
+.error::after {
+    content: " ⚠️";
 }
 
 .hidden {
