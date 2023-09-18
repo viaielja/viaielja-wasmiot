@@ -1,3 +1,143 @@
+/**
+ * Purely (or close enough) functional (i.e. outputs are based on the inputs
+ * only) utilities:
+ */
+function OpenApi3_1_0_SchemaToInputType(schema) {
+    switch (schema.type) {
+        case "integer":
+            return "number";
+        default:
+            throw `Unsupported schema type '${schema.type}'`;
+    }
+}
+
+/**
+ * Using HTMLElement.dataset (See:
+ * https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/dataset),
+ * create a Javascript object from the fields i.e.:
+ * - text and number -inputs become 'key:string-value' pairs,
+ * - select elements' selected options become 'key:string-value' pairs,
+ * - 1-dimensional ordered lists become lists of objects (based on the
+ * serialized JSON in their items' value-fields). Note: The key that then
+ * corresponds to this list in the result object must be found in the
+ * HTML-elements field attribute 'data-json-key'!
+ */
+function formToObject(form) {
+    let obj = {};
+
+    let inputs = [
+        ...form.querySelectorAll("input[type=text]"),
+        ...form.querySelectorAll("input[type=number]"),
+    ];
+    // Text inputs.
+    for (let input of inputs) {
+        // HACK: List-inputs are identified by a custom field and
+        // ','-characters delimit the values.
+        if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
+            obj[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
+        } else {
+            obj[input.name] = input.value;
+        }
+    }
+
+    // Select elements immediately under this form NOTE: the ":scope" selector
+    // (See: https://developer.mozilla.org/en-US/docs/Web/CSS/:scope) might
+    // be better?. HACK: Getting all under div (which currently excludes
+    // items under ol).
+    for (let select of form.querySelectorAll("div > select")) {
+        obj[select.name] = select.selectedOptions[0].value;
+    }
+
+    // TODO: Use formdata directly? See:
+    // https://developer.mozilla.org/en-US/docs/Web/API/FormData/getAll#examples
+    let ol = form.querySelector("ol");
+    if (ol !== null && ol) {
+        obj[ol.dataset.jsonKey] =
+            Array.from(ol.querySelectorAll("select"))
+                // Parse the JSON-string hidden inside option.
+                .map(x => JSON.parse(x.selectedOptions[0].value));
+    }
+
+    return obj;
+}
+
+/**
+ * Return object representing the data found in a form (files included) for
+ * submitting it later with body-parameter in `fetch`. Returns also URL where
+ * the form expects to be submitted to.
+ * @param {*} form The form to get the data from.
+ * @returns FormData object
+ */
+function formDataFrom(form) {
+    let formData = new FormData();
+
+    // Add the data found in the form.
+    // NOTE: Only relatively simple forms containing just text
+    // inputs and one "level" are handled.
+    let formObj = formToObject(form);
+    for (let [key, value] of Object.entries(formObj)) {
+        switch (typeof (value)) {
+            case "string":
+                formData.append(key, value);
+                break;
+            default:
+                alert("Submitting the type '" + typeof (value) + "'' is not currently supported!")
+                return;
+        }
+    }
+
+    // NOTE: only one (1) file is sent.
+    let fileField = form.querySelector("input[type=file]");
+    if (fileField) {
+        formData.append(fileField.name, fileField.files[0]);
+    }
+
+    return formData;
+}
+
+/**
+ * Return list of options for the sequence-item.
+ * @param {*} devicesData [{_id: string, name: string} ..}]
+ * @param {*} modulesData [{_id: string, name: string, exports: [{name: string, } ..]} ..]
+ * @returns [{value: string, text: string} ..]
+ */
+function sequenceItemSelectOptions(devicesData, modulesData) {
+    let options = [
+        // Add placeholder first.
+        { value: "", text: "Please select the next procedure:" },
+    ];
+
+    // The null here means that selecting the device is left for orchestrator to decide.
+    let anyDevice = { _id: null, name: "any device" };
+
+    // Add all the different procedures (i.e., module exports) to be
+    // selectable.
+    for (let device of [anyDevice].concat(devicesData)) {
+        for (let mod of modulesData) {
+            if (mod.exports === undefined) {
+                // Do not include modules without uploaded Wasm's at all.
+                continue;
+            }
+            for (let exportt of mod.exports) {
+                options.push({
+                    // Add data to the option element for parsing later and
+                    // sending to the deploy-endpoint.
+                    value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt.name }),
+                    // Make something that a human could understand from the interface.
+                    // TODO/FIXME?: XSS galore?
+                    text: `Use ${device.name} for ${mod.name}:${exportt.name}`
+                })
+            }
+        }
+    }
+
+    return options;
+}
+
+/*******************************************************************************
+ * Utilities for updating elements on the page:
+ */
+
 async function tryFetchWithStatusUpdate(path) {
     let resp;
     let json;
@@ -24,24 +164,12 @@ async function tryFetchWithStatusUpdate(path) {
     }
 }
 
-function OpenApi3_1_0_SchemaToInputType(schema) {
-    switch (schema.type) {
-        case "integer":
-            return "number";
-        default:
-            throw `Unsupported schema type '${schema.type}'`;
-    }
-}
-
-async function generateModuleFuncInputForm(event) {
-    let deploymentId = event.target.value;
-    let deployment = await tryFetchWithStatusUpdate(`/file/manifest/${deploymentId}`);
-
+function generateParameterFieldsFor(deployment) {
     // Get the data to build a form.
     let { operationObj: operation } = getStartEndpoint(deployment);
 
+    let fieldDivs = [];
     // Build the form.
-    let formTopDiv = document.querySelector("#execution-form fieldset > div");
     for (let param of operation.parameters) {
         // Create elems.
         let inputFieldDiv = document.createElement("div");
@@ -56,7 +184,8 @@ async function generateModuleFuncInputForm(event) {
         // Add to form.
         inputFieldLabel.appendChild(inputField);
         inputFieldDiv.appendChild(inputFieldLabel);
-        formTopDiv.appendChild(inputFieldDiv);
+
+        fieldDivs.push(inputFieldDiv);
     }
 
     // (Single) File upload based on media type.
@@ -76,11 +205,14 @@ async function generateModuleFuncInputForm(event) {
         // Add to form.
         fileInputDiv.appendChild(fileInputFieldLabel);
         fileInputDiv.appendChild(fileInputField);
-        formTopDiv.appendChild(fileInputDiv);
+
+        fieldDivs.push(fileInputDiv);
     }
+
+    return fieldDivs;
 }
 
-function addProcedureRow(listId) {
+function addProcedureRow(listId, devicesData, modulesData) {
     /**
      * Constructor for the following HTML:
      * <li id="dprocedure-select-list-0">
@@ -97,56 +229,19 @@ function addProcedureRow(listId) {
      * </li>
      */
     async function makeItem(id) {
-        let li = document.createElement("li");
-        li.id = `dprocedure-select-list-${id}`;
         let select = document.createElement("select");
         select.id = `dprocedure-select-${id}`;
         select.name = `proc${id}`;
         select.required = true;
+        let options = sequenceItemSelectOptions(devicesData, modulesData);
+        fillSelectWith(options, select, true);
+
         let label = document.createElement("label");
         label.for = select.id;
         label.textContent = "Select a procedure:";
-        let option = document.createElement("option");
-        option.value = "";
-        option.textContent = "Please select the next procedure:";
 
-        // Add placeholder first.
-        select.appendChild(option);
-        // Add all the different procedures (i.e., module exports) to be
-        // selectable.
-        // NOTE: Doing this way means quite a lot of requests that
-        // will probably not change in between...
-        // TODO: Show proc inputs and outputs for checking compatibility?
-        let modulesResponse = await fetch("/file/module");
-        let modulesData = await modulesResponse.json();
-        let devicesResponse = await fetch("/file/device");
-        let devicesData = await devicesResponse.json();
-
-        // The null here means that selecting the device is left for orchestrator to decide.
-        let anyDevice = { _id: null, name: "any device" };
-        for (let device of [anyDevice].concat(devicesData)) {
-            for (let mod of modulesData) {
-                if (mod.exports === undefined) {
-                    // Do not include modules without uploaded Wasm's at all.
-                    continue;
-                }
-                for (let exportt of mod.exports) {
-                    let exportOption = document.createElement("option");
-
-                    // Add data to the option element for parsing later and sending to the deploy-endpoint.
-                    let optionData = { "device": device._id, "module": mod._id, "func": exportt.name };
-                    // Saving value as a serialized JSON string, but could there be a
-                    // non-string solution?
-                    exportOption.value = JSON.stringify(optionData);
-                    // Make something that a human could understand from the interface.
-                    // TODO/FIXME?: XSS galore?
-                    exportOption.textContent = `Use ${device.name} for ${mod.name}:${exportt.name}`;
-
-                    select.appendChild(exportOption);
-                }
-            }
-        }
-
+        let li = document.createElement("li");
+        li.id = `dprocedure-select-list-${id}`;
         li.appendChild(label);
         li.appendChild(select);
         return li;
@@ -207,7 +302,7 @@ function submitJsonTextarea(url, successCallback) {
 /**
  * Return a handler that submits (POST) a form with the
  * 'enctype="multipart/form-data"' to the url. Used for uploading files
- * along with some metadata that the server needs.
+ * along with other fields of the form in the body.
  *
  * See:
  * https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#uploading_a_file
@@ -215,31 +310,9 @@ function submitJsonTextarea(url, successCallback) {
 function submitFile(url) {
     function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault()
-        let formData = new FormData();
-
-        // Add the metadata found in the form.
-        // NOTE: Forms that are more complicated than just containing text
-        // inputs or that are hierarchical/deeper are not handled.
-        let formObj = formToObject(formSubmitEvent.target);
-        for (let [key, value] of Object.entries(formObj)) {
-            switch (typeof (value)) {
-                case "string":
-                    formData.append(key, value);
-                    break;
-                default:
-                    alert("Submitting the type '" + typeof (value) + "'' is not currently supported!")
-                    return;
-            }
-        }
-
-        // NOTE: only one (1) file is sent.
-        let fileField = formSubmitEvent.target.querySelector("input[type=file]");
-        if (fileField) {
-            formData.append(fileField.name, fileField.files[0]);
-        }
-
-        // NOTE: Hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
-        let idUrl = url.replace(":id", formObj["id"]);
+        let formData = formDataFrom(formSubmitEvent.target);
+        // NOTE: Semi-hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
+        let idUrl = url.replace(":id", formData.get("id"));
 
         fetch(idUrl, { method: "POST", body: formData })
             .then((resp) => resp.json())
@@ -252,63 +325,8 @@ function submitFile(url) {
                 setStatus(result)
             });
     }
-    // Build up the request.
-    // POST.
-    // action="/file/module/upload" method="POST" enctype="multipart/form-data"
+
     return handleSubmit;
-}
-
-/**
- * Using HTMLElement.dataset (See:
- * https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/dataset),
- * create a Javascript object from the fields i.e.:
- * - text and number -inputs become 'key:string-value' pairs,
- * - select elements' selected options become 'key:string-value' pairs,
- * - 1-dimensional ordered lists become lists of objects (based on the
- * serialized JSON in their items' value-fields). Note: The key that then
- * corresponds to this list in the result object must be found in the
- * HTML-elements field attribute 'data-json-key'!
- */
-function formToObject(form) {
-    let obj = {};
-
-    let inputs = [
-        ...form.querySelectorAll("input[type=text]"),
-        ...form.querySelectorAll("input[type=number]"),
-    ];
-    // Text inputs.
-    for (let input of inputs) {
-        // HACK: List-inputs are identified by a custom field and
-        // ','-characters delimit the values.
-        if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
-            obj[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
-        } else {
-            obj[input.name] = input.value;
-        }
-    }
-
-    // Select elements immediately under this form NOTE: the ":scope" selector
-    // (See: https://developer.mozilla.org/en-US/docs/Web/CSS/:scope) might
-    // be better?. HACK: Getting all under div (which currently excludes
-    // items under ol).
-    for (let select of document.querySelectorAll(`#${form.getAttribute("id")} div > select`)) {
-        obj[select.name] = select.selectedOptions[0].value;
-    }
-
-    // TODO: Make a separate "arrayHandle" function.
-    // TODO: Use formdata directly? See:
-    // https://developer.mozilla.org/en-US/docs/Web/API/FormData/getAll#examples
-    let ol = form.querySelector("ol");
-    if (ol !== null && ol) {
-        obj[ol.dataset.jsonKey] =
-            // TODO: Does queryselectorall return the elements in the same
-            // order as "listed" on the page?
-            Array.from(ol.querySelectorAll("select"))
-                // Parse the JSON-string hidden inside option.
-                .map(x => JSON.parse(x.selectedOptions[0].value));
-    }
-
-    return obj;
 }
 
 /**
@@ -320,77 +338,23 @@ function populateWithJson(sourceForm, targetTextArea) {
 }
 
 /**
- * Update the form that is used to upload a Wasm-binary with the current
- * selection of modules recorded in database.
- */
-function populateWasmFormModules() {
-    // Get all current modules' ids and names and add them to the list for
-    // selection.
-    fetch("/file/module")
-        .then((resp) => resp.json())
-        .then(function (modulesData) {
-            let selectElem = document.querySelector("#wmodule-select");
-
-            // Remove previous ones first and replace with newly fetched ones.
-            for (let option of selectElem.querySelectorAll("option")) {
-                if (option.value !== "") {
-                    option.remove();
-                }
-            }
-
-            for (let mod of modulesData) {
-                let optionElem = document.createElement("option");
-                optionElem.value = mod._id;
-                optionElem.textContent = mod.name;
-                selectElem.appendChild(optionElem);
-            }
-        });
-}
-
-/**
- * Update the form that is used to request deployment execution with the
- * current selection of deployments recorded in database.
- */
-async function populateExecutionFormDeployments() {
-    await populateSelectWithDeployments(document.querySelector("#edeployment-select"));
-
-    // Now that the selection is populated, add events to generate a form
-    // for giving inputs that will eventually be fed into the initial func
-    // of the execution sequence.
-    for (let option of document.querySelectorAll("#edeployment-select option")) {
-        option.addEventListener("click", function (event) {
-            // Remove all other children immediately under the form's "inputs area"
-            // except for the deployment selector.
-            let divsExpectFirst =
-                document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
-            for (div of divsExpectFirst) {
-                div.remove();
-            }
-
-            generateModuleFuncInputForm(event);
-        });
-    }
-}
-
-/**
- * Get all current deployments' ids and names and add them to the list for
- * selection. TODO: Generalize for module or whatever else -selections.
+ * Clear the current options in the select-element and add new ones using the
+ * given list of `value` and `text` fields.
+ * @param {*} valueAndTextData List of objects with `value` and `text` fields.
  * @param {*} selectElem The `select` element to populate with options.
  */
-async function populateSelectWithDeployments(selectElem) {
-    let deploymentsData = await fetch("/file/manifest").then((resp) => resp.json())
-
+function fillSelectWith(valueAndTextData, selectElem, removePlaceholder=false) {
     // Remove previous ones first and replace with newly fetched ones.
     for (let option of selectElem.querySelectorAll("option")) {
-        if (option.value !== "") {
+        if (option.value !== "" || removePlaceholder) {
             option.remove();
         }
     }
 
-    for (let deployment of deploymentsData) {
+    for (let x of valueAndTextData) {
         let optionElem = document.createElement("option");
-        optionElem.value = deployment._id;
-        optionElem.textContent = deployment.name;
+        optionElem.value = x.value;
+        optionElem.textContent = x.text;
         selectElem.appendChild(optionElem);
     }
 }
@@ -430,15 +394,194 @@ function setStatus(result) {
     focusBar.focus();
 }
 
-/**
- * Update selection list of available deployments to deploy to devices on
- * command.
+/*******************************************************************************
+ * Tabs:
  */
-async function populateDeploymentFormDeployments() {
-    await populateSelectWithDeployments(document.querySelector("#dmanifest-select"));
+
+/**
+ * Mapping of tab-ids to functions to fetch the needed data for the tab and then
+ * set up the tab's elements.
+ *
+ * Used so that each tab runs its own setup-function whenever it is selected.
+ */
+function setupTab(tabId) {
+    const tabSetups = {
+        "resource-listing"  : setupResourceListingTab,
+        "module-create"     : setupModuleCreateTab,
+        "module-upload"     : setupModuleUploadTab,
+        "deployment-create" : setupDeploymentCreateTab,
+        "deployment-action" : setupDeploymentActionTab,
+        "execution-start"   : setupExecutionStartTab,
+    };
+
+    tabSetups[tabId]();
 }
 
-window.onload = async function () {
+/** Return suffix for URL used in GETting a resource or many. */
+const idSuffix = (id) => id ? ("/" + id) : "";
+/** Fetch specific device if given ID, otherwise all of them. */
+const fetchDevice     = async (id) => fetch(`/file/device${idSuffix(id)}`).then(resp => resp.json());
+/** Fetch specific module if given ID, otherwise all of them. */
+const fetchModule     = async (id) => fetch(`/file/module${idSuffix(id)}`).then(resp => resp.json());
+/** Fetch specific deployment if given ID, otherwise all of them. */
+const fetchDeployment = async (id) => fetch(`/file/manifest${idSuffix(id)}`).then(resp => resp.json());
+
+/**
+ * Needs data about:
+ * - All devices
+ * - All modules
+ * - All deployments
+ */
+async function setupResourceListingTab() {
+    const devices = await fetchDevice();
+    const modules = await fetchModule();
+    const deployments = await fetchDeployment();
+
+    // TODO: Make a nice listing of the resources.
+}
+
+/**
+ * Needs no data.
+ */
+async function setupModuleCreateTab() {
+    // NOTE: This is here just for the sake of consistency.
+}
+
+/**
+ * Update the form that is used to upload a Wasm-binary with the current
+ * selection of modules recorded in database.
+ *
+ * Needs data about:
+ * - All modules
+ */
+async function setupModuleUploadTab() {
+    const modules = await fetchModule();
+
+    let selectElem = document.querySelector("#wmodule-select");
+
+    // Remove previous ones first and replace with newly fetched ones.
+    for (let option of selectElem.querySelectorAll("option")) {
+        if (option.value !== "") {
+            option.remove();
+        }
+    }
+
+    for (let mod of modules) {
+        let optionElem = document.createElement("option");
+        optionElem.value = mod._id;
+        optionElem.textContent = mod.name;
+        selectElem.appendChild(optionElem);
+    }
+}
+
+/**
+ * Needs data about:
+ * - All devices
+ * - All modules
+ */
+async function setupDeploymentCreateTab() {
+    const devices = await fetchDevice();
+    const modules = await fetchModule();
+
+    // (re)Add the button for adding new procedure rows.
+    const nextRowButtonId = "dadd-procedure-row";
+    document.querySelector(`#${nextRowButtonId}`)?.remove();
+    let nextButton = document.createElement("button");
+    nextButton.id = nextRowButtonId;
+    nextButton.textContent = "Next";
+    nextButton
+        .addEventListener(
+            "click",
+            // NOTE: This means that the data is queried only once when opening
+            // this tab and new rows won't have the most up-to-date data.
+            addProcedureRow("dprocedure-sequence-list", devices, modules)
+        );
+
+    // Add the button under the list in the same div.
+    document
+        .querySelector("#dprocedure-sequence-list")
+        .parentElement
+        .appendChild(nextButton);
+
+    // If there is any existing procedure rows, update them as well.
+    for (let select of document.querySelectorAll("#dprocedure-sequence-list select")) {
+        fillSelectWith(sequenceItemSelectOptions(devices, modules), select, true);
+    }
+}
+
+/**
+ * Needs data about:
+ * - All deployments
+ */
+async function setupDeploymentActionTab() {
+    const deployments = await fetchDeployment();
+
+    fillSelectWith(
+        deployments.map((x) => ({ value: x._id, text: x.name })),
+        document.querySelector("#dmanifest-select")
+    );
+}
+
+/**
+ * Needs data about:
+ * - All deployments
+ */
+async function setupExecutionStartTab() {
+    const deployments = await fetchDeployment();
+
+    fillSelectWith(
+        deployments.map((x) => ({ value: x._id, text: x.name })),
+        document.querySelector("#edeployment-select")
+    );
+
+    /**
+     * Using the deployment-ID in the event, generate a form for submitting
+     * inputs that start the deployment.
+     * @param {*} event The event that triggered this function.
+     */
+    async function setupParameterFields(event) {
+        // Remove all other elements from the form except for the deployment
+        // selector.
+        let divsWithoutFirst =
+            document.querySelectorAll("#execution-form fieldset > div > div:not(:first-child)");
+        for (div of divsWithoutFirst) {
+            div.remove();
+        }
+
+        // Add new fields based on the selected deployment.
+        let deploymentId = event.target.value;
+        let deployment = await fetchDeployment(deploymentId);
+
+        let formTopDiv = document.querySelector("#execution-form fieldset > div");
+        for (let div of generateParameterFieldsFor(deployment)) {
+            formTopDiv.appendChild(div);
+        }
+    }
+
+    // Now that the selection is populated, add an event handler for selecting
+    // each.
+    for (let option of document.querySelectorAll("#edeployment-select option")) {
+        option.addEventListener("click", setupParameterFields);
+    }
+}
+
+/*******************************************************************************
+ * Event listeners:
+ */
+
+function handleExecutionSubmit(event) {
+    submitFile("/execute/:id")(event);
+}
+
+
+/*******************************************************************************
+ * Page initializations:
+ */
+
+/**
+ * Add event handlers for showing and hiding different tabs.
+ */
+async function addHandlersToTabSelectors() {
     // Open up the currently selected tab.
     let selectedTab = document.querySelector('#selector input[name="tab-selector"]:checked')
         || document.querySelector('#selector input[name="tab-selector"]');
@@ -448,28 +591,34 @@ window.onload = async function () {
     initialTabToShow.classList.add("selected");
     // Also ensure the matching radiobutton is always checked.
     selectedTab.checked = true;
+    // Perform the initial setup of the tab.
+    setupTab(selectedTabId);
 
     // Add event handlers for showing and hiding different tabs.
     let tabElems = document.querySelectorAll("#selector input");
     for (let elem of tabElems) {
         elem.addEventListener("input", function (event) {
+            const targetTabId = event.target.dataset.tabId;
+            // Call this tab's initialization function.
+            setupTab(targetTabId)
+
+            // Hide previous tab.
             let previousTab = document.querySelector("#tab-container > .selected");
             previousTab.classList.remove("selected");
             previousTab.classList.add("hidden");
 
-            let tabToShow = document.getElementById(event.target.dataset.tabId);
+            // Show the selected tab.
+            let tabToShow = document.getElementById(targetTabId);
             tabToShow.classList.remove("hidden");
             tabToShow.classList.add("selected");
         });
     }
+}
 
-    // Populate different kinds of lists when page loads.
-    populateWasmFormModules();
-    await populateExecutionFormDeployments();
-    await populateDeploymentFormDeployments();
-
-    // Module forms:
-
+/**
+ * Add event handlers for the forms creating or updating a module.
+ */
+function addHandlersToModuleForms() {
     // Swap the form's view from human-friendly to the JSON textarea. TODO: This
     // is a bit boilerplatey because repeated with deployment forms.
     document.querySelector("#module-form")
@@ -507,16 +656,15 @@ window.onload = async function () {
 
     document
         .querySelector("#module-json-form")
-        .addEventListener("submit", submitJsonTextarea("/file/module", populateWasmFormModules));
+        .addEventListener("submit", submitJsonTextarea("/file/module"));
 
     document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/:id/upload"));
+}
 
-    // Deployment forms:
-
-    document
-        .querySelector("#dadd-procedure-row")
-        .addEventListener("click", addProcedureRow("dprocedure-sequence-list"));
-
+/**
+ * Add event handlers for the forms creating or sending a deployment.
+ */
+function addHandlersToDeploymentForms() {
     // Swap the form's view from human-friendly to the JSON textarea.
     document.querySelector("#deployment-form")
         .addEventListener("submit", function (event) {
@@ -539,10 +687,7 @@ window.onload = async function () {
     // POST the JSON found in textarea to the server.
     document
         .querySelector("#deployment-json-form")
-        .addEventListener("submit", submitJsonTextarea("/file/manifest", function () {
-            populateExecutionFormDeployments();
-            populateDeploymentFormDeployments();
-        }));
+        .addEventListener("submit", submitJsonTextarea("/file/manifest"));
 
     document
         .querySelector("#deployment-action-form")
@@ -561,15 +706,22 @@ window.onload = async function () {
                     .catch(setStatus);
             }
         );
+}
 
-    // Execution forms:
-
+/**
+ * Add event handlers for the forms executing a deployment.
+ */
+function addHandlersToExecutionForms() {
     document
         .querySelector("#execution-form")
-        .addEventListener("submit", submitFile("/execute/:id"));
+        .addEventListener("submit", handleExecutionSubmit);
+}
 
-    // Database listings:
-
+/**
+ * Add event handlers for the buttons performing simple READ or DELETE
+ * operations on resources.
+ */
+function addHandlersToResourceListings() {
     document.querySelector("#module-deleteall-form").addEventListener("submit", (event) => {
         event.preventDefault();
         fetch("/file/module", { method: "DELETE" })
@@ -592,7 +744,6 @@ window.onload = async function () {
     });
 
     // Device discovery:
-
     document.querySelector("#device-discovery-reset-form").addEventListener("submit", (event) => {
         event.preventDefault();
         fetch("/file/device/discovery/reset",
@@ -605,4 +756,16 @@ window.onload = async function () {
             .then(resp => resp.json())
             .then(setStatus);
     });
+}
+
+/*******************************************************************************
+ * Main:
+ */
+
+window.onload = function () {
+    addHandlersToTabSelectors();
+    addHandlersToResourceListings();
+    addHandlersToModuleForms();
+    addHandlersToDeploymentForms();
+    addHandlersToExecutionForms();
 };
