@@ -7,7 +7,9 @@
             // For explanation see:
             // https://code.visualstudio.com/Docs/editor/debugging#_launch-versus-attach-configurations
             "request": "launch",
-            "name": "Debug orchestrator",
+            "name": "Auto-restarting debug",
+            "runtimeExecutable": "nodemon",
+            "args": ["--watch", "${workspaceFolder}/fileserv/"],
             "program": "${workspaceFolder}/fileserv/server.js",
             "cwd": "${workspaceFolder}/fileserv"
         },
