@@ -138,10 +138,10 @@ const migrateWork = async (request, response) => {
 
     let instructions = request.body;
     let deviceFrom = (
-        await database.read("device", { _id: instructions.from.device })
+        await database.read("device", { _id: instructions.from })
     )[0];
-    let deviceTo = instructions.to?.device
-        ? (await database.read("device", { _id: instructions.to.device }))[0]
+    let deviceTo = instructions.to
+        ? (await database.read("device", { _id: instructions.to }))[0]
         : null;
 
     // This call will basically create a whole new deployment, as the topology

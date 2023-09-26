@@ -85,7 +85,7 @@ class Orchestrator {
         this.messageDevice = options.deviceMessagingFunction;
     }
 
-    async solve(deployment) {
+    async solve(deployment, resolving=false) {
         // Gather the devices and modules attached to deployment in "full"
         // (i.e., not just database IDs).
         let availableDevices = await this.database.read("device");
@@ -104,8 +104,13 @@ class Orchestrator {
 
         // Now that the deployment is deemed possible, an ID is needed to
         // construct the instructions on devices.
-        let deploymentId = (await this.database.create("deployment", [deployment]))
-            .insertedIds[0];
+        let deploymentId;
+        if (resolving) {
+            deploymentId = deployment._id;
+        } else {
+            deploymentId = (await this.database.create("deployment", [deployment]))
+                .insertedIds[0];
+        }
 
         let solution = createSolution(deploymentId, updatedSequence, this.packageManagerBaseUrl)
 
@@ -116,7 +121,7 @@ class Orchestrator {
             solution
         );
 
-        return deploymentId;
+        return resolving ? solution : deploymentId;
     }
 
     async deploy(deployment) {
@@ -210,9 +215,32 @@ class Orchestrator {
      * `null` if the best candidate should be automatically selected.
      * @returns The updated deployment.
      */
-    migrate(deployment, fromDevice, toDevice=null) {
+    async migrate(deployment, fromDevice, toDevice=null) {
         console.log(deployment, fromDevice, toDevice);
-        throw new Error("migration logic not implemented");
+        // Remove deployment from old device.
+        let deploymentDeletionRes = await this.messageDevice(fromDevice, `/deploy/${deployment._id}`, {}, "DELETE");
+        if (deploymentDeletionRes.status !== 200) {
+            throw new utils.Error("deleting deployment from device failed");
+        }
+
+        // Update the deployment replacing the device with the new one.
+        for (let i in deployment.sequence) {
+            if (deployment.sequence[i].device.toString() === fromDevice._id.toString()) {
+                deployment.sequence[i].device = toDevice._id;
+            }
+            // HACK: Change the ObjectIds to strings, that the orch method
+            // wants...
+            deployment.sequence[i].device = deployment.sequence[i].device.toString();
+            deployment.sequence[i].module = deployment.sequence[i].module.toString();
+        }
+
+        // Re-solve the deployment with the new device.
+        let newDeployment = await this.solve(deployment);
+
+        // Re-deploy the deployment to the new device(s).
+        this.deploy(newDeployment);
+
+        return newDeployment;
     }
 }
 
