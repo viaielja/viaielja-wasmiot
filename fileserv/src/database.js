@@ -57,7 +57,7 @@ class Database {
     /*
     * U
     */
-    async update(collectionName, filter, fields)
+    async update(collectionName, filter, fields, upsert=true)
     { throw "update not implemented"; }
 
     /*
@@ -94,7 +94,7 @@ class MongoDatabase extends Database {
     async read(collectionName, filter) {
         // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
 
-        this.wrapId(filter); 
+        this.wrapId(filter);
 
         return (this.db
                 .collection(collectionName)
