@@ -199,6 +199,21 @@ class Orchestrator {
         // Message the first device and return its reaction response.
         return fetch(url, options);
     }
+
+    /**
+     * Update the deployment so that functionality on `fromDevice` is moved to
+     * `toDevice` resulting in `fromDevice` being essentially forgotten in the
+     * context of the deployment.
+     * @param {*} deployment Deployment that is to be updated.
+     * @param {*} fromDevice Device to move functionality from.
+     * @param {*} toDevice Specific existing device to move functionality to or
+     * `null` if the best candidate should be automatically selected.
+     * @returns The updated deployment.
+     */
+    migrate(deployment, fromDevice, toDevice=null) {
+        console.log(deployment, fromDevice, toDevice);
+        throw new Error("migration logic not implemented");
+    }
 }
 
 /**

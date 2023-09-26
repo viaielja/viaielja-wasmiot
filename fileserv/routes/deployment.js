@@ -1,6 +1,5 @@
 const express = require("express");
 
-const { PUBLIC_BASE_URI } = require("../constants.js");
 const utils = require("../utils.js");
 
 let database = null;
@@ -15,6 +14,11 @@ function setOrchestrator(orch) {
     orchestrator = orch;
 }
 
+class DeploymentMigrated {
+    constructor(newDeployment) {
+        this.newDeployment = newDeployment;
+    }
+}
 
 /**
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
@@ -106,7 +110,7 @@ const deploy = async (request, response) => {
                 break;
             default:
                 let err = ["unknown error while deploying", e];
-                console.error(...err);
+                console.error(e, e.stack);
                 response
                     .status(500)
                     .json(new utils.Error(...err));
@@ -123,11 +127,44 @@ const deleteDeployments = async (request, response) => {
     response.status(204).send();
 }
 
+const migrateWork = async (request, response) => {
+    let deploymentFilter = { _id: request.params.deploymentId };
+    let doc = (await database.read("deployment", deploymentFilter))[0];
+    if (!doc) {
+        response
+            .status(404)
+            .json(new utils.Error("no deployment matches ID"));
+    }
+
+    let instructions = request.body;
+    let deviceFrom = (
+        await database.read("device", { _id: instructions.from.device })
+    )[0];
+    let deviceTo = instructions.to?.device
+        ? (await database.read("device", { _id: instructions.to.device }))[0]
+        : null;
+
+    // This call will basically create a whole new deployment, as the topology
+    // might be totally different after including a new device.
+    let updatedDeployment = orchestrator.migrate(doc, deviceFrom, deviceTo);
+
+    let updateRes = await database.update("deployment", deploymentFilter, updatedDeployment);
+    if (updateRes.matchedCount === 0) {
+        response
+            .status(404)
+            .json(new utils.Error("no deployment matches ID"));
+    } else {
+        response
+            .json(new DeploymentMigrated(updatedDeployment));
+    }
+}
+
 const router = express.Router();
 router.get("/:deploymentId", getDeployment);
 router.get("/", getDeployments);
 router.post("/", createDeployment);
 router.post("/:deploymentId", deploy);
+router.put("/:deploymentId", migrateWork);
 router.delete("/", deleteDeployments);
 
 
