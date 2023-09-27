@@ -263,43 +263,6 @@ function addProcedureRow(listId, devicesData, modulesData) {
 }
 
 /**
- * Return a handler that submits JSON contained in a textarea-element of the
- * event target to the url.
- */
-function submitJsonTextarea(url, successCallback) {
-    function handleSubmit(formSubmitEvent) {
-        formSubmitEvent.preventDefault();
-        let json = formSubmitEvent.target.querySelector("textarea").value;
-
-        // Disable the form for the duration of the submission (provided it is
-        // inside a fieldset-element).
-        formSubmitEvent.target.querySelector("fieldset").disabled = true;
-        // Submit to backend that handles application/json.
-        fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: json
-        })
-            // TODO The backend should preferrably always respond with JSON but
-            // does not currently always do so...
-            .then(function (response) { return response.json(); })
-            .then(function (result) {
-                if (result.success) {
-                    // Re-enable the form and show success message
-                    formSubmitEvent.target.querySelector("fieldset").disabled = false;
-                    if (successCallback) { successCallback(result) };
-                }
-                setStatus(result);
-            })
-            .catch(function (result) {
-                // Show an error message.
-                setStatus(result);
-            });
-    }
-    return handleSubmit;
-}
-
-/**
  * Return a handler that submits (POST) a form with the
  * 'enctype="multipart/form-data"' to the url. Used for uploading files
  * along with other fields of the form in the body.
@@ -327,14 +290,6 @@ function submitFile(url) {
     }
 
     return handleSubmit;
-}
-
-/**
- * Transform the sourceForm's contents into JSON and put into the
- * targetTextArea.
- */
-function populateWithJson(sourceForm, targetTextArea) {
-    targetTextArea.value = JSON.stringify(formToObject(sourceForm), null, 2);
 }
 
 /**
@@ -622,48 +577,56 @@ async function addHandlersToTabSelectors() {
     }
 }
 
+async function apiCall(url, method, jsonBody) {
+    const response = await fetch(url, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: jsonBody
+    });
+
+    if (response.status === 204) {
+        setStatus({ success: "API call succeeded with no further response data" });
+        return;
+    }
+
+    let result = {
+        error: true,
+        errorText: `Parsing API response to JSON failed (see console)`
+    };
+    try {
+        result = { success: await response.json() };
+    } catch(e) {
+        console.error(e)
+    }
+
+    setStatus(result);
+}
+
 /**
  * Add event handlers for the forms creating or updating a module.
  */
 function addHandlersToModuleForms() {
-    // Swap the form's view from human-friendly to the JSON textarea. TODO: This
-    // is a bit boilerplatey because repeated with deployment forms.
     document.querySelector("#module-form")
-        // NOTE: Submit event here in order to have form make requirement-checks
-        // automatically.
+        // NOTE: The "submit" event is used in order to have the form make
+        // required-field etc. checks automatically.
         .addEventListener("submit", function (event) {
             event.preventDefault();
-            // Also populate the JSON field.
-            let thisForm = document.querySelector("#module-form")
-            let jsonForm = document.querySelector("#module-json-form");
-            let jsonFormTextarea = jsonForm.querySelector("textarea");
-            populateWithJson(thisForm, jsonFormTextarea);
+            const moduleObj = formToObject(event.target);
 
-            // Merge the OpenAPI field into the JSON. TODO: This is clunky...
-            let moduleObj = JSON.parse(jsonFormTextarea.value)
+            // Merge the OpenAPI field into the module. TODO: This is clunky...
             try {
                 document.querySelector("#status p").classList.add("hidden");
-                moduleObj["openapi"] = JSON.parse(thisForm.querySelector("#mopenapi").value);
+                moduleObj["openapi"] = JSON.parse(event.target.querySelector("#mopenapi").value);
             } catch (e) {
-                setStatus({error: `Check for 'TODO' in your OpenAPI description: ${e}`});
+                setStatus({
+                    error: true,
+                    errorText: `Check for 'TODO' in your OpenAPI description: ${e}`
+                });
                 return;
             }
 
-            jsonFormTextarea.value = JSON.stringify(moduleObj);
-
-            thisForm.classList.add("hidden");
-            jsonForm.classList.remove("hidden");
+            apiCall("/file/module", "POST", JSON.stringify(moduleObj));
         });
-    // Same as above but reverse and does not fill in the form (TODO).
-    document.querySelector("#module-json-form .input-view-switch")
-        .addEventListener("click", function (_) {
-            document.querySelector("#module-json-form").classList.add("hidden");
-            document.querySelector("#module-form").classList.remove("hidden");
-        });
-
-    document
-        .querySelector("#module-json-form")
-        .addEventListener("submit", submitJsonTextarea("/file/module"));
 
     document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/:id/upload"));
 }
@@ -672,29 +635,13 @@ function addHandlersToModuleForms() {
  * Add event handlers for the forms creating or sending a deployment.
  */
 function addHandlersToDeploymentForms() {
-    // Swap the form's view from human-friendly to the JSON textarea.
     document.querySelector("#deployment-form")
         .addEventListener("submit", function (event) {
             event.preventDefault();
-            // Also populate the JSON field.
-            let thisForm = document.querySelector("#deployment-form")
-            let jsonForm = document.querySelector("#deployment-json-form");
-            populateWithJson(thisForm, jsonForm.querySelector("textarea"));
+            const deploymentObj = formToObject(event.target);
+            apiCall("/file/manifest", "POST", JSON.stringify(deploymentObj));
 
-            thisForm.classList.add("hidden");
-            jsonForm.classList.remove("hidden");
         });
-    // Same as above but reverse and does not fill in the form (TODO).
-    document.querySelector("#deployment-json-form .input-view-switch")
-        .addEventListener("click", function (_) {
-            document.querySelector("#deployment-json-form").classList.add("hidden");
-            document.querySelector("#deployment-form").classList.remove("hidden");
-        });
-
-    // POST the JSON found in textarea to the server.
-    document
-        .querySelector("#deployment-json-form")
-        .addEventListener("submit", submitJsonTextarea("/file/manifest"));
 
     document
         .querySelector("#deployment-action-form")
