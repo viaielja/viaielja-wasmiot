@@ -362,35 +362,38 @@ function fillSelectWith(valueAndTextData, selectElem, removePlaceholder=false) {
 /**
  * Set the status bar to signify different states described by key-value pair in
  * the `result` parameter.
- * @param {} result `null` to reset the element or an Object containing one of
- * the keys `error`, `success`, `result` with message as the value.
+ * @param {{ success: NonFalsiable } | { error: NonFalsiable, errorText: string }} result Result object.
  */
 function setStatus(result) {
+    // Do manual typing in JavaScript.
+    const isValidResultObject = result.success || (
+        result.error && result.errorText instanceof string
+    );
+
+    if (!isValidResultObject) {
+        result = {
+            error: true,
+            errorText: `Developer failure - bad object format: ${JSON.stringify(result, null, 2)}`
+        };
+    }
+
+    // Reset the status completely.
     let statusText = document.querySelector("#status p");
+    statusText.textContent = "";
+    statusText.classList.remove("hidden");
     statusText.classList.remove("error");
     statusText.classList.remove("success");
-    // "Result" is the result of execution e.g. `plus(1, 2)` results in `3`.
-    statusText.classList.remove("result");
-    statusText.classList.remove("hidden");
 
-    if (result === null) {
-        // Reset the status.
-        statusText.classList.add("hidden");
-        return;
-    }
-
+    // Select appropriate content and styling.
     if (result.error) {
-        // Empty the message if result is malformed.
-        msg = result.errorText ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
-        // Default the style to error.
-        classs = "error"
+        statusText.classList.add("error");
+        statusText.textContent = result.errorText;
     } else {
-        msg = JSON.stringify(result);
-        classs = "success";
+        statusText.classList.add("success");
+        statusText.textContent = JSON.stringify(result.success, null, 4);
     }
-    statusText.textContent = msg;
-    statusText.classList.add(classs);
-    // Scroll into view.
+
+    // Scroll the status bar into view.
     statusText.focus();
 }
 
@@ -639,7 +642,7 @@ function addHandlersToModuleForms() {
             // Merge the OpenAPI field into the JSON. TODO: This is clunky...
             let moduleObj = JSON.parse(jsonFormTextarea.value)
             try {
-                setStatus(null);
+                document.querySelector("#status p").classList.add("hidden");
                 moduleObj["openapi"] = JSON.parse(thisForm.querySelector("#mopenapi").value);
             } catch (e) {
                 setStatus({error: `Check for 'TODO' in your OpenAPI description: ${e}`});
