@@ -2,6 +2,12 @@
  * Purely (or close enough) functional (i.e. outputs are based on the inputs
  * only) utilities:
  */
+
+/**
+ * Mapping of OpenAPI 3.1.0 schema types to HTML input field types.
+ * @param {*} schema
+ * @returns { string }
+ */
 function OpenApi3_1_0_SchemaToInputType(schema) {
     switch (schema.type) {
         case "integer":
@@ -96,6 +102,24 @@ function formDataFrom(form) {
 }
 
 /**
+ * Construct a struct for value and textContent fields of a deployment sequence
+ * item that use can choose from a select-element.
+ * @param {*} device
+ * @param {*} mod Module
+ * @param {string} exportt Module export
+ * @returns { { value: string, text: string } }
+ */
+function deploymentSequenceItem(device, mod, exportt) {
+    return {
+        // Data for parsing later into values compatible with the
+        // deploy-endpoint.
+        value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt.name }),
+        // Make something that a human could understand from the interface.
+        // TODO/FIXME?: XSS galore?
+        text: `Use ${device.name} for ${mod.name}:${exportt.name}`
+    };
+}
+/**
  * Return list of options for the sequence-item.
  * @param {*} devicesData [{_id: string, name: string} ..}]
  * @param {*} modulesData [{_id: string, name: string, exports: [{name: string, } ..]} ..]
@@ -119,14 +143,7 @@ function sequenceItemSelectOptions(devicesData, modulesData) {
                 continue;
             }
             for (let exportt of mod.exports) {
-                options.push({
-                    // Add data to the option element for parsing later and
-                    // sending to the deploy-endpoint.
-                    value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt.name }),
-                    // Make something that a human could understand from the interface.
-                    // TODO/FIXME?: XSS galore?
-                    text: `Use ${device.name} for ${mod.name}:${exportt.name}`
-                })
+                options.push(deploymentSequenceItem(device, mod, exportt));
             }
         }
     }
@@ -257,6 +274,8 @@ function addProcedureRow(listId, devicesData, modulesData) {
         let nextId = parentList.querySelectorAll("li").length;
         let newListItem = await makeItem(nextId);
         parentList.appendChild(newListItem);
+
+        return newListItem;
     }
 
     return handleAddRow;
@@ -361,6 +380,58 @@ function handleExecutionSubmit(event) {
 }
 
 /**
+ * Fill in the deployment fields onto the designated form.
+ * @param {{id: string, name:string, sequence: [{device: string, module: string, func: string }]}} deployment
+ */
+async function setupDeploymentUpdateFields(deployment, devices, modules) {
+    // Add basic functionalities first to the empty form.
+
+    // Remove the button for adding new procedure rows (if it exists).
+    const nextRowButtonId = "dupdate-procedure-row";
+    document.querySelector(`#${nextRowButtonId}`)?.remove();
+    // And add it again, resulting in only one button existing at all times.
+    let nextButton = document.createElement("button");
+    nextButton.id = nextRowButtonId;
+    nextButton.textContent = "Next";
+    nextButton
+        .addEventListener(
+            "click",
+            // NOTE: This means that the data is queried only once when opening
+            // this tab and new rows won't have the most up-to-date data.
+            addProcedureRow("dprocedure-sequence-list", devices, modules)
+        );
+
+    // Add the button under the list in the same div.
+    document
+        .querySelector("#duprocedure-sequence-list")
+        .parentElement
+        .appendChild(nextButton);
+
+    // If there is any existing and empty procedure rows, update them as well.
+    for (let select of document.querySelectorAll("#duprocedure-sequence-list select")) {
+        fillSelectWith(sequenceItemSelectOptions(devices, modules), select, true);
+    }
+
+    // Now add the existing deployment content to the fields.
+    // ID into a non-editable field.
+    document.querySelector("#duid").value = deployment._id;
+    // Name.
+    document.querySelector("#duname").value = deployment.name;
+    // Sequence.
+    for (let { device: deviceId, module: moduleId, func } of deployment.sequence) {
+        // TODO: Delete this joke.
+        let stepItem = await addProcedureRow("duprocedure-sequence-list", devices, modules)({
+            preventDefault: () => { },
+        });
+
+        let optionElem = stepItem.querySelector("option");
+        let { value: value, text: textContent } = deploymentSequenceItem(devices.find(x => x._id === deviceId), modules.find(x => x._id === moduleId), func);
+        optionElem.value = value;
+        optionElem.textContent = textContent;
+    }
+}
+
+/**
  * Using the deployment-ID in the event, generate a form for submitting
  * inputs that start the deployment.
  * @param {*} event The event that triggered this function.
@@ -405,6 +476,7 @@ function setupTab(tabId) {
         "module-create"     : setupModuleCreateTab,
         "module-upload"     : setupModuleUploadTab,
         "deployment-create" : setupDeploymentCreateTab,
+        "deployment-update" : setupDeploymentUpdateTab,
         "deployment-action" : setupDeploymentActionTab,
         "execution-start"   : setupExecutionStartTab,
     };
@@ -506,6 +578,25 @@ async function setupDeploymentCreateTab() {
 
 /**
  * Needs data about:
+ * - All devices
+ * - All modules
+ * - All deployments
+ */
+async function setupDeploymentUpdateTab() {
+    const devices = await fetchDevice();
+    const modules = await fetchModule();
+    const deployments = await fetchDeployment();
+
+    const form = document.querySelector("#deployment-update-form");
+
+    fillSelectWith(
+        deployments.map((x) => ({ value: x._id, text: x.name })),
+        form.querySelector("#udeployment-select")
+    );
+}
+
+/**
+ * Needs data about:
  * - All deployments
  */
 async function setupDeploymentActionTab() {
@@ -513,7 +604,7 @@ async function setupDeploymentActionTab() {
 
     fillSelectWith(
         deployments.map((x) => ({ value: x._id, text: x.name })),
-        document.querySelector("#dmanifest-select")
+        document.querySelector("#damanifest-select")
     );
 }
 
@@ -528,12 +619,6 @@ async function setupExecutionStartTab() {
         deployments.map((x) => ({ value: x._id, text: x.name })),
         document.querySelector("#edeployment-select")
     );
-
-    // Now that the selection is populated, add an event handler for selecting
-    // an option from it.
-    document
-        .querySelector("#edeployment-select")
-        .addEventListener("change", setupExecutionParameterFields);
 }
 
 /*******************************************************************************
@@ -643,6 +728,16 @@ function addHandlersToDeploymentForms() {
 
         });
 
+    document.querySelector("#deployment-update-form")
+        .addEventListener("submit", async function (event) {
+            event.preventDefault();
+            const deploymentObj = formToObject(event.target);
+            await apiCall(`/file/manifest/${deploymentObj.id}`, "PUT", JSON.stringify(deploymentObj));
+
+            // Hide the form after the update.
+            document.querySelector("#deployment-update-form div div:nth-child(2)").classList.add("hidden");
+        });
+
     document
         .querySelector("#deployment-action-form")
         .addEventListener(
@@ -660,6 +755,17 @@ function addHandlersToDeploymentForms() {
                     .catch(setStatus);
             }
         );
+
+    document
+        .querySelector("#udeployment-select")
+        .addEventListener("change", async (e) => {
+            const deployment = await fetchDeployment(e.target.value);
+            const devices = await fetchDevice();
+            const modules = await fetchModule();
+            // Show the deployment form.
+            document.querySelector("#deployment-update-form div div:nth-child(2)").classList.remove("hidden");
+            setupDeploymentUpdateFields(deployment, devices, modules);
+        });
 }
 
 /**
@@ -669,6 +775,12 @@ function addHandlersToExecutionForms() {
     document
         .querySelector("#execution-form")
         .addEventListener("submit", handleExecutionSubmit);
+
+    // When the selection is populated, this event handler sets up a form for
+    // parameter inputs.
+    document
+        .querySelector("#edeployment-select")
+        .addEventListener("change", setupExecutionParameterFields);
 }
 
 /**

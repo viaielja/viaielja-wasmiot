@@ -41,6 +41,10 @@
           Deployment manifest creation
         </label>
         <label class="tab-selector dull">
+          <input type="radio" name="tab-selector" data-tab-id="deployment-update">
+          Deployment manifest update
+        </label>
+         <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="deployment-action">
           Deployment of deployment manifests
         </label>
@@ -85,7 +89,7 @@
         </div>
       </div>
 
-      <!-- Module creation (JSON and HTML-form). -->
+      <!-- Module creation. -->
       <div id="module-create" class="tab hidden">
         <div>
           <form id="module-form">
@@ -131,23 +135,58 @@
         </div>
       </div>
 
-      <!-- Deployment manifest creation (JSON and HTML-form). -->
+      <!-- Deployment manifest creation. -->
       <div id="deployment-create" class="tab hidden">
         <div>
           <form id="deployment-form">
             <fieldset>
-                <legend>Create a deployment manifest</legend>
+              <legend>Create a deployment manifest</legend>
+              <div>
                 <div>
+                  <label for="dname">Name</label>
+                  <input id="dname" name="name" required type="text" value="">
+                </div>
+                <div>
+                  <p>Procedure-call sequence:</p>
+                  <ol id="dprocedure-sequence-list" data-json-key="sequence">
+                  </ol>
+                </div>
+              </div>
+            </fieldset>
+            <input type="submit" value="Submit"/>
+          </form>
+        </div>
+      </div>
+
+      <!-- Deployment manifest update. -->
+      <div id="deployment-update" class="tab hidden">
+        <div>
+          <form id="deployment-update-form">
+            <fieldset>
+              <legend>Update a deployment manifest</legend>
+              <div>
+                <div>
+                  <label for="udeployment-select">Select the deployment</label>
+                    <select id="udeployment-select" name="id" required>
+                      <option value="">Please select a deployment:</option>
+                    </select>
+                </div>
+                <!-- Same shared fields for all deployments. -->
+                <div class="hidden">
                   <div>
-                    <label for="dname">Name</label>
-                    <input id="dname" name="name" required type="text" value="">
+                    <label for="duid">ID</label>
+                    <input id="duid" name="id" required type="text" value="filled-programmatically" disabled>
+
+                    <label for="duname">Name</label>
+                    <input id="duname" name="name" required type="text" value="">
                   </div>
                   <div>
                     <p>Procedure-call sequence:</p>
-                    <ol id="dprocedure-sequence-list" data-json-key="sequence">
+                    <ol id="duprocedure-sequence-list" data-json-key="sequence">
                     </ol>
                   </div>
                 </div>
+              </div>
             </fieldset>
             <input type="submit" value="Submit"/>
           </form>
@@ -162,9 +201,9 @@
               <legend>Deploy</legend>
               <div>
                 <div>
-                  <label for="dmanifest-select">Select the deployment manifest:</label>
-                    <select id="dmanifest-select" name="id" required>
-                      <option value="">Please select a deployment manifest:</option>
+                  <label for="damanifest-select">Select the deployment</label>
+                    <select id="damanifest-select" name="id" required>
+                      <option value="">Please select a deployment:</option>
                     </select>
                 </div>
               </div>
