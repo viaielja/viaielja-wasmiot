@@ -113,10 +113,10 @@ function deploymentSequenceItem(device, mod, exportt) {
     return {
         // Data for parsing later into values compatible with the
         // deploy-endpoint.
-        value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt.name }),
+        value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt }),
         // Make something that a human could understand from the interface.
         // TODO/FIXME?: XSS galore?
-        text: `Use ${device.name} for ${mod.name}:${exportt.name}`
+        text: `Use ${device.name} for ${mod.name}:${exportt}`
     };
 }
 /**
@@ -143,7 +143,7 @@ function sequenceItemSelectOptions(devicesData, modulesData) {
                 continue;
             }
             for (let exportt of mod.exports) {
-                options.push(deploymentSequenceItem(device, mod, exportt));
+                options.push(deploymentSequenceItem(device, mod, exportt.name));
             }
         }
     }
