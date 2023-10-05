@@ -14,12 +14,6 @@ function setOrchestrator(orch) {
     orchestrator = orch;
 }
 
-class DeploymentMigrated {
-    constructor(newDeployment) {
-        this.newDeployment = newDeployment;
-    }
-}
-
 /**
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
  */
@@ -76,28 +70,20 @@ const createDeployment = async (request, response) => {
             .status(500)
             .json(new utils.Error(errorMsg));
     }
-
 }
 
-/**
- *  Deploy applications and instructions to devices according to a pre-created
- *  deployment.
- */
-const deploy = async (request, response) => {
-    let deploymentDoc = (await database
-        .read("deployment", { _id: request.params.deploymentId }))[0];
-
-    if (!deploymentDoc) {
-        response
-            .status(404)
-            .json(new utils.Error(`no deployment matches ID '${request.params.deploymentId}'`));
-        return;
-    }
-
+const tryDeploy = async (deploymentDoc, response) => {
     try {
         let responses = await orchestrator.deploy(deploymentDoc);
 
         console.log("Deploy-responses from devices: ", responses);
+
+        // Update the deployment to "active" status.
+        await database.update(
+            "deployment",
+            { _id: deploymentDoc._id },
+            { active: true }
+        );
 
         response.json({ deviceResponses: responses });
     } catch(e) {
@@ -117,6 +103,24 @@ const deploy = async (request, response) => {
                 break;
         }
     }
+};
+
+/**
+ *  Deploy applications and instructions to devices according to a pre-created
+ *  deployment.
+ */
+const deploy = async (request, response) => {
+    let deploymentDoc = (await database
+        .read("deployment", { _id: request.params.deploymentId }))[0];
+
+    if (!deploymentDoc) {
+        response
+            .status(404)
+            .json(new utils.Error(`no deployment matches ID '${request.params.deploymentId}'`));
+        return;
+    }
+
+    tryDeploy(deploymentDoc, response);
 }
 
 /**
@@ -127,44 +131,51 @@ const deleteDeployments = async (request, response) => {
     response.status(204).send();
 }
 
-const migrateWork = async (request, response) => {
-    let deploymentFilter = { _id: request.params.deploymentId };
-    let doc = (await database.read("deployment", deploymentFilter))[0];
-    if (!doc) {
+/**
+ * Update a deployment from PUT request and perform needed migrations on already
+ * deployed instructions.
+ * @param {*} request Same as for `createDeployment`.
+ * @param {*} response
+ */
+const updateDeployment = async (request, response) => {
+    let oldDeployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
+
+    if (!oldDeployment) {
         response
             .status(404)
-            .json(new utils.Error("no deployment matches ID"));
+            .json(new utils.Error(`no deployment matches ID '${request.params.deploymentId}'`));
+        return;
     }
 
-    let instructions = request.body;
-    let deviceFrom = (
-        await database.read("device", { _id: instructions.from })
-    )[0];
-    let deviceTo = instructions.to
-        ? (await database.read("device", { _id: instructions.to }))[0]
-        : null;
+    let updatedDeployment;
+    try {
+        let newDeployment = request.body;
+        newDeployment._id = oldDeployment._id;
+        updatedDeployment = await orchestrator.solve(newDeployment, true);
+    } catch (err) {
+        errorMsg = "Failed updating manifest for deployment" + err;
 
-    // This call will basically create a whole new deployment, as the topology
-    // might be totally different after including a new device.
-    let updatedDeployment = orchestrator.migrate(doc, deviceFrom, deviceTo);
+        console.error(errorMsg, err.stack);
 
-    let updateRes = await database.update("deployment", deploymentFilter, updatedDeployment);
-    if (updateRes.matchedCount === 0) {
         response
-            .status(404)
-            .json(new utils.Error("no deployment matches ID"));
+            .status(500)
+            .json(new utils.Error(errorMsg));
+    }
+
+    // If this has been deployed already, do needed migrations.
+    if (oldDeployment.active) {
+        tryDeploy(updatedDeployment, response);
     } else {
-        response
-            .json(new DeploymentMigrated(updatedDeployment));
+        response.status(204).send();
     }
-}
+};
 
 const router = express.Router();
 router.get("/:deploymentId", getDeployment);
 router.get("/", getDeployments);
 router.post("/", createDeployment);
 router.post("/:deploymentId", deploy);
-router.put("/:deploymentId", migrateWork);
+router.put("/:deploymentId", updateDeployment);
 router.delete("/", deleteDeployments);
 
 

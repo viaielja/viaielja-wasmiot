@@ -22,6 +22,13 @@ class ParameterMissing extends Error {
     }
 }
 
+class DeploymentFailed extends Error {
+    constructor(combinedResponse) {
+        super("deployment failed");
+        this.combinedResponse = combinedResponse;
+    }
+}
+
 
 /**
  * Fields for instruction about reacting to calls to modules and functions on a
@@ -117,7 +124,7 @@ class Orchestrator {
         // Update the deployment with the created solution.
         this.database.update(
             "deployment",
-            { _id: deployment._id },
+            { _id: deploymentId },
             solution
         );
 
@@ -141,13 +148,19 @@ class Orchestrator {
         }
 
         // Return devices mapped to their awaited deployment responses.
-        return Object.fromEntries(await Promise.all(
+        let deploymentResponse = Object.fromEntries(await Promise.all(
             requests.map(async ([deviceId, request]) => {
                 // Attach the device information to the response.
                 let response = await request;
                 return [deviceId, response];
             })
         ));
+
+        if (!deploymentResponse) {
+            throw new DeploymentFailed(deploymentResponse);
+        }
+
+        return deploymentResponse;
     }
 
     /**
@@ -203,44 +216,6 @@ class Orchestrator {
 
         // Message the first device and return its reaction response.
         return fetch(url, options);
-    }
-
-    /**
-     * Update the deployment so that functionality on `fromDevice` is moved to
-     * `toDevice` resulting in `fromDevice` being essentially forgotten in the
-     * context of the deployment.
-     * @param {*} deployment Deployment that is to be updated.
-     * @param {*} fromDevice Device to move functionality from.
-     * @param {*} toDevice Specific existing device to move functionality to or
-     * `null` if the best candidate should be automatically selected.
-     * @returns The updated deployment.
-     */
-    async migrate(deployment, fromDevice, toDevice=null) {
-        console.log(deployment, fromDevice, toDevice);
-        // Remove deployment from old device.
-        let deploymentDeletionRes = await this.messageDevice(fromDevice, `/deploy/${deployment._id}`, {}, "DELETE");
-        if (deploymentDeletionRes.status !== 200) {
-            throw new utils.Error("deleting deployment from device failed");
-        }
-
-        // Update the deployment replacing the device with the new one.
-        for (let i in deployment.sequence) {
-            if (deployment.sequence[i].device.toString() === fromDevice._id.toString()) {
-                deployment.sequence[i].device = toDevice._id;
-            }
-            // HACK: Change the ObjectIds to strings, that the orch method
-            // wants...
-            deployment.sequence[i].device = deployment.sequence[i].device.toString();
-            deployment.sequence[i].module = deployment.sequence[i].module.toString();
-        }
-
-        // Re-solve the deployment with the new device.
-        let newDeployment = await this.solve(deployment);
-
-        // Re-deploy the deployment to the new device(s).
-        this.deploy(newDeployment);
-
-        return newDeployment;
     }
 }
 
