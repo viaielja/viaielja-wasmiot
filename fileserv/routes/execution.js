@@ -81,7 +81,7 @@ const execute = async (request, response) => {
             if (!execResponse.ok) {
                 // Wait for a while, if the URL is not yet available.
                 if (execResponse.status == 404 && depth < 10) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                 } else {
                     result = new utils.Error("fetching result failed: " + execResponse.statusText);
                     break;

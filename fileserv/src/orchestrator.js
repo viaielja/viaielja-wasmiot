@@ -22,6 +22,13 @@ class ParameterMissing extends Error {
     }
 }
 
+class DeploymentFailed extends Error {
+    constructor(combinedResponse) {
+        super("deployment failed");
+        this.combinedResponse = combinedResponse;
+    }
+}
+
 
 /**
  * Fields for instruction about reacting to calls to modules and functions on a
@@ -85,7 +92,7 @@ class Orchestrator {
         this.messageDevice = options.deviceMessagingFunction;
     }
 
-    async solve(deployment) {
+    async solve(deployment, resolving=false) {
         // Gather the devices and modules attached to deployment in "full"
         // (i.e., not just database IDs).
         let availableDevices = await this.database.read("device");
@@ -104,19 +111,24 @@ class Orchestrator {
 
         // Now that the deployment is deemed possible, an ID is needed to
         // construct the instructions on devices.
-        let deploymentId = (await this.database.create("deployment", [deployment]))
-            .insertedIds[0];
+        let deploymentId;
+        if (resolving) {
+            deploymentId = deployment._id;
+        } else {
+            deploymentId = (await this.database.create("deployment", [deployment]))
+                .insertedIds[0];
+        }
 
         let solution = createSolution(deploymentId, updatedSequence, this.packageManagerBaseUrl)
 
         // Update the deployment with the created solution.
         this.database.update(
             "deployment",
-            { _id: deployment._id },
+            { _id: deploymentId },
             solution
         );
 
-        return deploymentId;
+        return resolving ? solution : deploymentId;
     }
 
     async deploy(deployment) {
@@ -136,13 +148,19 @@ class Orchestrator {
         }
 
         // Return devices mapped to their awaited deployment responses.
-        return Object.fromEntries(await Promise.all(
+        let deploymentResponse = Object.fromEntries(await Promise.all(
             requests.map(async ([deviceId, request]) => {
                 // Attach the device information to the response.
                 let response = await request;
                 return [deviceId, response];
             })
         ));
+
+        if (!deploymentResponse) {
+            throw new DeploymentFailed(deploymentResponse);
+        }
+
+        return deploymentResponse;
     }
 
     /**

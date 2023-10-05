@@ -1,6 +1,5 @@
 const express = require("express");
 
-const { PUBLIC_BASE_URI } = require("../constants.js");
 const utils = require("../utils.js");
 
 let database = null;
@@ -14,7 +13,6 @@ let orchestrator = null;
 function setOrchestrator(orch) {
     orchestrator = orch;
 }
-
 
 /**
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
@@ -72,8 +70,40 @@ const createDeployment = async (request, response) => {
             .status(500)
             .json(new utils.Error(errorMsg));
     }
-
 }
+
+const tryDeploy = async (deploymentDoc, response) => {
+    try {
+        let responses = await orchestrator.deploy(deploymentDoc);
+
+        console.log("Deploy-responses from devices: ", responses);
+
+        // Update the deployment to "active" status.
+        await database.update(
+            "deployment",
+            { _id: deploymentDoc._id },
+            { active: true }
+        );
+
+        response.json({ deviceResponses: responses });
+    } catch(e) {
+        switch (e.name) {
+            case "DeviceNotFound":
+                console.error("device not found", e);
+                response
+                    .status(404)
+                    .json(new utils.Error(undefined, e));
+                break;
+            default:
+                let err = ["unknown error while deploying", e];
+                console.error(e, e.stack);
+                response
+                    .status(500)
+                    .json(new utils.Error(...err));
+                break;
+        }
+    }
+};
 
 /**
  *  Deploy applications and instructions to devices according to a pre-created
@@ -90,29 +120,7 @@ const deploy = async (request, response) => {
         return;
     }
 
-    try {
-        let responses = await orchestrator.deploy(deploymentDoc);
-
-        console.log("Deploy-responses from devices: ", responses);
-
-        response.json({ deviceResponses: responses });
-    } catch(e) {
-        switch (e.name) {
-            case "DeviceNotFound":
-                console.error("device not found", e);
-                response
-                    .status(404)
-                    .json(new utils.Error(undefined, e));
-                break;
-            default:
-                let err = ["unknown error while deploying", e];
-                console.error(...err);
-                response
-                    .status(500)
-                    .json(new utils.Error(...err));
-                break;
-        }
-    }
+    tryDeploy(deploymentDoc, response);
 }
 
 /**
@@ -123,11 +131,51 @@ const deleteDeployments = async (request, response) => {
     response.status(204).send();
 }
 
+/**
+ * Update a deployment from PUT request and perform needed migrations on already
+ * deployed instructions.
+ * @param {*} request Same as for `createDeployment`.
+ * @param {*} response
+ */
+const updateDeployment = async (request, response) => {
+    let oldDeployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
+
+    if (!oldDeployment) {
+        response
+            .status(404)
+            .json(new utils.Error(`no deployment matches ID '${request.params.deploymentId}'`));
+        return;
+    }
+
+    let updatedDeployment;
+    try {
+        let newDeployment = request.body;
+        newDeployment._id = oldDeployment._id;
+        updatedDeployment = await orchestrator.solve(newDeployment, true);
+    } catch (err) {
+        errorMsg = "Failed updating manifest for deployment" + err;
+
+        console.error(errorMsg, err.stack);
+
+        response
+            .status(500)
+            .json(new utils.Error(errorMsg));
+    }
+
+    // If this has been deployed already, do needed migrations.
+    if (oldDeployment.active) {
+        tryDeploy(updatedDeployment, response);
+    } else {
+        response.status(204).send();
+    }
+};
+
 const router = express.Router();
 router.get("/:deploymentId", getDeployment);
 router.get("/", getDeployments);
 router.post("/", createDeployment);
 router.post("/:deploymentId", deploy);
+router.put("/:deploymentId", updateDeployment);
 router.delete("/", deleteDeployments);
 
 

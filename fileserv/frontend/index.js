@@ -2,6 +2,12 @@
  * Purely (or close enough) functional (i.e. outputs are based on the inputs
  * only) utilities:
  */
+
+/**
+ * Mapping of OpenAPI 3.1.0 schema types to HTML input field types.
+ * @param {*} schema
+ * @returns { string }
+ */
 function OpenApi3_1_0_SchemaToInputType(schema) {
     switch (schema.type) {
         case "integer":
@@ -96,6 +102,24 @@ function formDataFrom(form) {
 }
 
 /**
+ * Construct a struct for value and textContent fields of a deployment sequence
+ * item that use can choose from a select-element.
+ * @param {*} device
+ * @param {*} mod Module
+ * @param {string} exportt Module export
+ * @returns { { value: string, text: string } }
+ */
+function deploymentSequenceItem(device, mod, exportt) {
+    return {
+        // Data for parsing later into values compatible with the
+        // deploy-endpoint.
+        value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt }),
+        // Make something that a human could understand from the interface.
+        // TODO/FIXME?: XSS galore?
+        text: `Use ${device.name} for ${mod.name}:${exportt}`
+    };
+}
+/**
  * Return list of options for the sequence-item.
  * @param {*} devicesData [{_id: string, name: string} ..}]
  * @param {*} modulesData [{_id: string, name: string, exports: [{name: string, } ..]} ..]
@@ -119,14 +143,7 @@ function sequenceItemSelectOptions(devicesData, modulesData) {
                 continue;
             }
             for (let exportt of mod.exports) {
-                options.push({
-                    // Add data to the option element for parsing later and
-                    // sending to the deploy-endpoint.
-                    value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt.name }),
-                    // Make something that a human could understand from the interface.
-                    // TODO/FIXME?: XSS galore?
-                    text: `Use ${device.name} for ${mod.name}:${exportt.name}`
-                })
+                options.push(deploymentSequenceItem(device, mod, exportt.name));
             }
         }
     }
@@ -257,46 +274,11 @@ function addProcedureRow(listId, devicesData, modulesData) {
         let nextId = parentList.querySelectorAll("li").length;
         let newListItem = await makeItem(nextId);
         parentList.appendChild(newListItem);
+
+        return newListItem;
     }
 
     return handleAddRow;
-}
-
-/**
- * Return a handler that submits JSON contained in a textarea-element of the
- * event target to the url.
- */
-function submitJsonTextarea(url, successCallback) {
-    function handleSubmit(formSubmitEvent) {
-        formSubmitEvent.preventDefault();
-        let json = formSubmitEvent.target.querySelector("textarea").value;
-
-        // Disable the form for the duration of the submission (provided it is
-        // inside a fieldset-element).
-        formSubmitEvent.target.querySelector("fieldset").disabled = true;
-        // Submit to backend that handles application/json.
-        fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: json
-        })
-            // TODO The backend should preferrably always respond with JSON but
-            // does not currently always do so...
-            .then(function (response) { return response.json(); })
-            .then(function (result) {
-                if (result.success) {
-                    // Re-enable the form and show success message
-                    formSubmitEvent.target.querySelector("fieldset").disabled = false;
-                    if (successCallback) { successCallback(result) };
-                }
-                setStatus(result);
-            })
-            .catch(function (result) {
-                // Show an error message.
-                setStatus(result);
-            });
-    }
-    return handleSubmit;
 }
 
 /**
@@ -314,27 +296,10 @@ function submitFile(url) {
         // NOTE: Semi-hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
         let idUrl = url.replace(":id", formData.get("id"));
 
-        fetch(idUrl, { method: "POST", body: formData })
-            .then((resp) => resp.json())
-            .then(result => {
-                setStatus(result);
-            })
-            // TODO: This never happens with fetch(), does it? (unless explicitly
-            // coded throwing an error).
-            .catch(result => {
-                setStatus(result)
-            });
+        apiCall(idUrl, "POST", formData, false);
     }
 
     return handleSubmit;
-}
-
-/**
- * Transform the sourceForm's contents into JSON and put into the
- * targetTextArea.
- */
-function populateWithJson(sourceForm, targetTextArea) {
-    targetTextArea.value = JSON.stringify(formToObject(sourceForm), null, 2);
 }
 
 /**
@@ -362,35 +327,38 @@ function fillSelectWith(valueAndTextData, selectElem, removePlaceholder=false) {
 /**
  * Set the status bar to signify different states described by key-value pair in
  * the `result` parameter.
- * @param {} result `null` to reset the element or an Object containing one of
- * the keys `error`, `success`, `result` with message as the value.
+ * @param {{ success: NonFalsiable } | { error: NonFalsiable, errorText: string }} result Result object.
  */
 function setStatus(result) {
+    // Do manual typing in JavaScript.
+    const isValidResultObject = result.success || (
+        result.error && typeof(result.errorText) === "string"
+    );
+
+    if (!isValidResultObject) {
+        result = {
+            error: true,
+            errorText: `Developer failure - bad object format: ${JSON.stringify(result, null, 2)}`
+        };
+    }
+
+    // Reset the status completely.
     let statusText = document.querySelector("#status p");
+    statusText.textContent = "";
+    statusText.classList.remove("hidden");
     statusText.classList.remove("error");
     statusText.classList.remove("success");
-    // "Result" is the result of execution e.g. `plus(1, 2)` results in `3`.
-    statusText.classList.remove("result");
-    statusText.classList.remove("hidden");
 
-    if (result === null) {
-        // Reset the status.
-        statusText.classList.add("hidden");
-        return;
-    }
-
+    // Select appropriate content and styling.
     if (result.error) {
-        // Empty the message if result is malformed.
-        msg = result.errorText ?? ("RESPONSE MISSING FIELD `error`: " + JSON.stringify(result));
-        // Default the style to error.
-        classs = "error"
+        statusText.classList.add("error");
+        statusText.textContent = result.errorText;
     } else {
-        msg = JSON.stringify(result);
-        classs = "success";
+        statusText.classList.add("success");
+        statusText.textContent = JSON.stringify(result.success, null, 4);
     }
-    statusText.textContent = msg;
-    statusText.classList.add(classs);
-    // Scroll into view.
+
+    // Scroll the status bar into view.
     statusText.focus();
 }
 
@@ -400,6 +368,59 @@ function setStatus(result) {
 
 function handleExecutionSubmit(event) {
     submitFile("/execute/:id")(event);
+}
+
+/**
+ * Fill in the deployment fields onto the designated form.
+ * @param {{id: string, name:string, sequence: [{device: string, module: string, func: string }]}} deployment
+ */
+async function setupDeploymentUpdateFields(deployment, devices, modules) {
+    // Add basic functionalities first to the empty form.
+
+    // Remove the button for adding new procedure rows (if it exists).
+    const nextRowButtonId = "dupdate-procedure-row";
+    document.querySelector(`#${nextRowButtonId}`)?.remove();
+    // And add it again, resulting in only one button existing at all times.
+    let nextButton = document.createElement("button");
+    nextButton.id = nextRowButtonId;
+    nextButton.textContent = "Next";
+    nextButton
+        .addEventListener(
+            "click",
+            // NOTE: This means that the data is queried only once when opening
+            // this tab and new rows won't have the most up-to-date data.
+            addProcedureRow("dprocedure-sequence-list", devices, modules)
+        );
+
+    // Add the button under the list in the same div.
+    document
+        .querySelector("#duprocedure-sequence-list")
+        .parentElement
+        .appendChild(nextButton);
+
+    // Delete any existing procedure rows.
+    for (let item of document.querySelectorAll("#duprocedure-sequence-list li")) {
+        item.remove();
+    }
+    if (deployment) {
+    // Now add the existing deployment content to the fields.
+    // ID into a non-editable field.
+    document.querySelector("#duid").value = deployment._id;
+    // Name.
+    document.querySelector("#duname").value = deployment.name;
+    // Sequence.
+    for (let { device: deviceId, module: moduleId, func } of deployment.sequence) {
+        // TODO: Delete this joke.
+        let stepItem = await addProcedureRow("duprocedure-sequence-list", devices, modules)({
+            preventDefault: () => { },
+        });
+
+        let optionElem = stepItem.querySelector("option");
+        let { value: value, text: textContent } = deploymentSequenceItem(devices.find(x => x._id === deviceId), modules.find(x => x._id === moduleId), func);
+        optionElem.value = value;
+        optionElem.textContent = textContent;
+    }
+}
 }
 
 /**
@@ -447,6 +468,7 @@ function setupTab(tabId) {
         "module-create"     : setupModuleCreateTab,
         "module-upload"     : setupModuleUploadTab,
         "deployment-create" : setupDeploymentCreateTab,
+        "deployment-update" : setupDeploymentUpdateTab,
         "deployment-action" : setupDeploymentActionTab,
         "execution-start"   : setupExecutionStartTab,
     };
@@ -548,6 +570,23 @@ async function setupDeploymentCreateTab() {
 
 /**
  * Needs data about:
+ * - All devices (after deployment selected)
+ * - All modules (after deployment selected)
+ * - All deployments
+ */
+async function setupDeploymentUpdateTab() {
+    const deployments = await fetchDeployment();
+
+    const form = document.querySelector("#deployment-update-form");
+
+    fillSelectWith(
+        deployments.map((x) => ({ value: x._id, text: x.name })),
+        form.querySelector("#udeployment-select")
+    );
+}
+
+/**
+ * Needs data about:
  * - All deployments
  */
 async function setupDeploymentActionTab() {
@@ -555,7 +594,7 @@ async function setupDeploymentActionTab() {
 
     fillSelectWith(
         deployments.map((x) => ({ value: x._id, text: x.name })),
-        document.querySelector("#dmanifest-select")
+        document.querySelector("#damanifest-select")
     );
 }
 
@@ -570,12 +609,6 @@ async function setupExecutionStartTab() {
         deployments.map((x) => ({ value: x._id, text: x.name })),
         document.querySelector("#edeployment-select")
     );
-
-    // Now that the selection is populated, add an event handler for selecting
-    // an option from it.
-    document
-        .querySelector("#edeployment-select")
-        .addEventListener("change", setupExecutionParameterFields);
 }
 
 /*******************************************************************************
@@ -619,97 +652,116 @@ async function addHandlersToTabSelectors() {
     }
 }
 
+async function apiCall(url, method, body, headers={"Content-Type": "application/json"}) {
+    let options = {
+        method: method,
+        body: body
+    };
+    if (headers) {
+        options.headers = headers;
+    }
+    const response = await fetch(url, options);
+
+    if (response.status === 204) {
+        setStatus({ success: "API call succeeded with no further response data" });
+        return;
+    }
+
+    // Assume parsing JSON will fail.
+    let result = {
+        error: true,
+        errorText: `Parsing API response to JSON failed (see console)`
+    };
+    try {
+        const theJson = await response.json();
+        // Replace with successfull result.
+        result = { success: theJson };
+    } catch(e) {
+        console.error(e)
+    }
+
+    setStatus(result);
+}
+
 /**
  * Add event handlers for the forms creating or updating a module.
  */
 function addHandlersToModuleForms() {
-    // Swap the form's view from human-friendly to the JSON textarea. TODO: This
-    // is a bit boilerplatey because repeated with deployment forms.
     document.querySelector("#module-form")
-        // NOTE: Submit event here in order to have form make requirement-checks
-        // automatically.
+        // NOTE: The "submit" event is used in order to have the form make
+        // required-field etc. checks automatically.
         .addEventListener("submit", function (event) {
             event.preventDefault();
-            // Also populate the JSON field.
-            let thisForm = document.querySelector("#module-form")
-            let jsonForm = document.querySelector("#module-json-form");
-            let jsonFormTextarea = jsonForm.querySelector("textarea");
-            populateWithJson(thisForm, jsonFormTextarea);
+            const moduleObj = formToObject(event.target);
 
-            // Merge the OpenAPI field into the JSON. TODO: This is clunky...
-            let moduleObj = JSON.parse(jsonFormTextarea.value)
+            // Merge the OpenAPI field into the module. TODO: This is clunky...
             try {
-                setStatus(null);
-                moduleObj["openapi"] = JSON.parse(thisForm.querySelector("#mopenapi").value);
+                document.querySelector("#status p").classList.add("hidden");
+                moduleObj["openapi"] = JSON.parse(event.target.querySelector("#mopenapi").value);
             } catch (e) {
-                setStatus({error: `Check for 'TODO' in your OpenAPI description: ${e}`});
+                setStatus({
+                    error: true,
+                    errorText: `Check for 'TODO' in your OpenAPI description: ${e}`
+                });
                 return;
             }
 
-            jsonFormTextarea.value = JSON.stringify(moduleObj);
-
-            thisForm.classList.add("hidden");
-            jsonForm.classList.remove("hidden");
-        });
-    // Same as above but reverse and does not fill in the form (TODO).
-    document.querySelector("#module-json-form .input-view-switch")
-        .addEventListener("click", function (_) {
-            document.querySelector("#module-json-form").classList.add("hidden");
-            document.querySelector("#module-form").classList.remove("hidden");
+            apiCall("/file/module", "POST", JSON.stringify(moduleObj));
         });
 
     document
-        .querySelector("#module-json-form")
-        .addEventListener("submit", submitJsonTextarea("/file/module"));
-
-    document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/:id/upload"));
+        .querySelector("#wasm-form")
+        .addEventListener("submit", submitFile("/file/module/:id/upload"));
 }
 
 /**
  * Add event handlers for the forms creating or sending a deployment.
  */
 function addHandlersToDeploymentForms() {
-    // Swap the form's view from human-friendly to the JSON textarea.
     document.querySelector("#deployment-form")
         .addEventListener("submit", function (event) {
             event.preventDefault();
-            // Also populate the JSON field.
-            let thisForm = document.querySelector("#deployment-form")
-            let jsonForm = document.querySelector("#deployment-json-form");
-            populateWithJson(thisForm, jsonForm.querySelector("textarea"));
+            const deploymentObj = formToObject(event.target);
+            apiCall("/file/manifest", "POST", JSON.stringify(deploymentObj));
 
-            thisForm.classList.add("hidden");
-            jsonForm.classList.remove("hidden");
-        });
-    // Same as above but reverse and does not fill in the form (TODO).
-    document.querySelector("#deployment-json-form .input-view-switch")
-        .addEventListener("click", function (_) {
-            document.querySelector("#deployment-json-form").classList.add("hidden");
-            document.querySelector("#deployment-form").classList.remove("hidden");
         });
 
-    // POST the JSON found in textarea to the server.
-    document
-        .querySelector("#deployment-json-form")
-        .addEventListener("submit", submitJsonTextarea("/file/manifest"));
+    document.querySelector("#deployment-update-form")
+        .addEventListener("submit", async function (event) {
+            event.preventDefault();
+            const deploymentObj = formToObject(event.target);
+            await apiCall(`/file/manifest/${deploymentObj.id}`, "PUT", JSON.stringify(deploymentObj));
+
+            // Hide the form after the update.
+            document.querySelector("#deployment-update-form div div:nth-child(2)").classList.add("hidden");
+        });
 
     document
         .querySelector("#deployment-action-form")
         .addEventListener(
             "submit",
-            (event) => {
+            async (event) => {
                 event.preventDefault();
                 let deploymentObj = formToObject(event.target);
-                fetch(`/file/manifest/${deploymentObj.id}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(deploymentObj)
-                })
-                    .then(resp => resp.json())
-                    .then(setStatus)
-                    .catch(setStatus);
+                apiCall(`/file/manifest/${deploymentObj["id"]}`, "POST", JSON.stringify(deploymentObj));
             }
         );
+
+    document
+        .querySelector("#udeployment-select")
+        .addEventListener("change", async (event) => {
+            if (!event.target.value) {
+                // Hide again.
+                document.querySelector("#deployment-update-form div div:nth-child(2)").classList.add("hidden");
+                return
+            }
+            const deployment = await fetchDeployment(event.target.value);
+            const devices = await fetchDevice();
+            const modules = await fetchModule();
+            // Show the deployment form.
+            document.querySelector("#deployment-update-form div div:nth-child(2)").classList.remove("hidden");
+            setupDeploymentUpdateFields(deployment, devices, modules);
+        });
 }
 
 /**
@@ -719,6 +771,12 @@ function addHandlersToExecutionForms() {
     document
         .querySelector("#execution-form")
         .addEventListener("submit", handleExecutionSubmit);
+
+    // When the selection is populated, this event handler sets up a form for
+    // parameter inputs.
+    document
+        .querySelector("#edeployment-select")
+        .addEventListener("change", setupExecutionParameterFields);
 }
 
 /**
