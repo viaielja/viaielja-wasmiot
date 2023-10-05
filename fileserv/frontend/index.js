@@ -296,16 +296,7 @@ function submitFile(url) {
         // NOTE: Semi-hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
         let idUrl = url.replace(":id", formData.get("id"));
 
-        fetch(idUrl, { method: "POST", body: formData })
-            .then((resp) => resp.json())
-            .then(result => {
-                setStatus(result);
-            })
-            // TODO: This never happens with fetch(), does it? (unless explicitly
-            // coded throwing an error).
-            .catch(result => {
-                setStatus(result)
-            });
+        apiCall(idUrl, "POST", formData, false);
     }
 
     return handleSubmit;
@@ -341,7 +332,7 @@ function fillSelectWith(valueAndTextData, selectElem, removePlaceholder=false) {
 function setStatus(result) {
     // Do manual typing in JavaScript.
     const isValidResultObject = result.success || (
-        result.error && result.errorText instanceof string
+        result.error && typeof(result.errorText) === "string"
     );
 
     if (!isValidResultObject) {
@@ -407,11 +398,11 @@ async function setupDeploymentUpdateFields(deployment, devices, modules) {
         .parentElement
         .appendChild(nextButton);
 
-    // If there is any existing and empty procedure rows, update them as well.
-    for (let select of document.querySelectorAll("#duprocedure-sequence-list select")) {
-        fillSelectWith(sequenceItemSelectOptions(devices, modules), select, true);
+    // Delete any existing procedure rows.
+    for (let item of document.querySelectorAll("#duprocedure-sequence-list li")) {
+        item.remove();
     }
-
+    if (deployment) {
     // Now add the existing deployment content to the fields.
     // ID into a non-editable field.
     document.querySelector("#duid").value = deployment._id;
@@ -429,6 +420,7 @@ async function setupDeploymentUpdateFields(deployment, devices, modules) {
         optionElem.value = value;
         optionElem.textContent = textContent;
     }
+}
 }
 
 /**
@@ -578,13 +570,11 @@ async function setupDeploymentCreateTab() {
 
 /**
  * Needs data about:
- * - All devices
- * - All modules
+ * - All devices (after deployment selected)
+ * - All modules (after deployment selected)
  * - All deployments
  */
 async function setupDeploymentUpdateTab() {
-    const devices = await fetchDevice();
-    const modules = await fetchModule();
     const deployments = await fetchDeployment();
 
     const form = document.querySelector("#deployment-update-form");
@@ -662,24 +652,30 @@ async function addHandlersToTabSelectors() {
     }
 }
 
-async function apiCall(url, method, jsonBody) {
-    const response = await fetch(url, {
+async function apiCall(url, method, body, headers={"Content-Type": "application/json"}) {
+    let options = {
         method: method,
-        headers: { "Content-Type": "application/json" },
-        body: jsonBody
-    });
+        body: body
+    };
+    if (headers) {
+        options.headers = headers;
+    }
+    const response = await fetch(url, options);
 
     if (response.status === 204) {
         setStatus({ success: "API call succeeded with no further response data" });
         return;
     }
 
+    // Assume parsing JSON will fail.
     let result = {
         error: true,
         errorText: `Parsing API response to JSON failed (see console)`
     };
     try {
-        result = { success: await response.json() };
+        const theJson = await response.json();
+        // Replace with successfull result.
+        result = { success: theJson };
     } catch(e) {
         console.error(e)
     }
@@ -713,7 +709,9 @@ function addHandlersToModuleForms() {
             apiCall("/file/module", "POST", JSON.stringify(moduleObj));
         });
 
-    document.querySelector("#wasm-form").addEventListener("submit", submitFile("/file/module/:id/upload"));
+    document
+        .querySelector("#wasm-form")
+        .addEventListener("submit", submitFile("/file/module/:id/upload"));
 }
 
 /**
@@ -742,24 +740,22 @@ function addHandlersToDeploymentForms() {
         .querySelector("#deployment-action-form")
         .addEventListener(
             "submit",
-            (event) => {
+            async (event) => {
                 event.preventDefault();
                 let deploymentObj = formToObject(event.target);
-                fetch(`/file/manifest/${deploymentObj.id}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(deploymentObj)
-                })
-                    .then(resp => resp.json())
-                    .then(setStatus)
-                    .catch(setStatus);
+                apiCall(`/file/manifest/${deploymentObj["id"]}`, "POST", JSON.stringify(deploymentObj));
             }
         );
 
     document
         .querySelector("#udeployment-select")
-        .addEventListener("change", async (e) => {
-            const deployment = await fetchDeployment(e.target.value);
+        .addEventListener("change", async (event) => {
+            if (!event.target.value) {
+                // Hide again.
+                document.querySelector("#deployment-update-form div div:nth-child(2)").classList.add("hidden");
+                return
+            }
+            const deployment = await fetchDeployment(event.target.value);
             const devices = await fetchDevice();
             const modules = await fetchModule();
             // Show the deployment form.
