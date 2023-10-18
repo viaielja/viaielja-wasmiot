@@ -88,22 +88,24 @@ const getModule = (justDescription) => (async (request, response) => {
  */
 const getModuleFile = async (request, response) => {
     let doc = (await database.read("module", { _id: request.params.moduleId }))[0];
-    let fileExtension = request.params.fileExtension;
+    let filename = request.params.filename;
     if (doc) {
-        let fileObj = doc[fileExtension];
+        let fileObj;
+        if (filename === "wasm") {
+            fileObj = doc.wasm;
+        } else {
+            fileObj = doc.dataFiles[filename];
+        }
+
         if (!fileObj) {
             response.status(400).json({
-                err: `file '${fileExtension}' missing from module '${doc.name}'`
+                err: `file '${filename}' missing from module '${doc.name}'`
             });
             return;
         }
-        console.log(`Sending '${fileExtension}' file from file-path: `, fileObj.path);
-        // TODO: Should force to use the application/wasm media type like
-        // suggested(?) here:
-        // https://webassembly.github.io/spec/web-api/#mediaType
-        // The resp.sendFile(f) uses application/octet-stream by default.
-        let options = { headers: { 'Content-Type': fileExtension == "wasm" ? 'application/wasm' : 'application/binary' } };
-        // FIXME: File might not be found at doc.path.
+        console.log(`Sending '${filename}' file from file-path: `, fileObj.path);
+        // TODO: A 'datafile' might not be application/binary in every case.
+        let options = { headers: { 'Content-Type': filename == "wasm" ? 'application/wasm' : 'application/binary' } };
         response.sendFile(fileObj.path, options);
     } else {
         let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
@@ -150,13 +152,14 @@ const createModule = async (request, response) => {
  */
 const addModuleFile = async (request, response) => {
     let filter = { _id: request.params.moduleId };
-    let fileExtension = request.file.originalname.split(".").pop();
+    let originalFilename = request.file.originalname;
+    let fileExtension = originalFilename.split(".").pop();
 
-    let updateObj = {}
     // Add additional fields initially from the file-upload and save to
     // database.
-    updateObj[fileExtension] = {
-        humanReadableName: request.file.originalname,
+    let updateObj = {};
+    let updateStruct = {
+        humanReadableName: originalFilename,
         fileName: request.file.filename,
         path: request.file.path,
     };
@@ -173,28 +176,34 @@ const addModuleFile = async (request, response) => {
         // non-filepath-related metadata fields.
         let statusCode = 200;
         let result;
-        switch (fileExtension) {
-            case "wasm":
-                try {
-                    await parseWasmModule(data, updateObj)
-                } catch (e) {
-                    let err = ["failed compiling Wasm", e]
-                    console.error(...err);
-                    statusCode = 500;
-                    result = new utils.Error(...err);
-                }
-                result = new WasmFileUploaded(updateObj.exports);
-                break;
-            case "pb":
-                // Model weights etc. for an ML-application.
-                result = new PbFileUploaded();
-                break;
-            default:
-                let err = `unsupported file extension: '${fileExtension}'`;
+        if (fileExtension === "wasm") {
+            updateObj["wasm"] = updateStruct;
+
+            try {
+                await parseWasmModule(data, updateObj)
+            } catch (e) {
+                let err = ["failed compiling Wasm", e]
+                console.error(...err);
                 statusCode = 500;
-                result = new utils.Error(err);
-                console.error(err);
-                break;
+                result = new utils.Error(...err);
+            }
+            result = new WasmFileUploaded(updateObj.exports);
+        } else {
+            // All other filetypes are to be "mounted".
+            // Model weights etc. for an ML-application.
+            updateObj["dataFiles"] = {};
+            updateObj["dataFiles"][originalFilename] = updateStruct;
+            switch (fileExtension) {
+                case "pb":
+                    result = new PbFileUploaded();
+                    break;
+                default:
+                    let err = `unsupported file extension: '${fileExtension}'`;
+                    statusCode = 500;
+                    result = new utils.Error(err);
+                    console.error(err);
+                    break;
+            }
         }
 
         // Now actually update the database-document, devices and respond to
@@ -334,7 +343,7 @@ router.post("/", createModule);
 router.post("/:moduleId/upload", fileUpload, utils.validateFileFormSubmission, addModuleFile);
 router.get("/:moduleId?", getModule(false));
 router.get("/:moduleId/description", getModule(true));
-router.get("/:moduleId/:fileExtension", getModuleFile);
+router.get("/:moduleId/:filename", getModuleFile);
 router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
 
 module.exports = { setDatabase, router };

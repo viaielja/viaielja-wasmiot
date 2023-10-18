@@ -400,10 +400,13 @@ function moduleData(modulee, packageBaseUrl) {
 
     // This is for any other files related to execution of module's
     // functions on device e.g., ML-models etc.
-    let other = [];
-    if (modulee.pb) {
-        other.push((new URL(packageBaseUrl+`file/module/${modulee._id}/pb`)).toString());
+    let other = {};
+    if (modulee.dataFiles) {
+        for (let filename of Object.keys(modulee.dataFiles)) {
+            other[filename] = (new URL(packageBaseUrl+`file/module/${modulee._id}/${filename}`)).toString();
+        }
     }
+
     return {
         id: modulee._id,
         name: modulee.name,

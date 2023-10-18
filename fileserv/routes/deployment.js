@@ -96,7 +96,7 @@ const tryDeploy = async (deploymentDoc, response) => {
                 break;
             default:
                 let err = ["unknown error while deploying", e];
-                console.error(e, e.stack);
+                console.error("Try checking supervisor logs.", e, e.stack);
                 response
                     .status(500)
                     .json(new utils.Error(...err));
