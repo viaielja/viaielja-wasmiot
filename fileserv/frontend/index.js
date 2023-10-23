@@ -92,9 +92,8 @@ function formDataFrom(form) {
         }
     }
 
-    // NOTE: only one (1) file is sent.
-    let fileField = form.querySelector("input[type=file]");
-    if (fileField) {
+    // Send all the files found.
+    for (let fileField of form.querySelectorAll("input[type=file]")) {
         formData.append(fileField.name, fileField.files[0]);
     }
 
@@ -205,25 +204,45 @@ function generateParameterFieldsFor(deployment) {
         fieldDivs.push(inputFieldDiv);
     }
 
-    // (Single) File upload based on media type.
     if (operation.requestBody) {
-        let [fileMediaType, _fileSchema] = Object.entries(operation.requestBody.content)[0];
-        let fileInputDiv = document.createElement("div");
-        let fileInputFieldLabel = document.createElement("label");
-        let fileInputField = document.createElement("input");
-        // Data.
-        let executeFileFieldName = "inputFile";
-        let executeFileUploadId = `execute-form-${fileMediaType}-${executeFileFieldName}`;
-        fileInputFieldLabel.textContent = `Upload file (${fileMediaType}):`;
-        fileInputFieldLabel.htmlFor = executeFileUploadId;
-        fileInputField.id = executeFileUploadId;
-        fileInputField.name = executeFileFieldName;
-        fileInputField.type = "file";
-        // Add to form.
-        fileInputDiv.appendChild(fileInputFieldLabel);
-        fileInputDiv.appendChild(fileInputField);
+        files = [];
 
-        fieldDivs.push(fileInputDiv);
+        let [fileMediaType, fileSchema] = Object.entries(operation.requestBody.content)[0];
+        fileSchema = fileSchema.schema;
+        if (fileMediaType === "multipart/form-data" && fileSchema.type === "object") {
+            // (Single) File upload based on media type.
+            for (let [name, metadata] of Object.entries(fileSchema.properties)) {
+                console.assert(
+                    metadata.type === "string",
+                    "When inputting a file (using multipart/form-data), the type must be 'string' to indicate the binary data contained in the file"
+                );
+                files.push({name: name, mediaType: metadata.contentMediaType});
+            }
+        } else {
+            // Just a single file.
+            files = [{name: "inputFile", mediaType: fileMediaType}];
+        }
+
+        for (let file of files) {
+            let fileInputDiv = document.createElement("div");
+            let fileInputFieldLabel = document.createElement("label");
+            let fileInputField = document.createElement("input");
+            // Data.
+            let executeFileUploadId = `execute-form-${file.mediaType}-${file.name}`;
+            fileInputFieldLabel.textContent = `File to mount as '${file.name}' (${file.mediaType}):`;
+            fileInputFieldLabel.htmlFor = executeFileUploadId;
+            fileInputField.id = executeFileUploadId;
+            // Name used when mapping to input in function (OpenAPI) description.
+            fileInputField.name = file.name;
+            // Media type used when mapping to input in function (OpenAPI) description.
+            fileInputField.mediaType = file.mediaType;
+            fileInputField.type = "file";
+            // Add to form.
+            fileInputDiv.appendChild(fileInputFieldLabel);
+            fileInputDiv.appendChild(fileInputField);
+
+            fieldDivs.push(fileInputDiv);
+        }
     }
 
     return fieldDivs;

@@ -86,10 +86,14 @@ function validateFileFormSubmission(request, response, next) {
  *
  * From: https://www.twilio.com/blog/handle-file-uploads-node-express
  * @param {*} destinationFilePath
- * @param {*} formFieldName
- * @returns Middleware for saving an incoming file.
+ * @returns Middleware for saving incoming files named in by strings in `fields`.
  */
-const fileUpload = (destinationFilePath, formFieldName) => multer({ dest: destinationFilePath }).single(formFieldName);
+const fileUpload =
+    (destinationFilePath) =>
+        //(fields) =>
+            multer({ dest: destinationFilePath })
+                .any();
+                //TODO: This'd be a tad nicer/secure: .fields(fields.map(field => ({ name: field, maxCount: 1 })));
 
 /**
  * Return the main OpenAPI 3.1.0 operation of a deployment manifest starting

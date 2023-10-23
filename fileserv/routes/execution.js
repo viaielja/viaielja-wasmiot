@@ -27,8 +27,8 @@ const execute = async (request, response) => {
     try {
         let args = {}
         args.body = request.body;
-        if (request.file) {
-            args.files = [request.file.path];
+        if (request.files) {
+            args.files = request.files.map(file => ({ path: file.path, name: file.fieldname }));
         }
         let execResponse = await orchestrator.schedule(deployment, args);
         if (!execResponse.ok) {
@@ -101,7 +101,7 @@ const execute = async (request, response) => {
     }
 }
 
-const fileUpload = utils.fileUpload(EXECUTION_INPUT_DIR, INPUT_FILE_FIELD);
+const fileUpload = utils.fileUpload(EXECUTION_INPUT_DIR);
 
 
 const router = express.Router();

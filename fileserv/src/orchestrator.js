@@ -207,7 +207,9 @@ class Orchestrator {
             options.headers = { "Content-type": mediaType };
             */
             let formData = new FormData();
-            formData.append("data", new Blob([fs.readFileSync(files[0])]), "inputfilename");
+            for (let {path, name} of files) {
+                formData.append(name, new Blob([fs.readFileSync(path)]));
+            }
             options.body = formData;
         } else if (!(["get", "head"].includes(method.toLowerCase()))) {
             // Request with GET/HEAD method cannot have body.
