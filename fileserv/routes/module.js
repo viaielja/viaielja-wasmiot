@@ -119,8 +119,8 @@ const getModuleFile = async (request, response) => {
  * Parse metadata from a Wasm-binary to database along with its name.
  */
 const createModule = async (request, response) => {
+    // Create the database entry.
     let moduleId;
-
     try {
         moduleId = (await database.create("module", [request.body]))
             .insertedIds[0];
@@ -129,9 +129,22 @@ const createModule = async (request, response) => {
         return;
     }
 
-    // NOTE: Kinda hacky to fake the request params like this.
-    request.params.moduleId = moduleId;
-}
+    // Attach the Wasm binary.
+    try {
+        await addModuleFiles({_id: moduleId}, request.files);
+
+        response
+            .status(statusCode)
+            .json(result);
+    } catch (e) {
+        let err = ["Failed attaching a file to module", e];
+        console.error(...err);
+        // TODO Handle device not found on update.
+        response
+            .status(500)
+            .json(new utils.Error(...err));
+    }        let result = getFileUpdate(file);
+};
 
 const getFileUpdate = async (file) => {
     let originalFilename = file.originalname;
@@ -190,56 +203,54 @@ const getFileUpdate = async (file) => {
 }
 
 /**
- * Attach a files to the previously created module.
+ * Attach _data_files (i.e., not .wasm) to a module.
  *
  * Saves the files to the server filesystem and references to them into module's
  * database-entry matching a module-ID given in the body.
  */
-const addModuleFile = async (request, response) => {
-    // TODO: Only regarding one file.
-    let file = request.files[0]
-    try {
-        let result = getFileUpdate(file);
-
-        let filter = { _id: request.params.moduleId };
-
-        // Now actually update the database-document, devices and respond to
-        // caller.
-        await updateModule(filter, updateObj);
-
-        console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, updateObj);
-
-        // Tell devices to fetch updated files on modules.
-        await notifyModuleFileUpdate(filter._id);
-
-        response
-            .status(statusCode)
-            .json(result);
-    } catch (e) {
-        let err = ["Failed attaching a file to module", e];
-        console.error(...err);
-        // TODO Handle device not found on update.
-        response
-            .status(500)
-            .json(new utils.Error(...err));
+const addModuleDataFiles = async (module, files) => {
+    let updateObj = { dataFiles: {} };
+    for (let file of files) {
+        let result = getFileUpdate(file).updateObj;
+        if (result.type === "wasm") {
+            throw new utils.Error("Wasm file not allowed at data file update");
+        }
+        updateObj,dataFiles[result.updateObj)
     }
+
+    let filter = { _id: module._id };
+    // Now actually update the database-document, devices and respond to
+    // caller.
+    await updateModule(filter, updateObj);
+
+    console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, result.updateObj);
+
+    // Tell devices to fetch updated files on modules.
+    await notifyModuleFileUpdate(filter._id);
+
 };
 
 /**
  * Map function parameters to names and mounts to files ultimately creating an
  * OpenAPI description for the module.
- * @param {*} request
- * @param {*} response
+ * @param {*} module The module to describe.
+ * @returns An OpenAPI description of the module primarily its functions and
+ * mounts.
  */
-const describeModule = async (request, response) => {
+const describeModule = async (modulee) => {
+    /**
+     * Create description for a single function.
+     * @param {{ parameters: [ { name: string, type: "integer" | "float" }], mounts: { "a/mount/path": { mediaType: string } }, output: { "aMediaType": schema} }} func
+     * @returns [functionCallPath, functionDescription]
+     */
     function funcPathDescription(func) {
         let params = func.parameters.map(x => ({
-            "name": x.name,
-            "in": "path", // TODO: Where dis?
-            "description": "Auto-generated description",
-            "required": true,
-            "schema": {
-                "type": x.type
+            name: x.name,
+            in: "path", // TODO: Where dis?
+            description: "Auto-generated description",
+            required: true,
+            schema: {
+                type: x.type
             }
         }));
 
@@ -247,86 +258,83 @@ const describeModule = async (request, response) => {
             func.mounts.map(x => [
                 x,
                 {
-                    "type": "string",
-                    "contentMediaType": "application/octet-stream",
-                    "contentEncoding": "base64"
+                    type: "string",
+                    contentMediaType: x.mediaType,
+                    contentEncoding: "base64"
                 }
             ])
         );
 
-        let funcPath = `/{deployment}/modules/${request.params.moduleId}/${func.name}`;
-
         let funcDescription = {
-            "summary": "Auto-generated description",
-            "parameters": params,
-            "post": {
-                "tags": [],
-                "summary": "Auto-generated description",
-                "parameters": [],
-                "requestBody": {
-                    "required": true,
-                    "content": {
+            summary: "Auto-generated description",
+            parameters: params,
+            // NOTE: Function-calls are always POST.
+            post: {
+                tags: [],
+                summary: "Auto-generated description",
+                parameters: [],
+                requestBody: {
+                    required: true,
+                    content: {
                         "multipart/form-data": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {mounts,
+                            schema: {
+                                type: "object",
+                                properties: mounts,
                             }
                         }
                     }
                 },
-                "responses": {
-                    "200": {
-                        "description": "Return index of the class of the object recognized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                "type": "integer",
-                                "format": "int64"
-                                }
-                            }
-                        }
+                responses: {
+                    200: {
+                        description: "Auto-generated description",
+                        content: func.output
                     }
                 }
             }
         };
 
-        return funcDescription;
+        return [
+            `/{deployment}/modules/${request.params.moduleId}/${func.name}`,
+            funcDescription
+        ];
     }
 
-    let funcPaths = [];
-    const description = {
-        "openapi": "3.1.0",
-        "info": {
-            "title": "A Wasm-IoT Supervisor API",
-            "summary": "Calling WebAssembly functions",
-            "version": "0.0.1"
+    let funcPaths = modulee.exports.map(funcPathDescription);
+    const moduleDescription = {
+        openapi: "3.1.0",
+        info: {
+            title: "A Wasm-IoT Supervisor API",
+            summary: "Calling WebAssembly functions",
+            version: "0.0.1"
         },
-        "tags": [
+        tags: [
             {
-            "name": "WebAssembly",
-            "description": "Executing WebAssembly functions"
+            name: "WebAssembly",
+            description: "Executing WebAssembly functions"
             }
         ],
-        "servers": [
+        servers: [
             {
-                "url": "http://{serverIp}:{port}",
-                "variables": {
-                    "serverIp": {
-                        "default": "localhost",
-                        "description": "IP or name found with mDNS of the machine running supervisor"
+                url: "http://{serverIp}:{port}",
+                variables: {
+                    serverIp: {
+                        default: "localhost",
+                        description: "IP or name found with mDNS of the machine running supervisor"
                     },
-                    "port": {
-                        "enum": [
+                    port: {
+                        enum: [
                             "5000",
                             "80"
                         ],
-                        "default": "5000"
+                        default: "5000"
                     }
                 }
             }
         ],
-        "paths": {...Object.entries(funcPaths)}
+        paths: {...Object.entries(funcPaths)}
     };
+
+    return moduleDescription;
 };
 
 /**
@@ -445,15 +453,11 @@ router.post(
     // A .wasm binary is required.
     utils.validateFileFormSubmission,
     createModule,
-    // Adds the (assumed) .wasm binary attached.
-    addModuleFile
 );
 router.post(
     "/:moduleId/upload",
     fileUpload,
-    // Describe first, so that update notifs are not sent too early.
-    describeModule,
-    addModuleFile
+    describeModule
 );
 router.get("/:moduleId?", getModule(false));
 router.get("/:moduleId/description", getModule(true));
