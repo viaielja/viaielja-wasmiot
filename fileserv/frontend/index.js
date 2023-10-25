@@ -5,13 +5,17 @@
 
 /**
  * Mapping of OpenAPI 3.1.0 schema types to HTML input field types.
+ * https://spec.openapis.org/oas/latest.html#data-types
  * @param {*} schema
  * @returns { string }
  */
 function OpenApi3_1_0_SchemaToInputType(schema) {
     switch (schema.type) {
+        case "number":
         case "integer":
             return "number";
+        case "string":
+            return "text";
         default:
             throw `Unsupported schema type '${schema.type}'`;
     }
@@ -180,6 +184,54 @@ async function tryFetchWithStatusUpdate(path) {
     }
 }
 
+/**
+ * Generate fields for describing the functions' interfaces and mounts.
+ * @param {{exports: [{name: string, parameterCount: integer}]}} module
+ * @returns
+ */
+function generateFunctionDescriptionFieldsFor(module) {
+    // Get the data to build a form.
+    let functions = module.exports;
+
+    let functionFieldGroups = [];
+    // Build the form.
+    for (let { functionName, parameterCount } of functions) {
+        let inputFieldset = document.createElement("fieldset");
+        function makeInputField(textContent, name, type="int | float") {
+            // Create elems.
+            let inputFieldDiv = document.createElement("div");
+            let inputFieldLabel = document.createElement("label");
+            let inputField = document.createElement("input");
+
+            // Fill with data.
+            inputFieldLabel.textContent = textContent;
+            inputField.name = name;
+            inputField.type = type;
+
+            inputFieldLabel.appendChild(inputField);
+            inputFieldDiv.appendChild(inputFieldLabel);
+
+            return inputFieldDiv;
+        }
+
+        // Add name of function on top.
+        let functionNameFieldDiv = makeInputField("Function name:", functionName, "text");
+        // Function name shouldn't be editable.
+        functionNameFieldDiv.querySelector("input").disabled = true;
+        functionFieldGroups.push(functionNameFieldDiv);
+
+        for (let i = 0; i < parameterCount; i++) {
+            let inputFieldDiv = makeInputField(`Parameter #${i}`, `param${i}`);
+            inputFieldset.appendChild(inputFieldDiv);
+            functionFieldGroups.push(inputFieldset);
+        }
+
+        // TODO: Add dynamic list for mounts.
+    }
+
+    return functionFieldGroups;
+}
+
 function generateParameterFieldsFor(deployment) {
     // Get the data to build a form.
     let { operationObj: operation } = getStartEndpoint(deployment);
@@ -308,7 +360,7 @@ function addProcedureRow(listId, devicesData, modulesData) {
  * See:
  * https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#uploading_a_file
  */
-function submitFile(url) {
+function submitFormData(url) {
     function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault()
         let formData = formDataFrom(formSubmitEvent.target);
@@ -385,8 +437,33 @@ function setStatus(result) {
  * Event listeners:
  */
 
-function handleExecutionSubmit(event) {
-    submitFile("/execute/:id")(event);
+/**
+ * Using the module-ID in the event, generate a form for describing functions'
+ * interfaces and (module) mounts.
+ * @param {*} event The event that triggered this function.
+ */
+async function setupModuleDescriptionFields(event) {
+    // Remove all other elements from the form except for the module
+    // selector.
+    let divsWithoutFirst =
+        document.querySelectorAll("#module-properties-form fieldset > div > div:not(:first-child)");
+    for (div of divsWithoutFirst) {
+        div.remove();
+    }
+
+    // Add fields based on the selected module.
+    let moduleId = event.target.value;
+    if (!moduleId) {
+        // Assume the placeholder was selected and thus there is nothing to
+        // show.
+        return;
+    }
+    let modulee = await fetchModule(moduleId);
+
+    let formTopDiv = document.querySelector("#module-properties-form fieldset > div");
+    for (let div of generateFunctionDescriptionFieldsFor(modulee)) {
+        formTopDiv.appendChild(div);
+    }
 }
 
 /**
@@ -422,24 +499,28 @@ async function setupDeploymentUpdateFields(deployment, devices, modules) {
         item.remove();
     }
     if (deployment) {
-    // Now add the existing deployment content to the fields.
-    // ID into a non-editable field.
-    document.querySelector("#duid").value = deployment._id;
-    // Name.
-    document.querySelector("#duname").value = deployment.name;
-    // Sequence.
-    for (let { device: deviceId, module: moduleId, func } of deployment.sequence) {
-        // TODO: Delete this joke.
-        let stepItem = await addProcedureRow("duprocedure-sequence-list", devices, modules)({
-            preventDefault: () => { },
-        });
+        // Now add the existing deployment content to the fields.
+        // ID into a non-editable field.
+        document.querySelector("#duid").value = deployment._id;
+        // Name.
+        document.querySelector("#duname").value = deployment.name;
+        // Sequence.
+        for (let { device: deviceId, module: moduleId, func } of deployment.sequence) {
+            // TODO: Delete this joke.
+            let stepItem = await addProcedureRow("duprocedure-sequence-list", devices, modules)({
+                preventDefault: () => { },
+            });
 
-        let optionElem = stepItem.querySelector("option");
-        let { value: value, text: textContent } = deploymentSequenceItem(devices.find(x => x._id === deviceId), modules.find(x => x._id === moduleId), func);
-        optionElem.value = value;
-        optionElem.textContent = textContent;
+            let optionElem = stepItem.querySelector("option");
+            let { value: value, text: textContent } = deploymentSequenceItem(devices.find(x => x._id === deviceId), modules.find(x => x._id === moduleId), func);
+            optionElem.value = value;
+            optionElem.textContent = textContent;
+        }
     }
 }
+
+function handleExecutionSubmit(event) {
+    submitFormData("/execute/:id")(event);
 }
 
 /**
@@ -526,7 +607,7 @@ async function setupModuleCreateTab() {
 }
 
 /**
- * Update the form that is used to upload a Wasm-binary with the current
+ * Update the form that is used to add descriptions to the current
  * selection of modules recorded in database.
  *
  * Needs data about:
@@ -545,6 +626,7 @@ async function setupModuleUploadTab() {
     }
 
     for (let mod of modules) {
+        console.log(mod);
         let optionElem = document.createElement("option");
         optionElem.value = mod._id;
         optionElem.textContent = mod.name;
@@ -709,28 +791,17 @@ function addHandlersToModuleForms() {
     document.querySelector("#module-form")
         // NOTE: The "submit" event is used in order to have the form make
         // required-field etc. checks automatically.
-        .addEventListener("submit", function (event) {
-            event.preventDefault();
-            const moduleObj = formToObject(event.target);
-
-            // Merge the OpenAPI field into the module. TODO: This is clunky...
-            try {
-                document.querySelector("#status p").classList.add("hidden");
-                moduleObj["openapi"] = JSON.parse(event.target.querySelector("#mopenapi").value);
-            } catch (e) {
-                setStatus({
-                    error: true,
-                    errorText: `Check for 'TODO' in your OpenAPI description: ${e}`
-                });
-                return;
-            }
-
-            apiCall("/file/module", "POST", JSON.stringify(moduleObj));
-        });
+        .addEventListener("submit", submitFormData("/file/module"));
 
     document
-        .querySelector("#wasm-form")
-        .addEventListener("submit", submitFile("/file/module/:id/upload"));
+        .querySelector("#module-properties-form")
+        .addEventListener("submit", submitFormData("/file/module/:id/upload"));
+
+    document
+        .querySelector("#wmodule-select")
+        .addEventListener("change", async (event) => {
+            setupModuleDescriptionFields(event);
+        });
 }
 
 /**
@@ -850,3 +921,4 @@ window.onload = function () {
     addHandlersToDeploymentForms();
     addHandlersToExecutionForms();
 };
+
