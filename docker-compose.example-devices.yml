@@ -12,16 +12,7 @@ services:
       # during `docker compose up`. The "inherited" services need to be started
       # on their own though (separate profile)...
       - ABSTRACT_BASE_HACK_DO_NOT_USE
-    build:
-      context: ./wasmiot-supervisor
-      dockerfile: Dockerfile
-      target: run
-      # args:
-      #   - DEVICE_NAME='thingi' # ::OVERRIDE::
-      #   # TODO Are these needed now that using git submodules (earlier for
-      #   # pulling from gitlab in separate local clone?).
-      #   #- DEPLOY_USER=${DEPLOY_USER}
-      #   #- DEPLOY_TOKEN=${DEPLOY_TOKEN}
+    image: ghcr.io/liquidai-project/wasmiot-supervisor
     # ports:
     #   # 5000 is the default Flask-port that is probably used.
     #   - 0:5000 # ::OVERRIDE::
