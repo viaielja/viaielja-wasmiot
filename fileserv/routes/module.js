@@ -24,9 +24,9 @@ class WasmFileUploaded {
     }
 }
 
-class PbFileUploaded {
-    constructor() {
-        this.type = "pb";
+class MlModelFileUploaded {
+    constructor(type) {
+        this.type = type;
     }
 }
 
@@ -152,7 +152,9 @@ const createModule = async (request, response) => {
  */
 const addModuleFile = async (request, response) => {
     let filter = { _id: request.params.moduleId };
-    let originalFilename = request.file.originalname;
+    // NOTE: Only regarding one file.
+    let file = request.files[0]
+    let originalFilename = file.originalname;
     let fileExtension = originalFilename.split(".").pop();
 
     // Add additional fields initially from the file-upload and save to
@@ -160,13 +162,13 @@ const addModuleFile = async (request, response) => {
     let updateObj = {};
     let updateStruct = {
         humanReadableName: originalFilename,
-        fileName: request.file.filename,
-        path: request.file.path,
+        fileName: file.filename,
+        path: file.path,
     };
 
-    readFile(request.file.path, async function (err, data) {
+    readFile(file.path, async function (err, data) {
         if (err) {
-            console.log("couldn't read Wasm binary from file ", request.file.path, err);
+            console.log("couldn't read Wasm binary from file ", file.path, err);
             // TODO: Should this really be considered server-side error (500)?
             response.status(500).json({err: `Bad Wasm file: ${err}`});
             return;
@@ -190,12 +192,13 @@ const addModuleFile = async (request, response) => {
             result = new WasmFileUploaded(updateObj.exports);
         } else {
             // All other filetypes are to be "mounted".
-            // Model weights etc. for an ML-application.
             updateObj["dataFiles"] = {};
             updateObj["dataFiles"][originalFilename] = updateStruct;
             switch (fileExtension) {
+                // Model weights etc. for an ML-application.
                 case "pb":
-                    result = new PbFileUploaded();
+                case "onnx":
+                    result = new MlModelFileUploaded(fileExtension);
                     break;
                 default:
                     let err = `unsupported file extension: '${fileExtension}'`;

@@ -16,7 +16,6 @@ function setOrchestrator(orch) {
     orchestrator = orch;
 }
 
-const INPUT_FILE_FIELD = "inputFile";
 /**
  * Send data to the first device in the deployment-sequence in order to
  * kickstart the application execution.
@@ -25,7 +24,7 @@ const execute = async (request, response) => {
     let deployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
 
     try {
-        let args = {}
+        let args = {};
         args.body = request.body;
         if (request.files) {
             args.files = request.files.map(file => ({ path: file.path, name: file.fieldname }));

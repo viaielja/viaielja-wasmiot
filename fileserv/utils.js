@@ -71,8 +71,8 @@ class ApiError {
 function validateFileFormSubmission(request, response, next) {
     if (request.method !== "POST") { next(); return; }
 
-    // Check that request contains a file upload.
-    if (!request.hasOwnProperty("file")) {
+    // Check that request contains files uploaded.
+    if (!request.hasOwnProperty("files")) {
         response.status(400).send("file-submission missing");
         console.log("Bad request; needs a file-input for the module field");
         return;
