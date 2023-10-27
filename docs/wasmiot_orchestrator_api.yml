@@ -24,6 +24,21 @@ servers:
         default: '5000'
 paths:
   /api/module:
+    get:
+      description: Return information about all available modules
+      responses:
+        '200':
+          description: An array of module information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Modules"
+        '404':
+          description: No modules found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       description: Create a new module
       requestBody:
@@ -47,21 +62,6 @@ paths:
                 $ref: "#/components/schemas/Module"
         '400':
           description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    get:
-      description: Return information about all available modules
-      responses:
-        '200':
-          description: An array of module information
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Modules"
-        '404':
-          description: No modules found
           content:
             application/json:
               schema:
@@ -123,6 +123,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+
   /api/module/{module_id}/file:
     get:
       description: Return files associated to a module
@@ -157,6 +158,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /api/device:
+    get:
+      description: Return information about all currently connected devices
+      responses:
+        '200':
+          description: An array of device information
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+        '404':
+          description: No devices found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      description: Force device scanning in orchestrator network
+      responses:
+        '204':
+          description: The rescan was started
+    delete:
+      description: Delete all devices
+      responses:
+        '204':
+          description: All devices deleted
+
+  /api/deployment:
+    get:
+      description: Return information about all created deployments
+      responses:
+        '200':
+          description: An array of deployment information
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deployment"
+    post:
+      description: Create and enact a new deployment
+      requestBody:
+        description: |
+          Function type information and files or 'mounts' to attach to the
+          module
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Manifest"
+      responses:
+        '204':
+          description: The deployment was created and enacted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     Function:
@@ -204,6 +268,11 @@ components:
           type: string
         description:
           $ref: "#/components/schemas/ModuleDescription"
+        mounts:
+          type: object
+          items:
+            type: string
+            format: binary
     Modules:
       type: array
       items:
@@ -251,6 +320,88 @@ components:
                   properties:
                     Hz:
                       type: integer
+
+    ManifestNode:
+      description: Describes a workload that should appear in the deployment
+      required:
+        - device
+        - module
+        - function
+      properties:
+        name:
+          type: string
+        device:
+          description: |
+            The ID of the device that the workload should be deployed to.
+            If the device is not connected, the deployment will be queued until
+            the device is connected(?)
+          type: string
+        module:
+          description: A module ID
+          type: string
+        function:
+          description: |
+            The name of the function that should be callable on the node. The
+            function must be exported by the module.
+          type: string
+
+    Manifest:
+      description: Document that a deployment is created based on
+      required:
+        - name
+        - nodes
+      properties:
+        name:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ManifestNode"
+
+    DeploymentNode:
+      description: Information for a device to set itself up for a workload
+      required:
+        - modules
+        - peers
+      properties:
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleDescription"
+        peers:
+          description: |
+            An array of device IDs that are expected to have connection to and from this node
+          type: array
+          items:
+            type: string
+
+    DeploymentSolution:
+      description: |
+        Solution for how the manifest is to be enacted based on
+        manifest and available resources
+      required:
+        - nodes
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeploymentNode"
+
+    Deployment:
+      description: |
+        Contains information about a deployment and its current manifest
+      required:
+        - id
+        - manifest
+        - solution
+      properties:
+        id:
+          type: string
+        manifest:
+          $ref: "#/components/schemas/Manifest"
+        solution:
+          $ref: "#/components/schemas/DeploymentSolution"
+
     Error:
       type: object
       required:
