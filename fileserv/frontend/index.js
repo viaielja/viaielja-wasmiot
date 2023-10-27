@@ -195,9 +195,15 @@ function generateFunctionDescriptionFieldsFor(module) {
 
     let functionFieldGroups = [];
     // Build the form.
-    for (let { functionName, parameterCount } of functions) {
+    for (let { name: functionName, parameterCount } of functions) {
         let inputFieldset = document.createElement("fieldset");
-        function makeInputField(textContent, name, type="int | float") {
+        inputFieldset.name = functionName;
+        // Add header showing the function that is described.
+        let legend = document.createElement("legend");
+        legend.textContent = functionName;
+        inputFieldset.appendChild(legend);
+
+        function makeInputField(textContent, name, defaultValue, type="text") {
             // Create elems.
             let inputFieldDiv = document.createElement("div");
             let inputFieldLabel = document.createElement("label");
@@ -205,7 +211,10 @@ function generateFunctionDescriptionFieldsFor(module) {
 
             // Fill with data.
             inputFieldLabel.textContent = textContent;
+            // NOTE: This identifies which parameter associates with which function
+            inputField.dataset.functionName = functionName;
             inputField.name = name;
+            inputField.value = defaultValue;
             inputField.type = type;
 
             inputFieldLabel.appendChild(inputField);
@@ -214,19 +223,21 @@ function generateFunctionDescriptionFieldsFor(module) {
             return inputFieldDiv;
         }
 
-        // Add name of function on top.
-        let functionNameFieldDiv = makeInputField("Function name:", functionName, "text");
-        // Function name shouldn't be editable.
-        functionNameFieldDiv.querySelector("input").disabled = true;
-        functionFieldGroups.push(functionNameFieldDiv);
-
-        for (let i = 0; i < parameterCount; i++) {
-            let inputFieldDiv = makeInputField(`Parameter #${i}`, `param${i}`);
-            inputFieldset.appendChild(inputFieldDiv);
-            functionFieldGroups.push(inputFieldset);
+        if (parameterCount > 0) {
+            for (let i = 0; i < parameterCount; i++) {
+                let inputFieldDiv = makeInputField(`Parameter #${i}`, `param${i}`, "integer");
+                inputFieldset.appendChild(inputFieldDiv);
+            }
+        } else {
+            // Show that there are no parameters.
+            let text = document.createElement("p");
+            text.textContent = "No parameters.";
+            inputFieldset.appendChild(text);
         }
 
         // TODO: Add dynamic list for mounts.
+
+        functionFieldGroups.push(inputFieldset);
     }
 
     return functionFieldGroups;
@@ -458,7 +469,7 @@ async function setupModuleDescriptionFields(event) {
         // show.
         return;
     }
-    let modulee = await fetchModule(moduleId);
+    let modulee = (await fetchModule(moduleId))[0];
 
     let formTopDiv = document.querySelector("#module-properties-form fieldset > div");
     for (let div of generateFunctionDescriptionFieldsFor(modulee)) {
@@ -626,7 +637,6 @@ async function setupModuleUploadTab() {
     }
 
     for (let mod of modules) {
-        console.log(mod);
         let optionElem = document.createElement("option");
         optionElem.value = mod._id;
         optionElem.textContent = mod.name;

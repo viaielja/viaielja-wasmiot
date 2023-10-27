@@ -31,6 +31,11 @@ class MlModelFileUploaded {
     }
 }
 
+/**
+ *
+ * @param {*} moduleId
+ * @returns [failCode, module]
+ */
 const getModuleBy = async (moduleId) => {
     // Common database query in any case.
     let getAllModules = moduleId === undefined;
@@ -131,10 +136,10 @@ const createModule = async (request, response) => {
 
     // Attach the Wasm binary.
     try {
-        await addModuleFiles({_id: moduleId}, request.files);
+        let result = await addModuleBinary({_id: moduleId}, request.files[0]);
 
         response
-            .status(statusCode)
+            .status(201)
             .json(result);
     } catch (e) {
         let err = ["Failed attaching a file to module", e];
@@ -143,7 +148,7 @@ const createModule = async (request, response) => {
         response
             .status(500)
             .json(new utils.Error(...err));
-    }        let result = getFileUpdate(file);
+    }
 };
 
 const getFileUpdate = async (file) => {
@@ -185,8 +190,7 @@ const getFileUpdate = async (file) => {
         result = new WasmFileUpload(updateObj);
     } else {
         // All other filetypes are to be "mounted".
-        updateObj["dataFiles"] = {};
-        updateObj["dataFiles"][originalFilename] = updateStruct;
+        updateObj[originalFilename] = updateStruct;
         switch (fileExtension) {
             // Model weights etc. for an ML-application.
             case "pb":
@@ -203,20 +207,17 @@ const getFileUpdate = async (file) => {
 }
 
 /**
- * Attach _data_files (i.e., not .wasm) to a module.
+ * Attach _binary_file (i.e., .wasm) to a module.
  *
- * Saves the files to the server filesystem and references to them into module's
+ * Saves the file to the server filesystem and references to it into module's
  * database-entry matching a module-ID given in the body.
  */
-const addModuleDataFiles = async (module, files) => {
-    let updateObj = { dataFiles: {} };
-    for (let file of files) {
-        let result = getFileUpdate(file).updateObj;
-        if (result.type === "wasm") {
-            throw new utils.Error("Wasm file not allowed at data file update");
-        }
-        updateObj,dataFiles[result.updateObj)
+const addModuleBinary = async (module, file) => {
+    let result = await getFileUpdate(file);
+    if (result.type !== "wasm") {
+        throw new utils.Error("file given as module binary is not a .wasm file");
     }
+    let updateObj = result.updateObj;
 
     let filter = { _id: module._id };
     // Now actually update the database-document, devices and respond to
@@ -228,16 +229,50 @@ const addModuleDataFiles = async (module, files) => {
     // Tell devices to fetch updated files on modules.
     await notifyModuleFileUpdate(filter._id);
 
+    return result;
+};
+
+
+/**
+ * Attach _data_files (i.e., not .wasm) to a module.
+ *
+ * Saves the files to the server filesystem and references to them into module's
+ * database-entry matching a module-ID given in the body.
+ */
+const addModuleDataFiles = async (moduleId, files) => {
+    let update = { dataFiles: {} };
+    for (let file of files) {
+        let result = await getFileUpdate(file);
+        if (result.type === "wasm") {
+            throw new utils.Error("Wasm file not allowed at data file update");
+        }
+        let [[key, obj]] = Object.entries(result.updateObj);
+        update.dataFiles[key] = obj;
+    }
+
+    let filter = { _id: moduleId };
+    // Now actually update the database-document, devices and respond to
+    // caller.
+    await updateModule(filter, update);
+
+    console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, update);
+
+    // Tell devices to fetch updated files on modules.
+    await notifyModuleFileUpdate(filter._id);
 };
 
 /**
  * Map function parameters to names and mounts to files ultimately creating an
  * OpenAPI description for the module.
- * @param {*} module The module to describe.
+ * @param {*} module The module to describe (from DB).
+ * @param {{"functionName": { parameters: [ { name: string, type: "integer" |
+ * "float" }], mounts: { "a/mount/path": { mediaType: string } }, output: {
+ * "aMediaType": schema} }}} functionDescriptions Mapping of function names to
+ * their descriptions.
  * @returns An OpenAPI description of the module primarily its functions and
  * mounts.
  */
-const describeModule = async (modulee) => {
+const moduleDescription = async (modulee, functionDescriptions) => {
     /**
      * Create description for a single function.
      * @param {{ parameters: [ { name: string, type: "integer" | "float" }], mounts: { "a/mount/path": { mediaType: string } }, output: { "aMediaType": schema} }} func
@@ -299,11 +334,13 @@ const describeModule = async (modulee) => {
         ];
     }
 
-    let funcPaths = modulee.exports.map(funcPathDescription);
-    const moduleDescription = {
+    // TODO: Check that the module (i.e. .wasm binary) and description info match.
+
+    let funcPaths = functionDescriptions.map(funcPathDescription);
+    const description = {
         openapi: "3.1.0",
         info: {
-            title: "A Wasm-IoT Supervisor API",
+            title: `${modulee.name}`,
             summary: "Calling WebAssembly functions",
             version: "0.0.1"
         },
@@ -334,7 +371,24 @@ const describeModule = async (modulee) => {
         paths: {...Object.entries(funcPaths)}
     };
 
-    return moduleDescription;
+    return description;
+};
+
+const describeModule = async (request, response) => {
+    // Save associated files ("mounts") adding their info to the database entry.
+    addModuleDataFiles(request.params.moduleId, request.files);
+
+    // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
+    let [failCode, modulee] = await getModuleBy(request.params.moduleId);
+    if (failCode) {
+        console.error(...value);
+        response.status(failCode).json(new utils.Error(value));
+        return;
+    }
+
+    // Prepare description for the module based on given info for functions
+    // (params & outputs) and files (mounts).
+    let description = await moduleDescription(modulee, request.body.functions);
 };
 
 /**
@@ -415,7 +469,7 @@ async function notifyModuleFileUpdate(moduleId) {
             .read("device", { _id: deviceId }))[0];
 
         if (!device) {
-            throw new utils.Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`);
+            throw new utils.Error(`No device found for '${deviceId}' in manifest#${i}'`);
         }
 
         for (let manifest of manifests) {
@@ -457,7 +511,7 @@ router.post(
 router.post(
     "/:moduleId/upload",
     fileUpload,
-    describeModule
+    describeModule,
 );
 router.get("/:moduleId?", getModule(false));
 router.get("/:moduleId/description", getModule(true));
