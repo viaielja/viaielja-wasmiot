@@ -17,6 +17,12 @@ class ModuleCreated {
     }
 }
 
+class ModuleDescribed {
+    constructor(description) {
+        this.description = description;
+    }
+}
+
 class WasmFileUpload {
     constructor(updateObj) {
         this.type = "wasm";
@@ -216,7 +222,7 @@ const createModule = async (request, response) => {
 
         response
             .status(201)
-            .json(result);
+            .json(new ModuleCreated(result));
     } catch (e) {
         let err = ["Failed attaching a file to module", e];
         console.error(...err);
@@ -410,31 +416,30 @@ const moduleDescription = (modulee, functionDescriptions) => {
         let funcDescription = {
             summary: "Auto-generated description",
             parameters: params,
-            // NOTE: Function-calls are always POST.
-            post: {
-                tags: [],
-                summary: "Auto-generated description",
-                parameters: [],
-                requestBody: {
-                    required: true,
-                    content: {
-                        "multipart/form-data": {
-                            schema: {
-                                type: "object",
-                                properties: mountEntries
-                            },
-                            encoding: mountEncodings
-                        }
+        };
+        funcDescription[func.method] = {
+            tags: [],
+            summary: "Auto-generated description",
+            parameters: [],
+            requestBody: {
+                required: true,
+                content: {
+                    "multipart/form-data": {
+                        schema: {
+                            type: "object",
+                            properties: mountEntries
+                        },
+                        encoding: mountEncodings
                     }
-                },
-                responses: {
-                    200: {
-                        description: "Auto-generated description",
-                        content: {
-                            "application/json": { // TODO Where dis?
-                                schema: {
-                                    type: func.outputType
-                                }
+                }
+            },
+            responses: {
+                200: {
+                    description: "Auto-generated description",
+                    content: {
+                        "application/json": { // TODO Where dis?
+                            schema: {
+                                type: func.outputType
                             }
                         }
                     }
@@ -443,7 +448,7 @@ const moduleDescription = (modulee, functionDescriptions) => {
         };
 
         return [
-            `/{deployment}/modules/${modulee._id}/${funcName}`,
+            `/{deployment}/${modulee._id}/${funcName}`,
             funcDescription
         ];
     }
@@ -505,6 +510,7 @@ const describeModule = async (request, response) => {
     let functions = {};
     for (let [funcName, func] of Object.entries(request.body).filter(x => typeof x[1] === "object")) {
         functions[funcName] = {
+            method: func.method,
             parameters: Object.entries(func)
                 .filter(([k, _v]) => k.startsWith("param"))
                 .map(([k, v]) => ({ name: k, type: v })),
@@ -530,6 +536,8 @@ const describeModule = async (request, response) => {
         response.status(500).json(new utils.Error(...err));
         return;
     }
+
+    response.json(new ModuleDescribed(description));
 };
 
 /**

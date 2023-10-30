@@ -38,6 +38,14 @@ function formToObject(form) {
     let inputs = [
         ...form.querySelectorAll("input[type=text]"),
         ...form.querySelectorAll("input[type=number]"),
+        ...(
+            Array.from(form.querySelectorAll("select"))
+            // Add as 'value' the selected option's value.
+            .map(x => {
+                x.value = x.querySelectorAll("option")[x.selectedIndex].value;
+                return x;
+            })
+        ),
     ];
     // Text inputs.
     for (let input of inputs) {
@@ -56,14 +64,6 @@ function formToObject(form) {
         } else {
             parent[input.name] = input.value;
         }
-    }
-
-    // Select elements immediately under this form NOTE: the ":scope" selector
-    // (See: https://developer.mozilla.org/en-US/docs/Web/CSS/:scope) might
-    // be better?. HACK: Getting all under div (which currently excludes
-    // items under ol).
-    for (let select of form.querySelectorAll("div > select")) {
-        obj[select.name] = select.selectedOptions[0].value;
     }
 
     // TODO: Use formdata directly? See:
@@ -232,6 +232,21 @@ function generateFunctionDescriptionFieldsFor(module) {
         let legend = document.createElement("legend");
         legend.textContent = functionName;
         inputFieldset.appendChild(legend);
+
+        // Add HTTP-method chooser between GET and POST.
+        let methodSelect = document.createElement("select");
+        methodSelect.name = "method";
+        methodSelect.dataset.parent = functionName;
+        let getOption = document.createElement("option");
+        getOption.value = "GET";
+        getOption.textContent = "GET";
+        getOption.selected = true;
+        let postOption = document.createElement("option");
+        postOption.value = "POST";
+        postOption.textContent = "POST";
+        methodSelect.appendChild(getOption);
+        methodSelect.appendChild(postOption);
+        inputFieldset.appendChild(methodSelect);
 
         function makeInputField(textContent, name, defaultValue, type="text") {
             // Create elems.
