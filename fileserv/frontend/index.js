@@ -290,6 +290,10 @@ function generateFunctionDescriptionFieldsFor(module) {
         mountsSpan.appendChild(addMountButton);
         inputFieldset.appendChild(mountsSpan);
 
+        // Add field for function output.
+        let outputFieldDiv = makeInputField("Output", "output", "integer");
+        inputFieldset.appendChild(outputFieldDiv);
+
         functionFieldGroups.push(inputFieldset);
     }
 
@@ -429,7 +433,7 @@ function submitFormData(url) {
         formSubmitEvent.preventDefault()
         let formData = formDataFrom(formSubmitEvent.target);
         // NOTE: Semi-hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
-        if ("id" in formData) {
+        if (formData.has("id")) {
             url = url.replace(":id", formData.get("id"));
             // Remove in order not to resend.
             formData.delete("id");
