@@ -31,6 +31,13 @@ class MlModelFileUploaded {
     }
 }
 
+class ImageUploaded {
+    constructor(type, updateObj) {
+        this.type = type;
+        this.updateObj = updateObj;
+    }
+}
+
 /**
  *
  * @param {*} moduleId
@@ -45,7 +52,7 @@ const getModuleBy = async (moduleId) => {
         matches = await database.read("module", filter);
     } catch (e) {
         let err = ["database query failed", e];
-        return [false, err];
+        return [500, err];
     }
 
     if (getAllModules) {
@@ -267,6 +274,13 @@ const getFileUpdate = async (file) => {
                 result = new MlModelFileUploaded(fileExtension, updateObj);
                 break;
             default:
+                switch (file.mimetype) {
+                    case "image/jpeg":
+                    case "image/jpg":
+                    case "image/png":
+                        result = new ImageUploaded(fileExtension, updateObj);
+                        return result;
+                }
                 let err = `unsupported file extension: '${fileExtension}'`;
                 throw new utils.Error(err);
         }
@@ -311,7 +325,15 @@ const addModuleBinary = async (module, file) => {
 const addModuleDataFiles = async (moduleId, files) => {
     let update = { dataFiles: {} };
     for (let file of files) {
-        let result = await getFileUpdate(file);
+        let result;
+        try {
+            result = await getFileUpdate(file);
+        } catch (e) {
+            let err = ["failed attaching file to module", e];
+            console.error(...err);
+            throw new utils.Error(...err);
+        }
+
         if (result.type === "wasm") {
             throw new utils.Error("Wasm file not allowed at data file update");
         }
@@ -335,7 +357,7 @@ const addModuleDataFiles = async (moduleId, files) => {
  * OpenAPI description for the module.
  * @param {*} module The module to describe (from DB).
  * @param {{"functionName": { parameters: [ { name: string, type: "integer" |
- * "float" }], mounts: { "a/mount/path": { mediaType: string } }, output: {
+ * "float" }], mounts: { "a/mount/path": { mediaType: string } }, outputType: {
  * "aMediaType": schema} }}} functionDescriptions Mapping of function names to
  * their descriptions.
  * @returns An OpenAPI description of the module primarily its functions and
@@ -349,9 +371,20 @@ const moduleDescription = (modulee, functionDescriptions) => {
      * @returns [functionCallPath, functionDescription]
      */
     function funcPathDescription(funcName, func) {
-        let params = func.parameters.map(x => ({
+        let sharedParams = [
+            {
+                "name": "deployment",
+                "in": "path",
+                "description": "Deployment ID",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                }
+            }
+        ];
+        let funcParams = func.parameters.map(x => ({
             name: x.name,
-            in: "path", // TODO: Where dis?
+            in: "query", // TODO: Where dis?
             description: "Auto-generated description",
             required: true,
             schema: {
@@ -359,18 +392,21 @@ const moduleDescription = (modulee, functionDescriptions) => {
             }
         }));
 
-        let mounts = Object.fromEntries(
-            Object.entries(func.mounts)
-                .map(([path, mount]) => [
+        let params = sharedParams.concat(funcParams);
+
+        let mounts = Object.entries(func.mounts);
+        let mountEntries = Object.fromEntries(
+                mounts.map(([path, _mount]) => [
                     path,
                     {
                         type: "string",
-                        contentMediaType: mount.mediaType,
-                        contentEncoding: "base64"
+                        format: "binary"
                     }
                 ])
         );
-
+        let mountEncodings = Object.fromEntries(
+            mounts.map(([path, mount]) => [path, { contentType: mount.mediaType }])
+        );
         let funcDescription = {
             summary: "Auto-generated description",
             parameters: params,
@@ -385,15 +421,22 @@ const moduleDescription = (modulee, functionDescriptions) => {
                         "multipart/form-data": {
                             schema: {
                                 type: "object",
-                                properties: mounts,
-                            }
+                                properties: mountEntries
+                            },
+                            encoding: mountEncodings
                         }
                     }
                 },
                 responses: {
                     200: {
                         description: "Auto-generated description",
-                        content: func.output
+                        content: {
+                            "application/json": { // TODO Where dis?
+                                schema: {
+                                    type: func.outputType
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -409,10 +452,10 @@ const moduleDescription = (modulee, functionDescriptions) => {
 
     let funcPaths = Object.entries(functionDescriptions).map(x => funcPathDescription(x[0], x[1]));
     const description = {
-        openapi: "3.1.0",
+        openapi: "3.0.3",
         info: {
             title: `${modulee.name}`,
-            summary: "Calling WebAssembly functions",
+            description: "Calling microservices defined as WebAssembly functions",
             version: "0.0.1"
         },
         tags: [
@@ -439,7 +482,7 @@ const moduleDescription = (modulee, functionDescriptions) => {
                 }
             }
         ],
-        paths: {...Object.entries(funcPaths)}
+        paths: {...Object.fromEntries(funcPaths)}
     };
 
     return description;
@@ -447,7 +490,7 @@ const moduleDescription = (modulee, functionDescriptions) => {
 
 const describeModule = async (request, response) => {
     // Save associated files ("mounts") adding their info to the database entry.
-    addModuleDataFiles(request.params.moduleId, request.files);
+    await addModuleDataFiles(request.params.moduleId, request.files);
 
     // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
     let [failCode, [modulee]] = await getModuleBy(request.params.moduleId);
@@ -464,7 +507,7 @@ const describeModule = async (request, response) => {
         functions[funcName] = {
             parameters: Object.entries(func)
                 .filter(([k, _v]) => k.startsWith("param"))
-                .map(([_k, v]) => ({ name: v.name, type: v.type })),
+                .map(([k, v]) => ({ name: k, type: v })),
             mounts: "mounts" in func
                 ? Object.fromEntries(
                     func["mounts"]
@@ -474,7 +517,7 @@ const describeModule = async (request, response) => {
                         }]))
                 )
                 : {},
-            output: func.output
+            outputType: func.output
         }
     }
     let description = moduleDescription(modulee, functions);
