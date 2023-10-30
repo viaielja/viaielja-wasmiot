@@ -41,12 +41,20 @@ function formToObject(form) {
     ];
     // Text inputs.
     for (let input of inputs) {
+        let parent = obj;
+        if ("parent" in input.dataset) {
+            // Add this input value to a parent object.
+            if (!(input.dataset.parent in obj)) {
+                obj[input.dataset.parent] = {};
+            }
+            parent = obj[input.dataset.parent];
+        }
         // HACK: List-inputs are identified by a custom field and
         // ','-characters delimit the values.
         if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
-            obj[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
+            parent[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
         } else {
-            obj[input.name] = input.value;
+            parent[input.name] = input.value;
         }
     }
 
@@ -86,18 +94,40 @@ function formDataFrom(form) {
     // inputs and one "level" are handled.
     let formObj = formToObject(form);
     for (let [key, value] of Object.entries(formObj)) {
-        switch (typeof (value)) {
+        let valueType = typeof value;
+        switch (valueType) {
             case "string":
                 formData.append(key, value);
                 break;
+            case "object":
+                let subEntries = Object.entries(value);
+                if (subEntries.length === 0 || typeof subEntries[0][1] === "string") {
+                    for (let [subKey, subValue] of subEntries) {
+                        formData.append(`${key}[${subKey}]`, subValue);
+                    }
+                    break;
+                }
+                valueType = "object with non-string values";
             default:
-                alert("Submitting the type '" + typeof (value) + "'' is not currently supported!")
+                alert("Submitting the type '" + valueType + "'' is not currently supported!")
                 return;
         }
     }
 
+    // HACK: Keep track of indices for making arrays of each functions' mounts.
+    let funcMountIdx = {};
     // Send all the files found.
     for (let fileField of form.querySelectorAll("input[type=file]")) {
+        // HACK: Add info about mount file to its parent function.
+        if ("ismount" in fileField.dataset) {
+            let funcName = fileField.dataset.parent;
+            if (!(funcName in funcMountIdx)) {
+                funcMountIdx[funcName] = 0;
+            }
+            mountIdx = funcMountIdx[funcName];
+            formData.append(`${funcName}[mounts][${mountIdx}]`, fileField.name);
+            funcMountIdx[funcName] += 1;
+        }
         formData.append(fileField.name, fileField.files[0]);
     }
 
@@ -212,7 +242,7 @@ function generateFunctionDescriptionFieldsFor(module) {
             // Fill with data.
             inputFieldLabel.textContent = textContent;
             // NOTE: This identifies which parameter associates with which function
-            inputField.dataset.functionName = functionName;
+            inputField.dataset.parent = functionName;
             inputField.name = name;
             inputField.value = defaultValue;
             inputField.type = type;
@@ -221,6 +251,13 @@ function generateFunctionDescriptionFieldsFor(module) {
             inputFieldDiv.appendChild(inputFieldLabel);
 
             return inputFieldDiv;
+        }
+
+        function makeMountField(name) {
+            let x = makeInputField(name, name, "", type="file");
+            // Add flag for knowing later that this is a mount.
+            x.querySelector("input").dataset.ismount = true;
+            return x;
         }
 
         if (parameterCount > 0) {
@@ -235,7 +272,23 @@ function generateFunctionDescriptionFieldsFor(module) {
             inputFieldset.appendChild(text);
         }
 
-        // TODO: Add dynamic list for mounts.
+        // Add button for adding mounts.
+        let mountsSpan = document.createElement("span");
+        let mountsDiv = document.createElement("div");
+        mountsDiv.classList.add("mounts");
+        mountsSpan.appendChild(mountsDiv);
+        let addMountButton = document.createElement("button");
+        addMountButton.textContent = "Add mount";
+        let addMountNameFieldDiv = makeInputField("Mount name", "mountName", "").querySelector("label");
+        mountsSpan.appendChild(addMountNameFieldDiv);
+        addMountButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            let mountFieldName = addMountNameFieldDiv.querySelector("input").value;
+            let mountFieldDiv = makeMountField(mountFieldName);
+            inputFieldset.querySelector(".mounts").appendChild(mountFieldDiv);
+        });
+        mountsSpan.appendChild(addMountButton);
+        inputFieldset.appendChild(mountsSpan);
 
         functionFieldGroups.push(inputFieldset);
     }
@@ -376,9 +429,13 @@ function submitFormData(url) {
         formSubmitEvent.preventDefault()
         let formData = formDataFrom(formSubmitEvent.target);
         // NOTE: Semi-hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
-        let idUrl = url.replace(":id", formData.get("id"));
+        if ("id" in formData) {
+            url = url.replace(":id", formData.get("id"));
+            // Remove in order not to resend.
+            formData.delete("id");
+        }
 
-        apiCall(idUrl, "POST", formData, false);
+        apiCall(url, "POST", formData, false);
     }
 
     return handleSubmit;

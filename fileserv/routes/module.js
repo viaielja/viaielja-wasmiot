@@ -67,24 +67,93 @@ const getModuleBy = async (moduleId) => {
 };
 
 /**
+ * Based on description of a node and functions that it should execute, put
+ * together and fill out information needed for describing the service(s).
+ * TODO Somehow filter out the unnecessary paths for this deployment that could
+ * be attached to the module.
+ * @param {*} deploymentId Identification for the deployment the endpoints will
+ * be associated to.
+ * @param {*} node OUT PARAMETER: The node containing data for where and how
+ * execution of functions on it should be requested.
+ * Should contain connectivity information (address and port) and definition of
+ * module containing functions so they can be called with correct inputs.
+ * @returns Pair of the function (index 0) and a pre-filled OpenAPI-doc endpoint
+ * (index 1) specially made for this node for configuring (ideally most
+ * effortlessly) the endpoint that function is available to be called from.
+ */
+const endpointDescription = (module) => {
+    // TODO ... Merge together into a single OpenAPI doc for __all__
+    // the modules' endpoints.
+
+    // Prepare options for making needed HTTP-request to this path.
+    // TODO: Check for device availability here?
+    // FIXME hardcoded: selecting first address.
+    let urlString = node.module.openapi.servers[0].url;
+    // FIXME hardcoded: "url" field assumed to be template "http://{serverIp}:{port}".
+    urlString = urlString
+        .replace("{serverIp}", node.device.communication.addresses[0])
+        .replace("{port}", node.device.communication.port);
+    let url = new URL(urlString);
+
+    // NOTE: The convention is that "paths" field contains the template
+    // "/{deployment}/modules/{module}/<thisFuncName>". In the future, this
+    // template and the OpenAPI or other description format should be as
+    // internal to orchestrator as possible.
+    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
+    if (!(funcPathKey in node.module.openapi.paths)) {
+        throw `func '${node.func}' not found in module's OpenAPI-doc`;
+    }
+    // TODO: Iterate all the paths.
+    let funcPath = node.module.openapi.paths[funcPathKey];
+    let filledFuncPathKey = funcPathKey
+        .replace("{deployment}", deploymentId)
+        .replace("{module}", node.module.name);
+
+    // Fill out the prepared parts of the templated OpenAPI-doc.
+    let preFilledOpenapiDoc = node.module.openapi;
+    // Where the device is located.
+    // FIXME hardcoded: selecting first address.
+    preFilledOpenapiDoc.servers[0].url = url.toString();
+    // Where and how to call the func.
+    preFilledOpenapiDoc.paths[filledFuncPathKey] = funcPath;
+
+    // Remove unnecessary fields.
+    // The path has been filled at this point.
+    if (preFilledOpenapiDoc.paths[funcPathKey].parameters) {
+        delete preFilledOpenapiDoc.paths[funcPathKey].parameters
+    }
+    // The server host and port are already filled out at this point.
+    // FIXME hardcoded: selecting first address.
+    if (preFilledOpenapiDoc.servers[0].variables) {
+        delete preFilledOpenapiDoc.servers[0].variables;
+    }
+    // TODO: See above about filtering out unnecessary paths (= based on funcs).
+    for (let unnecessaryPath of Object.keys(preFilledOpenapiDoc.paths).filter(x => x.includes("{module}"))) {
+        delete preFilledOpenapiDoc.paths[unnecessaryPath];
+    }
+
+    return description;
+}
+
+/**
  * GET
  * - a single Wasm-module's whole metadata (moduleId)
  * - a single Wasm-module's whole OpenAPI description (moduleId/description)
  * - all available Wasm-modules' metadata (no moduleId)
  */
 const getModule = (justDescription) => (async (request, response) => {
-    let [failCode, value] = await getModuleBy(request.params.moduleId);
+    let [failCode, modules] = await getModuleBy(request.params.moduleId);
     if (failCode) {
-        console.error(...value);
-        response.status(failCode).json(new utils.Error(value));
+        console.error(...modules);
+        response.status(failCode).json(new utils.Error(modules));
     } else {
         if (justDescription) {
-            console.log("Sending description of module: ", value[0].name);
+            console.log("Sending description of module: ", modules[0].name);
             // Return the description specifically.
-            response.json(value[0].openapi)
+            response.json(modules[0].description)
         } else {
-            console.log("Sending metadata of modules: ", value.map(x => x.name));
-            response.json(value);
+            console.log("Sending metadata of modules: ", modules.map(x => x.name));
+            response.json(modules);
         }
     }
 });
@@ -272,13 +341,14 @@ const addModuleDataFiles = async (moduleId, files) => {
  * @returns An OpenAPI description of the module primarily its functions and
  * mounts.
  */
-const moduleDescription = async (modulee, functionDescriptions) => {
+const moduleDescription = (modulee, functionDescriptions) => {
     /**
      * Create description for a single function.
-     * @param {{ parameters: [ { name: string, type: "integer" | "float" }], mounts: { "a/mount/path": { mediaType: string } }, output: { "aMediaType": schema} }} func
+     * @param {string} funcName
+     * @param {{ parameters: [ { type: integer | float | schema }], mounts: { "./some/mount/path": mediaType: string }, output: { "media/type": schema} }} func
      * @returns [functionCallPath, functionDescription]
      */
-    function funcPathDescription(func) {
+    function funcPathDescription(funcName, func) {
         let params = func.parameters.map(x => ({
             name: x.name,
             in: "path", // TODO: Where dis?
@@ -290,14 +360,15 @@ const moduleDescription = async (modulee, functionDescriptions) => {
         }));
 
         let mounts = Object.fromEntries(
-            func.mounts.map(x => [
-                x,
-                {
-                    type: "string",
-                    contentMediaType: x.mediaType,
-                    contentEncoding: "base64"
-                }
-            ])
+            Object.entries(func.mounts)
+                .map(([path, mount]) => [
+                    path,
+                    {
+                        type: "string",
+                        contentMediaType: mount.mediaType,
+                        contentEncoding: "base64"
+                    }
+                ])
         );
 
         let funcDescription = {
@@ -329,14 +400,14 @@ const moduleDescription = async (modulee, functionDescriptions) => {
         };
 
         return [
-            `/{deployment}/modules/${request.params.moduleId}/${func.name}`,
+            `/{deployment}/modules/${modulee._id}/${funcName}`,
             funcDescription
         ];
     }
 
     // TODO: Check that the module (i.e. .wasm binary) and description info match.
 
-    let funcPaths = functionDescriptions.map(funcPathDescription);
+    let funcPaths = Object.entries(functionDescriptions).map(x => funcPathDescription(x[0], x[1]));
     const description = {
         openapi: "3.1.0",
         info: {
@@ -379,7 +450,7 @@ const describeModule = async (request, response) => {
     addModuleDataFiles(request.params.moduleId, request.files);
 
     // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
-    let [failCode, modulee] = await getModuleBy(request.params.moduleId);
+    let [failCode, [modulee]] = await getModuleBy(request.params.moduleId);
     if (failCode) {
         console.error(...value);
         response.status(failCode).json(new utils.Error(value));
@@ -388,7 +459,34 @@ const describeModule = async (request, response) => {
 
     // Prepare description for the module based on given info for functions
     // (params & outputs) and files (mounts).
-    let description = await moduleDescription(modulee, request.body.functions);
+    let functions = {};
+    for (let [funcName, func] of Object.entries(request.body).filter(x => typeof x[1] === "object")) {
+        functions[funcName] = {
+            parameters: Object.entries(func)
+                .filter(([k, _v]) => k.startsWith("param"))
+                .map(([_k, v]) => ({ name: v.name, type: v.type })),
+            mounts: "mounts" in func
+                ? Object.fromEntries(
+                    func["mounts"]
+                        .map(k => ([ k, {
+                            // Map files by their form fieldname to this function's mount.
+                            mediaType: request.files.find(x => x.fieldname === k).mimetype
+                        }]))
+                )
+                : {},
+            output: func.output
+        }
+    }
+    let description = moduleDescription(modulee, functions);
+
+    try {
+        await updateModule({ _id: request.params.moduleId }, { description: description });
+    } catch (e) {
+        let err = ["failed updating module with description", e];
+        console.error(...err);
+        response.status(500).json(new utils.Error(...err));
+        return;
+    }
 };
 
 /**
