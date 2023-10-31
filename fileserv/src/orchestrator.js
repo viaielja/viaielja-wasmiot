@@ -299,7 +299,7 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
             // The order of endpoints attached to deployment is still the same
             // as it is based on the execution sequence and endpoints are
             // guaranteed to contain at least one item.
-            forwardEndpoint = forwardDeployment.endpoints[forwardFunc].operation;
+            forwardEndpoint = forwardDeployment.endpoints[forwardFunc];
         }
 
         // This is needed at device to figure out how to interpret WebAssembly
