@@ -94,6 +94,7 @@ const execute = async (request, response) => {
             .status(statusCode)
             .json(result);
     } catch (e) {
+        console.error("failure in execution:", e);
         response
             .status(500)
             .json(new utils.Error("scheduling work failed", e));

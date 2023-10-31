@@ -9,6 +9,16 @@ try {
 }
 
 
+/**
+ * Return the path that is used on supervisor for calling functions.
+ * @param {*} moduleId
+ * @param {*} funcName
+ * @returns
+ */
+function supervisorExecutionPath(moduleName, funcName) {
+    return `/{deployment}/modules/${moduleName}/${funcName}`;
+}
+
 /// Perform boilerplate tasks when responding with a file read from filesystem.
 function respondWithFile(response, filePath, contentType) {
     response.status(200)
@@ -107,27 +117,18 @@ function getStartEndpoint(deployment) {
         .fullManifest[deployment.sequence[0].device]
         .endpoints[deployment.sequence[0].func];
 
-    // FIXME hardcoded: selecting first(s) from list(s).
-    let url = new URL(startEndpoint.servers[0].url);
-    // FIXME hardcoded: Selecting 0 because paths expected to contain only a
-    // single item selected at creation of deployment manifest.
-    let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
-
-    // Build the __SINGLE "MAIN" OPERATION'S__ parameters for the request
-    // according to the description.
-    const OPEN_API_3_1_0_OPERATIONS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
-    let operations = Object.entries(pathObj)
-        .filter(([method, _]) => OPEN_API_3_1_0_OPERATIONS.includes(method.toLowerCase()));
-    console.assert(operations.length === 1, "expected one and only one operation");
-
-    let [method, operationObj] = operations[0];
-
-    return { url, path: pathName, method, operationObj };
+    return {
+        url: new URL(startEndpoint.url),
+        path: startEndpoint.path,
+        method: startEndpoint.operation.method,
+        operationObj: startEndpoint.operation.body
+    };
 }
 
 
 if (!runningInBrowser) {
     module.exports = {
+        supervisorExecutionPath,
         respondWithFile,
         messageDevice,
         Error: ApiError,

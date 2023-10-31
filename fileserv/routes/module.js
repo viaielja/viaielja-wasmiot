@@ -329,43 +329,14 @@ const moduleDescription = (modulee, functionDescriptions) => {
             }
         }));
 
-        let params = sharedParams.concat(funcParams);
-
-        let mounts = Object.entries(func.mounts);
-        let mountEntries = Object.fromEntries(
-                mounts.map(([path, _mount]) => [
-                    path,
-                    {
-                        type: "string",
-                        format: "binary"
-                    }
-                ])
-        );
-        let mountEncodings = Object.fromEntries(
-            mounts.map(([path, mount]) => [path, { contentType: mount.mediaType }])
-        );
         let funcDescription = {
             summary: "Auto-generated description",
-            parameters: params,
+            parameters: sharedParams,
         };
         funcDescription[func.method] = {
             tags: [],
             summary: "Auto-generated description",
-            parameters: [],
-            // TODO: Get methods cannot have a requestBody, so it won't work for
-            // describing mounts...
-            requestBody: {
-                required: true,
-                content: {
-                    "multipart/form-data": {
-                        schema: {
-                            type: "object",
-                            properties: mountEntries
-                        },
-                        encoding: mountEncodings
-                    }
-                }
-            },
+            parameters: funcParams,
             responses: {
                 200: {
                     description: "Auto-generated description",
@@ -379,9 +350,40 @@ const moduleDescription = (modulee, functionDescriptions) => {
                 }
             }
         };
+        // Describe mounts if there are any.
+        // TODO: HTTP GET -methods cannot have a requestBody, so it won't
+        // work for describing mounts...
+        let mounts = Object.entries(func.mounts);
+        if (mounts.length > 0) {
+            let mountEntries = Object.fromEntries(
+                    mounts.map(([path, _mount]) => [
+                        path,
+                        {
+                            type: "string",
+                            format: "binary"
+                        }
+                    ])
+            );
+            let mountEncodings = Object.fromEntries(
+                mounts.map(([path, mount]) => [path, { contentType: mount.mediaType }])
+            );
+            let content = {
+                "multipart/form-data": {
+                    schema: {
+                        type: "object",
+                        properties: mountEntries
+                    },
+                    encoding: mountEncodings
+                }
+            };
+            funcDescription[func.method].requestBody = {
+                required: true,
+                content,
+            };
+        }
 
         return [
-            `/{deployment}/${modulee._id}/${funcName}`,
+            utils.supervisorExecutionPath(modulee.name, funcName),
             funcDescription
         ];
     }

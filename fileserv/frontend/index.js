@@ -328,7 +328,7 @@ function generateParameterFieldsFor(deployment) {
         let inputField = document.createElement("input");
 
         // Fill with data.
-        inputFieldLabel.textContent = param.description
+        inputFieldLabel.textContent = param.name;
         inputField.type = OpenApi3_1_0_SchemaToInputType(param.schema);
         inputField.name = param.name;
 
