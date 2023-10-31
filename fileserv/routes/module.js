@@ -80,75 +80,6 @@ const getModuleBy = async (moduleId) => {
 };
 
 /**
- * Based on description of a node and functions that it should execute, put
- * together and fill out information needed for describing the service(s).
- * TODO Somehow filter out the unnecessary paths for this deployment that could
- * be attached to the module.
- * @param {*} deploymentId Identification for the deployment the endpoints will
- * be associated to.
- * @param {*} node OUT PARAMETER: The node containing data for where and how
- * execution of functions on it should be requested.
- * Should contain connectivity information (address and port) and definition of
- * module containing functions so they can be called with correct inputs.
- * @returns Pair of the function (index 0) and a pre-filled OpenAPI-doc endpoint
- * (index 1) specially made for this node for configuring (ideally most
- * effortlessly) the endpoint that function is available to be called from.
- */
-const endpointDescription = (module) => {
-    // TODO ... Merge together into a single OpenAPI doc for __all__
-    // the modules' endpoints.
-
-    // Prepare options for making needed HTTP-request to this path.
-    // TODO: Check for device availability here?
-    // FIXME hardcoded: selecting first address.
-    let urlString = node.module.openapi.servers[0].url;
-    // FIXME hardcoded: "url" field assumed to be template "http://{serverIp}:{port}".
-    urlString = urlString
-        .replace("{serverIp}", node.device.communication.addresses[0])
-        .replace("{port}", node.device.communication.port);
-    let url = new URL(urlString);
-
-    // NOTE: The convention is that "paths" field contains the template
-    // "/{deployment}/modules/{module}/<thisFuncName>". In the future, this
-    // template and the OpenAPI or other description format should be as
-    // internal to orchestrator as possible.
-    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
-    if (!(funcPathKey in node.module.openapi.paths)) {
-        throw `func '${node.func}' not found in module's OpenAPI-doc`;
-    }
-    // TODO: Iterate all the paths.
-    let funcPath = node.module.openapi.paths[funcPathKey];
-    let filledFuncPathKey = funcPathKey
-        .replace("{deployment}", deploymentId)
-        .replace("{module}", node.module.name);
-
-    // Fill out the prepared parts of the templated OpenAPI-doc.
-    let preFilledOpenapiDoc = node.module.openapi;
-    // Where the device is located.
-    // FIXME hardcoded: selecting first address.
-    preFilledOpenapiDoc.servers[0].url = url.toString();
-    // Where and how to call the func.
-    preFilledOpenapiDoc.paths[filledFuncPathKey] = funcPath;
-
-    // Remove unnecessary fields.
-    // The path has been filled at this point.
-    if (preFilledOpenapiDoc.paths[funcPathKey].parameters) {
-        delete preFilledOpenapiDoc.paths[funcPathKey].parameters
-    }
-    // The server host and port are already filled out at this point.
-    // FIXME hardcoded: selecting first address.
-    if (preFilledOpenapiDoc.servers[0].variables) {
-        delete preFilledOpenapiDoc.servers[0].variables;
-    }
-    // TODO: See above about filtering out unnecessary paths (= based on funcs).
-    for (let unnecessaryPath of Object.keys(preFilledOpenapiDoc.paths).filter(x => x.includes("{module}"))) {
-        delete preFilledOpenapiDoc.paths[unnecessaryPath];
-    }
-
-    return description;
-}
-
-/**
  * GET
  * - a single Wasm-module's whole metadata (moduleId)
  * - a single Wasm-module's whole OpenAPI description (moduleId/description)
@@ -421,6 +352,8 @@ const moduleDescription = (modulee, functionDescriptions) => {
             tags: [],
             summary: "Auto-generated description",
             parameters: [],
+            // TODO: Get methods cannot have a requestBody, so it won't work for
+            // describing mounts...
             requestBody: {
                 required: true,
                 content: {
@@ -510,7 +443,7 @@ const describeModule = async (request, response) => {
     let functions = {};
     for (let [funcName, func] of Object.entries(request.body).filter(x => typeof x[1] === "object")) {
         functions[funcName] = {
-            method: func.method,
+            method: func.method.toLowerCase(),
             parameters: Object.entries(func)
                 .filter(([k, _v]) => k.startsWith("param"))
                 .map(([k, v]) => ({ name: k, type: v })),
