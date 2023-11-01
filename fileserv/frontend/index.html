@@ -33,8 +33,8 @@
           Module creation
         </label>
         <label class="tab-selector dull">
-          <input type="radio" name="tab-selector" data-tab-id="module-upload">
-          Module upload
+          <input type="radio" name="tab-selector" data-tab-id="module-description">
+          Module description
         </label>
         <label class="tab-selector dull">
           <input type="radio" name="tab-selector" data-tab-id="deployment-create">
@@ -94,17 +94,15 @@
         <div>
           <form id="module-form">
             <fieldset>
-              <legend>Fill-in metadata for a new module</legend>
+              <legend>Create a new module</legend>
               <div>
                 <div>
                   <label for="mname">Name</label>
-                  <input id="mname" name="name" required type="text" value="">
+                  <input id="mname" name="name" type="text" value="" required>
                 </div>
                 <div>
-                  <label for="mopenapi">OpenAPI description</label>
-                  <textarea id="mopenapi" name="openapi" required>
-{}
-                  </textarea>
+                  <label for="wfile">WebAssembly binary (<code>.wasm</code>)</label>
+                  <input type="file" id="wfile" name="module" required>
                 </div>
               </div>
             </fieldset>
@@ -113,21 +111,30 @@
         </div>
       </div>
 
-      <!-- Module upload. -->
-      <div id="module-upload" class="tab hidden">
+      <!-- Module properties. TODO: Rename IDs -->
+      <div id="module-description" class="tab hidden">
         <div>
-          <form id="wasm-form">
+          <form id="module-properties-form">
             <fieldset>
-              <legend>Upload a file to attach to a module</legend>
+              <legend>Add function descriptions and data files</legend>
               <div>
-                <label for="wmodule-select">Select the module:</label>
-                <select id="wmodule-select" name="id" required>
-                  <option value="">Please select an existing module:</option>
-                </select>
-              </div>
-              <div>
-                <label for="wfile">File to upload</label>
-                <input type="file" id="wfile" name="module" required>
+                <div>
+                  <label for="wmodule-select">Select the module:</label>
+                  <select id="wmodule-select" name="id" required>
+                    <option value="">Please select an existing module:</option>
+                  </select>
+                </div>
+                <div>
+                  <p>Fill out function interfaces</p>
+                  <ol id="wmodule-function-list" data-json-key="functions">
+                  </ol>
+                  <!-- Dynamically generated fields based on .wasm file go here. -->
+                </div>
+                <div id="wmodule-mounts-list">
+                  <ol id="wmodule-function-list" data-json-key="mounts">
+                  <!-- Named files to be mounted go here. -->
+                  </ol>
+                </div>
               </div>
             </fieldset>
             <input type="submit" value="Submit"/>
@@ -144,7 +151,7 @@
               <div>
                 <div>
                   <label for="dname">Name</label>
-                  <input id="dname" name="name" required type="text" value="">
+                  <input id="dname" name="name" type="text" value="" required>
                 </div>
                 <div>
                   <p>Procedure-call sequence:</p>
@@ -226,7 +233,7 @@
                       <option value="">Please select a deployment:</option>
                     </select>
                 </div>
-                <!-- Generate here the needed form-fields according to (Thing?) Description -->
+                <!-- Generate here the needed form-fields according to start function description -->
               </div>
             </fieldset>
             <input type="submit" value="Execute!"/>

@@ -12,16 +12,7 @@ services:
       # during `docker compose up`. The "inherited" services need to be started
       # on their own though (separate profile)...
       - ABSTRACT_BASE_HACK_DO_NOT_USE
-    build:
-      context: ./wasmiot-supervisor
-      dockerfile: Dockerfile
-      target: run
-      # args:
-      #   - DEVICE_NAME='thingi' # ::OVERRIDE::
-      #   # TODO Are these needed now that using git submodules (earlier for
-      #   # pulling from gitlab in separate local clone?).
-      #   #- DEPLOY_USER=${DEPLOY_USER}
-      #   #- DEPLOY_TOKEN=${DEPLOY_TOKEN}
+    image: ghcr.io/liquidai-project/wasmiot-supervisor
     # ports:
     #   # 5000 is the default Flask-port that is probably used.
     #   - 0:5000 # ::OVERRIDE::
@@ -34,16 +25,15 @@ services:
     extends: device-base
     profiles:
       - device
-    build:
-      args:
-        - DEVICE_TYPE='webcam-laptop'
-        - DEVICE_NAME='adequate-webcam-laptop'
+    environment:
+      - DEVICE_TYPE='webcam-laptop'
+      - FLASK_APP='adequate-webcam-laptop'
     ports:
       - 3001:5000
     volumes:
-      - ./example/device1/configs:/app/configs
-      - ./example/device1/modules:/app/modules
-      - ./example/device1/output:/app/output
+      - ./example/device1/configs:/app/instance/configs
+      - ./example/device1/modules:/app/instance/modules
+      - ./example/device1/output:/app/instance/output
     deploy:
       # Simulate constrained memory. See
       # https://docs.docker.com/config/containers/resource_constraints/
@@ -59,16 +49,15 @@ services:
     extends: device-base
     profiles:
       - device
-    build:
-      args:
-        - DEVICE_TYPE='webcam-laptop'
-        - DEVICE_NAME='lousy-webcam-laptop'
+    environment:
+      - DEVICE_TYPE='webcam-laptop'
+      - FLASK_APP='lousy-webcam-laptop'
     ports:
       - 3002:5000
     volumes:
-      - ./example/device2/configs:/app/configs
-      - ./example/device2/modules:/app/modules
-      - ./example/device2/output:/app/output
+      - ./example/device2/configs:/app/instance/configs
+      - ./example/device2/modules:/app/instance/modules
+      - ./example/device2/output:/app/instance/output
     privileged: true
     devices:
       - /dev/video0:/dev/video0
@@ -83,16 +72,15 @@ services:
     extends: device-base
     profiles:
       - device
-    build:
-      args:
-        - DEVICE_TYPE='temperature-sensor'
-        - DEVICE_NAME='basic-temperature-sensor'
+    environment:
+      - DEVICE_TYPE='temperature-sensor'
+      - FLASK_APP='basic-temperature-sensor'
     ports:
       - 3003:5000
     volumes:
-      - ./example/device3/configs:/app/configs
-      - ./example/device3/modules:/app/modules
-      - ./example/device3/output:/app/output
+      - ./example/device3/configs:/app/instance/configs
+      - ./example/device3/modules:/app/instance/modules
+      - ./example/device3/output:/app/instance/output
     deploy:
       resources:
         limits:

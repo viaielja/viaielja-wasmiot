@@ -26,6 +26,7 @@ class DeploymentFailed extends Error {
     constructor(combinedResponse) {
         super("deployment failed");
         this.combinedResponse = combinedResponse;
+        this.name = "DeploymentFailed";
     }
 }
 
@@ -62,12 +63,10 @@ class DeploymentNode {
         this.deploymentId = deploymentId;
         // The modules the device needs to download.
         this.modules = [];
-        // Descriptions of endpoints that functions can be called from and
-        // that are needed to set up on the device for this deployment.
+        // Mapping of functions to endpoints for "transparent" RPC-calls _to_
+        // this node. Endpoints that the node exposes to others.
         this.endpoints = {};
-        // The instructions the device needs to follow the execution
-        // sequence i.e., where to forward computation results initiated by
-        // which arriving request.
+        // Chaining of results to others.
         this.instructions = new Instructions();
     }
 }
@@ -92,14 +91,14 @@ class Orchestrator {
         this.messageDevice = options.deviceMessagingFunction;
     }
 
-    async solve(deployment, resolving=false) {
+    async solve(manifest, resolving=false) {
         // Gather the devices and modules attached to deployment in "full"
         // (i.e., not just database IDs).
         let availableDevices = await this.database.read("device");
         // The original deployment should be saved to database as is with the
         // IDs TODO: Exactly why should it be saved?.
-        let hydratedDeployment =  structuredClone(deployment);
-        for (let step of hydratedDeployment.sequence) {
+        let hydratedManifest = structuredClone(manifest);
+        for (let step of hydratedManifest.sequence) {
             step.device = availableDevices.find(x => x._id.toString() === step.device);
             step.module = (await this.database.read("module", { _id: step.module }))[0];
         }
@@ -107,19 +106,19 @@ class Orchestrator {
         //TODO: Start searching for suitable packages using saved file.
         //startSearch();
 
-        let updatedSequence = sequenceFromResources(hydratedDeployment.sequence, availableDevices);
+        let assignedSequence = fetchAndFindResources(hydratedManifest.sequence, availableDevices);
 
         // Now that the deployment is deemed possible, an ID is needed to
         // construct the instructions on devices.
         let deploymentId;
         if (resolving) {
-            deploymentId = deployment._id;
+            deploymentId = manifest._id;
         } else {
-            deploymentId = (await this.database.create("deployment", [deployment]))
+            deploymentId = (await this.database.create("deployment", [manifest]))
                 .insertedIds[0];
         }
 
-        let solution = createSolution(deploymentId, updatedSequence, this.packageManagerBaseUrl)
+        let solution = createSolution(deploymentId, assignedSequence, this.packageManagerBaseUrl)
 
         // Update the deployment with the created solution.
         this.database.update(
@@ -198,20 +197,24 @@ class Orchestrator {
 
         let options = { method: method };
 
-        // OpenAPI Operation Object's requestBody (including files as input).
-        if (operation.requestBody) {
-            let contents = Object.entries(operation.requestBody.content);
-            console.assert(contents.length === 1, "expected one and only one media type");
-            /*
-            let [mediaType, mediaTypeObj] = contents[0];
-            options.headers = { "Content-type": mediaType };
-            */
-            let formData = new FormData();
-            formData.append("data", new Blob([fs.readFileSync(files[0])]), "inputfilename");
-            options.body = formData;
-        } else if (!(["get", "head"].includes(method.toLowerCase()))) {
-            // Request with GET/HEAD method cannot have body.
-            options.body = body;
+        // Request with GET/HEAD method cannot have body.
+        if (!(["get", "head"].includes(method.toLowerCase()))) {
+            // OpenAPI Operation Object's requestBody (including files as input).
+            if (operation.requestBody) {
+                let contents = Object.entries(operation.requestBody.content);
+                console.assert(contents.length === 1, "expected one and only one media type");
+                /*
+                let [mediaType, mediaTypeObj] = contents[0];
+                options.headers = { "Content-type": mediaType };
+                */
+                let formData = new FormData();
+                for (let {path, name} of files) {
+                    formData.append(name, new Blob([fs.readFileSync(path)]));
+                }
+                options.body = formData;
+            } else {
+                options.body = body;
+            }
         }
 
         // Message the first device and return its reaction response.
@@ -222,16 +225,15 @@ class Orchestrator {
 /**
  * Solve for M2M-call interfaces and create individual instructions
  * (deployments) to send to devices.
- * to the deployment manifest.
  * @param {*} deploymentId The deployment ID is used to identify received POSTs
  * on devices regarding this deployment.
  * @returns The created solution.
  * @throws An error if building the solution fails.
  */
-function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
+function createSolution(deploymentId, sequence, packageBaseUrl) {
     let deploymentsToDevices = {};
-    for (let x of updatedSequence) {
-        let deviceIdStr = x.device._id.toString();
+    for (let step of sequence) {
+        let deviceIdStr = step.device._id.toString();
 
         // __Prepare__ to make a mapping of devices and their instructions in order to
         // bulk-send the instructions to each device when deploying.
@@ -239,13 +241,35 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
             deploymentsToDevices[deviceIdStr] = new DeploymentNode(deploymentId);
         }
 
-        // Fill in the details about needed modules and endpoints on each device.
-        let moduleDataForDevice = moduleData(x.module, packageBaseUrl);
-        let [funcc, endpoint] = endpointDescription(deploymentId, x);
+        // Add module needed on device.
+        let moduleDataForDevice = moduleData(step.module, packageBaseUrl);
         deploymentsToDevices[deviceIdStr].modules.push(moduleDataForDevice);
-        // TODO ... Merge together into a single OpenAPI doc for __all__
-        // the modules' endpoints.
-        deploymentsToDevices[deviceIdStr].endpoints[funcc] = endpoint;
+
+        // Add needed endpoint to call function in said module on the device.
+        let funcPathKey = utils.supervisorExecutionPath(step.module.name, step.func);
+        let endpoint = step.module.description.paths[funcPathKey];
+
+        // Build the __SINGLE "MAIN" OPERATION'S__ parameters for the request
+        // according to the description.
+        const OPEN_API_3_1_0_OPERATIONS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
+        let methods = Object.keys(endpoint)
+            .filter((method) => OPEN_API_3_1_0_OPERATIONS.includes(method.toLowerCase()));
+        console.assert(methods.length === 1, "expected one and only one operation on an endpoint");
+        let method = methods[0];
+
+        deploymentsToDevices[deviceIdStr].endpoints[step.func] =  {
+            // TODO: Hardcodedly selecting first(s) from list(s) and
+            // "url" field assumed to be template "http://{serverIp}:{port}".
+            // Should this instead be provided by the device or smth?
+            url: step.module.description.servers[0].url
+                .replace("{serverIp}", step.device.communication.addresses[0])
+                .replace("{port}", step.device.communication.port),
+            path: funcPathKey.replace("{deployment}", deploymentId),
+            operation: {
+                method: method,
+                body: endpoint[method],
+            }
+        };
     }
 
     // It does not make sense to have a device without any possible
@@ -259,13 +283,13 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
     // According to deployment manifest describing the composed
     // application-calls, create a structure to represent the expected behaviour
     // and flow of data between nodes.
-    for (let i = 0; i < updatedSequence.length; i++) {
-        const [device, modulee, func] = Object.values(updatedSequence[i]);
+    for (let i = 0; i < sequence.length; i++) {
+        const [device, modulee, func] = Object.values(sequence[i]);
 
         let deviceIdStr = device._id.toString();
 
-        let forwardFunc = updatedSequence[i + 1]?.func;
-        let forwardDeviceIdStr = updatedSequence[i + 1]?.device._id.toString();
+        let forwardFunc = sequence[i + 1]?.func;
+        let forwardDeviceIdStr = sequence[i + 1]?.device._id.toString();
         let forwardDeployment = deploymentsToDevices[forwardDeviceIdStr];
 
         let forwardEndpoint;
@@ -280,10 +304,10 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
 
         // This is needed at device to figure out how to interpret WebAssembly
         // function's result.
-        let sourceEndpointPaths = deploymentsToDevices[deviceIdStr].endpoints[func].paths;
+        let sourceEndpoint = deploymentsToDevices[deviceIdStr].endpoints[func];
 
         let instruction = {
-            paths: sourceEndpointPaths,
+            from: sourceEndpoint,
             to: forwardEndpoint,
         };
 
@@ -291,7 +315,7 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
         deploymentsToDevices[deviceIdStr].instructions.add(modulee.name, func, instruction);
     }
 
-    let sequenceAsIds = Array.from(updatedSequence)
+    let sequenceAsIds = Array.from(sequence)
         .map(x => ({
             device: x.device._id,
             module: x.module._id,
@@ -314,7 +338,7 @@ function createSolution(deploymentId, updatedSequence, packageBaseUrl) {
  * resources [[device, module, func]...] as Objects. TODO: Throw errors if fails
  * @throws String error if validation of given sequence fails.
  */
-function sequenceFromResources(sequence, availableDevices) {
+function fetchAndFindResources(sequence, availableDevices) {
     let selectedModules = [];
     let selectedDevices = [];
 
@@ -400,10 +424,13 @@ function moduleData(modulee, packageBaseUrl) {
 
     // This is for any other files related to execution of module's
     // functions on device e.g., ML-models etc.
-    let other = [];
-    if (modulee.pb) {
-        other.push((new URL(packageBaseUrl+`file/module/${modulee._id}/pb`)).toString());
+    let other = {};
+    if (modulee.dataFiles) {
+        for (let filename of Object.keys(modulee.dataFiles)) {
+            other[filename] = (new URL(packageBaseUrl+`file/module/${modulee._id}/${filename}`)).toString();
+        }
     }
+
     return {
         id: modulee._id,
         name: modulee.name,
@@ -413,72 +440,6 @@ function moduleData(modulee, packageBaseUrl) {
             other: other,
         },
     };
-}
-
-/**
- * Based on description of a node and functions that it should execute, put
- * together and fill out information needed for describing the service(s).
- * TODO Somehow filter out the unnecessary paths for this deployment that could
- * be attached to the module.
- * @param {*} deploymentId Identification for the deployment the endpoints will
- * be associated to.
- * @param {*} node OUT PARAMETER: The node containing data for where and how
- * execution of functions on it should be requested.
- * Should contain connectivity information (address and port) and definition of
- * module containing functions so they can be called with correct inputs.
- * @returns Pair of the function (index 0) and a pre-filled OpenAPI-doc endpoint
- * (index 1) specially made for this node for configuring (ideally most
- * effortlessly) the endpoint that function is available to be called from.
- */
-function endpointDescription(deploymentId, node) {
-    // Prepare options for making needed HTTP-request to this path.
-    // TODO: Check for device availability here?
-    // FIXME hardcoded: selecting first address.
-    let urlString = node.module.openapi.servers[0].url;
-    // FIXME hardcoded: "url" field assumed to be template "http://{serverIp}:{port}".
-    urlString = urlString
-        .replace("{serverIp}", node.device.communication.addresses[0])
-        .replace("{port}", node.device.communication.port);
-    let url = new URL(urlString);
-
-    // NOTE: The convention is that "paths" field contains the template
-    // "/{deployment}/modules/{module}/<thisFuncName>". In the future, this
-    // template and the OpenAPI or other description format should be as
-    // internal to orchestrator as possible.
-    const funcPathKey = `/{deployment}/modules/{module}/${node.func}`;
-    if (!(funcPathKey in node.module.openapi.paths)) {
-        throw `func '${node.func}' not found in module's OpenAPI-doc`;
-    }
-    // TODO: Iterate all the paths.
-    let funcPath = node.module.openapi.paths[funcPathKey];
-    let filledFuncPathKey = funcPathKey
-        .replace("{deployment}", deploymentId)
-        .replace("{module}", node.module.name);
-
-    // Fill out the prepared parts of the templated OpenAPI-doc.
-    let preFilledOpenapiDoc = node.module.openapi;
-    // Where the device is located.
-    // FIXME hardcoded: selecting first address.
-    preFilledOpenapiDoc.servers[0].url = url.toString();
-    // Where and how to call the func.
-    preFilledOpenapiDoc.paths[filledFuncPathKey] = funcPath;
-
-    // Remove unnecessary fields.
-    // The path has been filled at this point.
-    if (preFilledOpenapiDoc.paths[funcPathKey].parameters) {
-        delete preFilledOpenapiDoc.paths[funcPathKey].parameters
-    }
-    // The server host and port are already filled out at this point.
-    // FIXME hardcoded: selecting first address.
-    if (preFilledOpenapiDoc.servers[0].variables) {
-        delete preFilledOpenapiDoc.servers[0].variables;
-    }
-    // TODO: See above about filtering out unnecessary paths (= based on funcs).
-    for (let unnecessaryPath of Object.keys(preFilledOpenapiDoc.paths).filter(x => x.includes("{module}"))) {
-        delete preFilledOpenapiDoc.paths[unnecessaryPath];
-    }
-
-    return [node.func, preFilledOpenapiDoc];
 }
 
 

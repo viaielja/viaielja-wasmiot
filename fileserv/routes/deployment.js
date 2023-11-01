@@ -15,6 +15,18 @@ function setOrchestrator(orch) {
 }
 
 /**
+ * Validate manifest (this is static typing manually).
+ */
+const validateManifest = (mani) => {
+    console.assert(typeof mani.name === "string", "manifest must have a name");
+    console.assert(typeof mani.sequence === "object" && mani.sequence instanceof Array, "manifest must have a sequence of operations");
+    for (let node of mani.sequence) {
+        console.assert(typeof node.module === "string", "manifest node must have a module");
+        console.assert(typeof node.func === "string", "manifest node must have a function");
+    }
+}
+
+/**
  * GET list of packages or the "deployment manifest"; used by IoT-devices.
  */
 const getDeployment = async (request, response) => {
@@ -42,27 +54,20 @@ const getDeployments = async (request, response) => {
 }
 
 /**
- * POST a new deployment manifest to add to orchestrator's database.
+ * POST a deployment manifest to solve save and enact immediately. For now this
+ * replaces an existing deployment with the same name (which isn't really
+ * aligned with a ReStFuL PoSt...).
  */
 const createDeployment = async (request, response) => {
-    let deployment = request.body;
-
-    // Ignore deployments with an already existing name.
-    // TODO When would a new deployment not be accepted? Based on user credits??
-    let doc = (await database.read("deployment", { name: deployment.name }))[0];
-    if (doc) {
-        response
-            .status(400)
-            .json(new utils.Error(`Deployment name '${deployment.name}' already exists`));
-        return;
-    }
+    let manifest = request.body;
+    validateManifest(manifest);
 
     try {
-        let deploymentId = await orchestrator.solve(deployment);
+        let deploymentId = await orchestrator.solve(manifest);
 
         response.status(201).json({ id: deploymentId });
     } catch (err) {
-        errorMsg = "Failed constructing manifest for deployment" + err;
+        errorMsg = "Failed constructing solution for manifest" + err;
 
         console.error(errorMsg, err.stack);
 
@@ -86,20 +91,25 @@ const tryDeploy = async (deploymentDoc, response) => {
         );
 
         response.json({ deviceResponses: responses });
-    } catch(e) {
-        switch (e.name) {
+    } catch(err) {
+        switch (err.name) {
             case "DeviceNotFound":
-                console.error("device not found", e);
+                console.error("device not found", err);
                 response
                     .status(404)
-                    .json(new utils.Error(undefined, e));
+                    .json(err);
                 break;
-            default:
-                let err = ["unknown error while deploying", e];
-                console.error(e, e.stack);
+            case "DeploymentFailed":
+                console.error("try checking supervisor logs", err, err.stack);
                 response
                     .status(500)
-                    .json(new utils.Error(...err));
+                    .json(err);
+                break;
+            default:
+                let unknownErr = ["unknown error while deploying", err];
+                response
+                    .status(500)
+                    .json(unknownErr);
                 break;
         }
     }

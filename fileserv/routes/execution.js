@@ -16,7 +16,6 @@ function setOrchestrator(orch) {
     orchestrator = orch;
 }
 
-const INPUT_FILE_FIELD = "inputFile";
 /**
  * Send data to the first device in the deployment-sequence in order to
  * kickstart the application execution.
@@ -25,10 +24,10 @@ const execute = async (request, response) => {
     let deployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
 
     try {
-        let args = {}
+        let args = {};
         args.body = request.body;
-        if (request.file) {
-            args.files = [request.file.path];
+        if (request.files) {
+            args.files = request.files.map(file => ({ path: file.path, name: file.fieldname }));
         }
         let execResponse = await orchestrator.schedule(deployment, args);
         if (!execResponse.ok) {
@@ -80,7 +79,7 @@ const execute = async (request, response) => {
 
             if (!execResponse.ok) {
                 // Wait for a while, if the URL is not yet available.
-                if (execResponse.status == 404 && depth < 10) {
+                if (execResponse.status == 404 && depth < 5 && tries < 5) {
                     await new Promise(resolve => setTimeout(resolve, 5000));
                 } else {
                     result = new utils.Error("fetching result failed: " + execResponse.statusText);
@@ -95,13 +94,14 @@ const execute = async (request, response) => {
             .status(statusCode)
             .json(result);
     } catch (e) {
+        console.error("failure in execution:", e);
         response
             .status(500)
             .json(new utils.Error("scheduling work failed", e));
     }
 }
 
-const fileUpload = utils.fileUpload(EXECUTION_INPUT_DIR, INPUT_FILE_FIELD);
+const fileUpload = utils.fileUpload(EXECUTION_INPUT_DIR);
 
 
 const router = express.Router();

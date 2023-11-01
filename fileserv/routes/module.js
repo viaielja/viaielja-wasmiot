@@ -1,4 +1,4 @@
-const { readFile } = require("node:fs");
+const { readFile } = require("node:fs/promises");
 const express = require("express");
 
 const { MODULE_DIR } = require("../constants.js");
@@ -17,19 +17,38 @@ class ModuleCreated {
     }
 }
 
-class WasmFileUploaded {
-    constructor(exports) {
+class ModuleDescribed {
+    constructor(description) {
+        this.description = description;
+    }
+}
+
+class WasmFileUpload {
+    constructor(updateObj) {
         this.type = "wasm";
-        this.exports = exports;
+        this.updateObj = updateObj;
     }
 }
 
-class PbFileUploaded {
-    constructor() {
-        this.type = "pb";
+class MlModelFileUploaded {
+    constructor(type, updateObj) {
+        this.type = type;
+        this.updateObj = updateObj;
     }
 }
 
+class ImageUploaded {
+    constructor(type, updateObj) {
+        this.type = type;
+        this.updateObj = updateObj;
+    }
+}
+
+/**
+ *
+ * @param {*} moduleId
+ * @returns [failCode, module]
+ */
 const getModuleBy = async (moduleId) => {
     // Common database query in any case.
     let getAllModules = moduleId === undefined;
@@ -39,7 +58,7 @@ const getModuleBy = async (moduleId) => {
         matches = await database.read("module", filter);
     } catch (e) {
         let err = ["database query failed", e];
-        return [false, err];
+        return [500, err];
     }
 
     if (getAllModules) {
@@ -67,18 +86,18 @@ const getModuleBy = async (moduleId) => {
  * - all available Wasm-modules' metadata (no moduleId)
  */
 const getModule = (justDescription) => (async (request, response) => {
-    let [failCode, value] = await getModuleBy(request.params.moduleId);
+    let [failCode, modules] = await getModuleBy(request.params.moduleId);
     if (failCode) {
-        console.error(...value);
-        response.status(failCode).json(new utils.Error(value));
+        console.error(...modules);
+        response.status(failCode).json(new utils.Error(modules));
     } else {
         if (justDescription) {
-            console.log("Sending description of module: ", value[0].name);
+            console.log("Sending description of module: ", modules[0].name);
             // Return the description specifically.
-            response.json(value[0].openapi)
+            response.json(modules[0].description)
         } else {
-            console.log("Sending metadata of modules: ", value.map(x => x.name));
-            response.json(value);
+            console.log("Sending metadata of modules: ", modules.map(x => x.name));
+            response.json(modules);
         }
     }
 });
@@ -88,22 +107,24 @@ const getModule = (justDescription) => (async (request, response) => {
  */
 const getModuleFile = async (request, response) => {
     let doc = (await database.read("module", { _id: request.params.moduleId }))[0];
-    let fileExtension = request.params.fileExtension;
+    let filename = request.params.filename;
     if (doc) {
-        let fileObj = doc[fileExtension];
+        let fileObj;
+        if (filename === "wasm") {
+            fileObj = doc.wasm;
+        } else {
+            fileObj = doc.dataFiles[filename];
+        }
+
         if (!fileObj) {
             response.status(400).json({
-                err: `file '${fileExtension}' missing from module '${doc.name}'`
+                err: `file '${filename}' missing from module '${doc.name}'`
             });
             return;
         }
-        console.log(`Sending '${fileExtension}' file from file-path: `, fileObj.path);
-        // TODO: Should force to use the application/wasm media type like
-        // suggested(?) here:
-        // https://webassembly.github.io/spec/web-api/#mediaType
-        // The resp.sendFile(f) uses application/octet-stream by default.
-        let options = { headers: { 'Content-Type': fileExtension == "wasm" ? 'application/wasm' : 'application/binary' } };
-        // FIXME: File might not be found at doc.path.
+        console.log(`Sending '${filename}' file from file-path: `, fileObj.path);
+        // TODO: A 'datafile' might not be application/binary in every case.
+        let options = { headers: { 'Content-Type': filename == "wasm" ? 'application/wasm' : 'application/binary' } };
         response.sendFile(fileObj.path, options);
     } else {
         let errmsg = `Failed querying for module id: ${request.params.moduleId}`;
@@ -113,11 +134,10 @@ const getModuleFile = async (request, response) => {
 }
 
 /**
- * Save metadata of a Wasm-module to database and leave information about the
- * concrete file to be patched by another upload-request. This separates
- * between requests with pure JSON or binary bodies.
+ * Parse metadata from a Wasm-binary to database along with its name.
  */
 const createModule = async (request, response) => {
+    // Create the database entry.
     let moduleId;
     try {
         moduleId = (await database.create("module", [request.body]))
@@ -127,98 +147,344 @@ const createModule = async (request, response) => {
         return;
     }
 
-    // Wasm-files are identified by their database-id.
-    response
-        .status(201)
-        .json(new ModuleCreated(moduleId));
+    // Attach the Wasm binary.
+    try {
+        let result = await addModuleBinary({_id: moduleId}, request.files[0]);
+
+        response
+            .status(201)
+            .json(new ModuleCreated(result));
+    } catch (e) {
+        let err = ["Failed attaching a file to module", e];
+        console.error(...err);
+        // TODO Handle device not found on update.
+        response
+            .status(500)
+            .json(new utils.Error(...err));
+    }
+};
+
+const getFileUpdate = async (file) => {
+    let originalFilename = file.originalname;
+    let fileExtension = originalFilename.split(".").pop();
+
+    // Add additional fields initially from the file-upload and save to
+    // database.
+    let updateObj = {};
+    let updateStruct = {
+        humanReadableName: originalFilename,
+        fileName: file.filename,
+        path: file.path,
+    };
+
+    let data;
+    try {
+        data = await readFile(file.path);
+    } catch (err) {
+        console.log("couldn't read Wasm binary from file ", file.path, err);
+        // TODO: Should this really be considered server-side error (500)?
+        response.status(500).json({err: `Bad Wasm file: ${err}`});
+        return;
+    }
+
+    // Perform actions specific for the filetype to update
+    // non-filepath-related metadata fields.
+    let result;
+    if (fileExtension === "wasm") {
+        updateObj["wasm"] = updateStruct;
+
+        try {
+            await parseWasmModule(data, updateObj)
+        } catch (e) {
+            let err = ["failed compiling Wasm", e]
+            console.error(...err);
+            throw new utils.Error(...err);
+        }
+        result = new WasmFileUpload(updateObj);
+    } else {
+        // All other filetypes are to be "mounted".
+        updateObj[originalFilename] = updateStruct;
+        switch (fileExtension) {
+            // Model weights etc. for an ML-application.
+            case "pb":
+            case "onnx":
+                result = new MlModelFileUploaded(fileExtension, updateObj);
+                break;
+            default:
+                switch (file.mimetype) {
+                    case "image/jpeg":
+                    case "image/jpg":
+                    case "image/png":
+                        result = new ImageUploaded(fileExtension, updateObj);
+                        return result;
+                }
+                let err = `unsupported file extension: '${fileExtension}'`;
+                throw new utils.Error(err);
+        }
+    }
+
+    return result;
 }
 
 /**
- * Attach a file to the previously created module.
+ * Attach _binary_file (i.e., .wasm) to a module.
  *
  * Saves the file to the server filesystem and references to it into module's
  * database-entry matching a module-ID given in the body.
- *
- * Regarding the use of PATCH https://restfulapi.net/http-methods/#patch says:
- * "-- the PATCH method is the correct choice for partially updating an existing
- * resource, and you should only use PUT if you’re replacing a resource in its
- * entirety."
- *
- * IMO using PATCH would fit this, but as this route will technically _create_ a
- * new resource (the file) (and the method is not supported with
- * multipart/form-data at the frontend), use POST.
  */
-const addModuleFile = async (request, response) => {
-    let filter = { _id: request.params.moduleId };
-    let fileExtension = request.file.originalname.split(".").pop();
+const addModuleBinary = async (module, file) => {
+    let result = await getFileUpdate(file);
+    if (result.type !== "wasm") {
+        throw new utils.Error("file given as module binary is not a .wasm file");
+    }
+    let updateObj = result.updateObj;
 
-    let updateObj = {}
-    // Add additional fields initially from the file-upload and save to
-    // database.
-    updateObj[fileExtension] = {
-        humanReadableName: request.file.originalname,
-        fileName: request.file.filename,
-        path: request.file.path,
+    let filter = { _id: module._id };
+    // Now actually update the database-document, devices and respond to
+    // caller.
+    await updateModule(filter, updateObj);
+
+    console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, result.updateObj);
+
+    // Tell devices to fetch updated files on modules.
+    await notifyModuleFileUpdate(filter._id);
+
+    return result;
+};
+
+
+/**
+ * Attach _data_files (i.e., not .wasm) to a module.
+ *
+ * Saves the files to the server filesystem and references to them into module's
+ * database-entry matching a module-ID given in the body.
+ */
+const addModuleDataFiles = async (moduleId, files) => {
+    let update = { dataFiles: {} };
+    for (let file of files) {
+        let result;
+        try {
+            result = await getFileUpdate(file);
+        } catch (e) {
+            let err = ["failed attaching file to module", e];
+            console.error(...err);
+            throw new utils.Error(...err);
+        }
+
+        if (result.type === "wasm") {
+            throw new utils.Error("Wasm file not allowed at data file update");
+        }
+        let [[key, obj]] = Object.entries(result.updateObj);
+        update.dataFiles[key] = obj;
+    }
+
+    let filter = { _id: moduleId };
+    // Now actually update the database-document, devices and respond to
+    // caller.
+    await updateModule(filter, update);
+
+    console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, update);
+
+    // Tell devices to fetch updated files on modules.
+    await notifyModuleFileUpdate(filter._id);
+};
+
+/**
+ * Map function parameters to names and mounts to files ultimately creating an
+ * OpenAPI description for the module.
+ * @param {*} module The module to describe (from DB).
+ * @param {{"functionName": { parameters: [ { name: string, type: "integer" |
+ * "float" }], mounts: { "a/mount/path": { mediaType: string } }, outputType: {
+ * "aMediaType": schema} }}} functionDescriptions Mapping of function names to
+ * their descriptions.
+ * @returns An OpenAPI description of the module primarily its functions and
+ * mounts.
+ */
+const moduleDescription = (modulee, functionDescriptions) => {
+    /**
+     * Create description for a single function.
+     * @param {string} funcName
+     * @param {{ parameters: [ { type: integer | float | schema }], mounts: { "./some/mount/path": { mediaType: string, stage: "deployment" | "execution" }, output: { "media/type": schema} }} func
+     * @returns [functionCallPath, functionDescription]
+     */
+    function funcPathDescription(funcName, func) {
+        let sharedParams = [
+            {
+                "name": "deployment",
+                "in": "path",
+                "description": "Deployment ID",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                }
+            }
+        ];
+        let funcParams = func.parameters.map(x => ({
+            name: x.name,
+            in: "query", // TODO: Where dis?
+            description: "Auto-generated description",
+            required: true,
+            schema: {
+                type: x.type
+            }
+        }));
+
+        let funcDescription = {
+            summary: "Auto-generated description",
+            parameters: sharedParams,
+        };
+        funcDescription[func.method] = {
+            tags: [],
+            summary: "Auto-generated description",
+            parameters: funcParams,
+            responses: {
+                200: {
+                    description: "Auto-generated description",
+                    content: {
+                        "application/json": { // TODO Where dis?
+                            schema: {
+                                type: func.outputType
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        // Describe mounts if there are any.
+        // TODO: HTTP GET -methods cannot have a requestBody, so it won't
+        // work for describing mounts...
+        let mounts = Object.entries(func.mounts);
+        if (mounts.length > 0) {
+            let mountEntries = Object.fromEntries(
+                    mounts.map(([path, mount]) => [
+                        path,
+                        {
+                            type: "string",
+                            format: "binary",
+                            // TODO: This is not in line with the OpenAPI spec.
+                            // Could define as a separate component maybe (or
+                            // better yet, ditch the whole OpenAPI business with
+                            // modules altogether :)?
+                            stage: mount.stage,
+                        }
+                    ])
+            );
+            let mountEncodings = Object.fromEntries(
+                mounts.map(([path, mount]) => [path, { contentType: mount.mediaType }])
+            );
+            let content = {
+                "multipart/form-data": {
+                    schema: {
+                        type: "object",
+                        properties: mountEntries
+                    },
+                    encoding: mountEncodings
+                }
+            };
+            funcDescription[func.method].requestBody = {
+                required: true,
+                content,
+            };
+        }
+
+        return [
+            utils.supervisorExecutionPath(modulee.name, funcName),
+            funcDescription
+        ];
+    }
+
+    // TODO: Check that the module (i.e. .wasm binary) and description info match.
+
+    let funcPaths = Object.entries(functionDescriptions).map(x => funcPathDescription(x[0], x[1]));
+    const description = {
+        openapi: "3.0.3",
+        info: {
+            title: `${modulee.name}`,
+            description: "Calling microservices defined as WebAssembly functions",
+            version: "0.0.1"
+        },
+        tags: [
+            {
+            name: "WebAssembly",
+            description: "Executing WebAssembly functions"
+            }
+        ],
+        servers: [
+            {
+                url: "http://{serverIp}:{port}",
+                variables: {
+                    serverIp: {
+                        default: "localhost",
+                        description: "IP or name found with mDNS of the machine running supervisor"
+                    },
+                    port: {
+                        enum: [
+                            "5000",
+                            "80"
+                        ],
+                        default: "5000"
+                    }
+                }
+            }
+        ],
+        paths: {...Object.fromEntries(funcPaths)}
     };
 
-    readFile(request.file.path, async function (err, data) {
-        if (err) {
-            console.log("couldn't read Wasm binary from file ", request.file.path, err);
-            // TODO: Should this really be considered server-side error (500)?
-            response.status(500).json({err: `Bad Wasm file: ${err}`});
-            return;
+    return description;
+};
+
+const describeModule = async (request, response) => {
+    // Save associated files ("mounts") adding their info to the database entry.
+    await addModuleDataFiles(request.params.moduleId, request.files);
+
+    // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
+    let [failCode, [modulee]] = await getModuleBy(request.params.moduleId);
+    if (failCode) {
+        console.error(...value);
+        response.status(failCode).json(new utils.Error(value));
+        return;
+    }
+
+    // Prepare description for the module based on given info for functions
+    // (params & outputs) and files (mounts).
+    let functions = {};
+    for (let [funcName, func] of Object.entries(request.body).filter(x => typeof x[1] === "object")) {
+        functions[funcName] = {
+            method: func.method.toLowerCase(),
+            parameters: Object.entries(func)
+                .filter(([k, _v]) => k.startsWith("param"))
+                .map(([k, v]) => ({ name: k, type: v })),
+            mounts: "mounts" in func
+                ? Object.fromEntries(
+                    Object.values(func["mounts"])
+                        // Map files by their form fieldname to this function's mount.
+                        .map(({ name, stage }) => ([ name, {
+                            // If no file is given the media type cannot be
+                            // determined and is set to default.
+                            mediaType: (
+                                request.files.find(x => x.fieldname === name)?.mimetype
+                                || "application/octet-stream"
+                            ),
+                            stage: stage,
+                        }]))
+                )
+                : {},
+            outputType: func.output
         }
+    }
+    let description = moduleDescription(modulee, functions);
 
-        // Perform actions specific for the filetype to update
-        // non-filepath-related metadata fields.
-        let statusCode = 200;
-        let result;
-        switch (fileExtension) {
-            case "wasm":
-                try {
-                    await parseWasmModule(data, updateObj)
-                } catch (e) {
-                    let err = ["failed compiling Wasm", e]
-                    console.error(...err);
-                    statusCode = 500;
-                    result = new utils.Error(...err);
-                }
-                result = new WasmFileUploaded(updateObj.exports);
-                break;
-            case "pb":
-                // Model weights etc. for an ML-application.
-                result = new PbFileUploaded();
-                break;
-            default:
-                let err = `unsupported file extension: '${fileExtension}'`;
-                statusCode = 500;
-                result = new utils.Error(err);
-                console.error(err);
-                break;
-        }
+    try {
+        await updateModule({ _id: request.params.moduleId }, { description: description });
+    } catch (e) {
+        let err = ["failed updating module with description", e];
+        console.error(...err);
+        response.status(500).json(new utils.Error(...err));
+        return;
+    }
 
-        // Now actually update the database-document, devices and respond to
-        // caller.
-        try {
-            await updateModule(filter, updateObj);
-
-            console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, updateObj);
-
-            // Tell devices to fetch updated files on modules.
-            await notifyModuleFileUpdate(filter._id);
-            response
-                .status(statusCode)
-                .json(result);
-        } catch (e) {
-            let err = ["Failed attaching a file to module", e];
-            console.error(...err);
-            // TODO Handle device not found on update.
-            response
-                .status(500)
-                .json(new utils.Error(...err));
-        }
-    });
-}
+    response.json(new ModuleDescribed(description));
+};
 
 /**
  * DELETE a single or all available Wasm-modules.
@@ -298,7 +564,7 @@ async function notifyModuleFileUpdate(moduleId) {
             .read("device", { _id: deviceId }))[0];
 
         if (!device) {
-            throw new utils.Error(`No device found for '${deviceId}' in manifest#${i} of deployment '${deploymentDoc.name}'`);
+            throw new utils.Error(`No device found for '${deviceId}' in manifest#${i}'`);
         }
 
         for (let manifest of manifests) {
@@ -330,11 +596,21 @@ const fileUpload = utils.fileUpload(MODULE_DIR, "module");
 
 
 const router = express.Router();
-router.post("/", createModule);
-router.post("/:moduleId/upload", fileUpload, utils.validateFileFormSubmission, addModuleFile);
+router.post(
+    "/",
+    fileUpload,
+    // A .wasm binary is required.
+    utils.validateFileFormSubmission,
+    createModule,
+);
+router.post(
+    "/:moduleId/upload",
+    fileUpload,
+    describeModule,
+);
 router.get("/:moduleId?", getModule(false));
 router.get("/:moduleId/description", getModule(true));
-router.get("/:moduleId/:fileExtension", getModuleFile);
+router.get("/:moduleId/:filename", getModuleFile);
 router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
 
 module.exports = { setDatabase, router };

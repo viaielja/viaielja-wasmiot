@@ -9,6 +9,16 @@ try {
 }
 
 
+/**
+ * Return the path that is used on supervisor for calling functions.
+ * @param {*} moduleId
+ * @param {*} funcName
+ * @returns
+ */
+function supervisorExecutionPath(moduleName, funcName) {
+    return `/{deployment}/modules/${moduleName}/${funcName}`;
+}
+
 /// Perform boilerplate tasks when responding with a file read from filesystem.
 function respondWithFile(response, filePath, contentType) {
     response.status(200)
@@ -71,8 +81,8 @@ class ApiError {
 function validateFileFormSubmission(request, response, next) {
     if (request.method !== "POST") { next(); return; }
 
-    // Check that request contains a file upload.
-    if (!request.hasOwnProperty("file")) {
+    // Check that request contains files uploaded.
+    if (!request.hasOwnProperty("files")) {
         response.status(400).send("file-submission missing");
         console.log("Bad request; needs a file-input for the module field");
         return;
@@ -86,10 +96,14 @@ function validateFileFormSubmission(request, response, next) {
  *
  * From: https://www.twilio.com/blog/handle-file-uploads-node-express
  * @param {*} destinationFilePath
- * @param {*} formFieldName
- * @returns Middleware for saving an incoming file.
+ * @returns Middleware for saving incoming files named in by strings in `fields`.
  */
-const fileUpload = (destinationFilePath, formFieldName) => multer({ dest: destinationFilePath }).single(formFieldName);
+const fileUpload =
+    (destinationFilePath) =>
+        //(fields) =>
+            multer({ dest: destinationFilePath })
+                .any();
+                //TODO: This'd be a tad nicer/secure: .fields(fields.map(field => ({ name: field, maxCount: 1 })));
 
 /**
  * Return the main OpenAPI 3.1.0 operation of a deployment manifest starting
@@ -103,27 +117,18 @@ function getStartEndpoint(deployment) {
         .fullManifest[deployment.sequence[0].device]
         .endpoints[deployment.sequence[0].func];
 
-    // FIXME hardcoded: selecting first(s) from list(s).
-    let url = new URL(startEndpoint.servers[0].url);
-    // FIXME hardcoded: Selecting 0 because paths expected to contain only a
-    // single item selected at creation of deployment manifest.
-    let [pathName, pathObj] = Object.entries(startEndpoint.paths)[0];
-
-    // Build the __SINGLE "MAIN" OPERATION'S__ parameters for the request
-    // according to the description.
-    const OPEN_API_3_1_0_OPERATIONS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
-    let operations = Object.entries(pathObj)
-        .filter(([method, _]) => OPEN_API_3_1_0_OPERATIONS.includes(method.toLowerCase()));
-    console.assert(operations.length === 1, "expected one and only one operation");
-
-    let [method, operationObj] = operations[0];
-
-    return { url, path: pathName, method, operationObj };
+    return {
+        url: new URL(startEndpoint.url),
+        path: startEndpoint.path,
+        method: startEndpoint.operation.method,
+        operationObj: startEndpoint.operation.body
+    };
 }
 
 
 if (!runningInBrowser) {
     module.exports = {
+        supervisorExecutionPath,
         respondWithFile,
         messageDevice,
         Error: ApiError,

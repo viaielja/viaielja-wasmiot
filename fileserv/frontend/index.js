@@ -5,13 +5,17 @@
 
 /**
  * Mapping of OpenAPI 3.1.0 schema types to HTML input field types.
+ * https://spec.openapis.org/oas/latest.html#data-types
  * @param {*} schema
  * @returns { string }
  */
 function OpenApi3_1_0_SchemaToInputType(schema) {
     switch (schema.type) {
+        case "number":
         case "integer":
             return "number";
+        case "string":
+            return "text";
         default:
             throw `Unsupported schema type '${schema.type}'`;
     }
@@ -34,24 +38,32 @@ function formToObject(form) {
     let inputs = [
         ...form.querySelectorAll("input[type=text]"),
         ...form.querySelectorAll("input[type=number]"),
+        ...(
+            Array.from(form.querySelectorAll("select"))
+            // Add as 'value' the selected option's value.
+            .map(x => {
+                x.value = x.querySelectorAll("option")[x.selectedIndex].value;
+                return x;
+            })
+        ),
     ];
     // Text inputs.
     for (let input of inputs) {
+        let parent = obj;
+        if ("parent" in input.dataset) {
+            // Add this input value to a parent object.
+            if (!(input.dataset.parent in obj)) {
+                obj[input.dataset.parent] = {};
+            }
+            parent = obj[input.dataset.parent];
+        }
         // HACK: List-inputs are identified by a custom field and
         // ','-characters delimit the values.
         if ("hacktype" in input.dataset && input.dataset.hacktype === "array") {
-            obj[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
+            parent[input.name] = input.value.split(",").filter(x => x.trim().length > 0);
         } else {
-            obj[input.name] = input.value;
+            parent[input.name] = input.value;
         }
-    }
-
-    // Select elements immediately under this form NOTE: the ":scope" selector
-    // (See: https://developer.mozilla.org/en-US/docs/Web/CSS/:scope) might
-    // be better?. HACK: Getting all under div (which currently excludes
-    // items under ol).
-    for (let select of form.querySelectorAll("div > select")) {
-        obj[select.name] = select.selectedOptions[0].value;
     }
 
     // TODO: Use formdata directly? See:
@@ -82,19 +94,41 @@ function formDataFrom(form) {
     // inputs and one "level" are handled.
     let formObj = formToObject(form);
     for (let [key, value] of Object.entries(formObj)) {
-        switch (typeof (value)) {
+        let valueType = typeof value;
+        switch (valueType) {
             case "string":
                 formData.append(key, value);
                 break;
+            case "object":
+                let subEntries = Object.entries(value);
+                if (subEntries.length === 0 || typeof subEntries[0][1] === "string") {
+                    for (let [subKey, subValue] of subEntries) {
+                        formData.append(`${key}[${subKey}]`, subValue);
+                    }
+                    break;
+                }
+                valueType = "object with non-string values";
             default:
-                alert("Submitting the type '" + typeof (value) + "'' is not currently supported!")
+                alert("Submitting the type '" + valueType + "'' is not currently supported!")
                 return;
         }
     }
 
-    // NOTE: only one (1) file is sent.
-    let fileField = form.querySelector("input[type=file]");
-    if (fileField) {
+    // HACK: Keep track of indices for making arrays of each functions' mounts.
+    let funcMountIdx = {};
+    // Send all the files found.
+    for (let fileField of form.querySelectorAll("input[type=file]")) {
+        // HACK: Add info about mount file to its parent function.
+        if ("ismount" in fileField.dataset) {
+            let funcName = fileField.dataset.parent;
+            if (!(funcName in funcMountIdx)) {
+                funcMountIdx[funcName] = 0;
+            }
+            mountIdx = funcMountIdx[funcName];
+            formData.append(`${funcName}[mounts][${mountIdx}][name]`, fileField.name);
+            formData.append(`${funcName}[mounts][${mountIdx}][stage]`, fileField.dataset.stage);
+            funcMountIdx[funcName] += 1;
+        }
         formData.append(fileField.name, fileField.files[0]);
     }
 
@@ -181,6 +215,130 @@ async function tryFetchWithStatusUpdate(path) {
     }
 }
 
+/**
+ * Generate fields for describing the functions' interfaces and mounts.
+ * @param {{exports: [{name: string, parameterCount: integer}]}} module
+ * @returns
+ */
+function generateFunctionDescriptionFieldsFor(module) {
+    // Get the data to build a form.
+    let functions = module.exports;
+
+    let functionFieldGroups = [];
+    // Build the form.
+    for (let { name: functionName, parameterCount } of functions) {
+        let inputFieldset = document.createElement("fieldset");
+        inputFieldset.name = functionName;
+        // Add header showing the function that is described.
+        let legend = document.createElement("legend");
+        legend.textContent = functionName;
+        inputFieldset.appendChild(legend);
+
+        // Add HTTP-method chooser between GET and POST.
+        let methodSelect = document.createElement("select");
+        methodSelect.name = "method";
+        methodSelect.dataset.parent = functionName;
+        let getOption = document.createElement("option");
+        getOption.value = "GET";
+        getOption.textContent = "GET";
+        getOption.selected = true;
+        let postOption = document.createElement("option");
+        postOption.value = "POST";
+        postOption.textContent = "POST";
+        methodSelect.appendChild(getOption);
+        methodSelect.appendChild(postOption);
+        inputFieldset.appendChild(methodSelect);
+
+        function makeInputField(textContent, name, defaultValue, type="text") {
+            // Create elems.
+            let inputFieldDiv = document.createElement("div");
+            let inputFieldLabel = document.createElement("label");
+            let inputField = document.createElement("input");
+
+            // Fill with data.
+            inputFieldLabel.textContent = textContent;
+            // NOTE: This identifies which parameter associates with which function
+            inputField.dataset.parent = functionName;
+            inputField.name = name;
+            inputField.value = defaultValue;
+            inputField.type = type;
+
+            inputFieldLabel.appendChild(inputField);
+            inputFieldDiv.appendChild(inputFieldLabel);
+
+            return inputFieldDiv;
+        }
+
+        function makeMountField(name) {
+            let x = makeInputField(name, name, "", type="file");
+            // Add stage selector for when this mount is expected at supervisor.
+            let stageSelect = document.createElement("select");
+            stageSelect.name = "stage";
+            stageSelect.dataset.parent = functionName;
+            let deploymentOption = document.createElement("option");
+            deploymentOption.value = "deployment";
+            deploymentOption.textContent = "Deployment";
+            // Set the stage to 'deployment' by default.
+            deploymentOption.selected = true;
+            let executionOption = document.createElement("option");
+            executionOption.value = "execution";
+            executionOption.textContent = "Execution";
+            stageSelect.appendChild(deploymentOption);
+            stageSelect.appendChild(executionOption);
+
+            // Set the stage to the file's dataset when option changes.
+            stageSelect.addEventListener("change", (event) => {
+                x.querySelector("input[type=file]").dataset.stage = event.target.value;
+            });
+            x.querySelector("input[type=file]").dataset.stage = stageSelect.value;
+
+            x.appendChild(stageSelect);
+
+            // Add flag for knowing later that this is a mount.
+            x.querySelector("input").dataset.ismount = true;
+            return x;
+        }
+
+        if (parameterCount > 0) {
+            for (let i = 0; i < parameterCount; i++) {
+                let inputFieldDiv = makeInputField(`Parameter #${i}`, `param${i}`, "integer");
+                inputFieldset.appendChild(inputFieldDiv);
+            }
+        } else {
+            // Show that there are no parameters.
+            let text = document.createElement("p");
+            text.textContent = "No parameters.";
+            inputFieldset.appendChild(text);
+        }
+
+        // Add button for adding mounts.
+        let mountsSpan = document.createElement("span");
+        let mountsDiv = document.createElement("div");
+        mountsDiv.classList.add("mounts");
+        mountsSpan.appendChild(mountsDiv);
+        let addMountButton = document.createElement("button");
+        addMountButton.textContent = "Add mount";
+        let addMountNameFieldDiv = makeInputField("Mount name", "mountName", "").querySelector("label");
+        mountsSpan.appendChild(addMountNameFieldDiv);
+        addMountButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            let mountFieldName = addMountNameFieldDiv.querySelector("input").value;
+            let mountFieldDiv = makeMountField(mountFieldName);
+            inputFieldset.querySelector(".mounts").appendChild(mountFieldDiv);
+        });
+        mountsSpan.appendChild(addMountButton);
+        inputFieldset.appendChild(mountsSpan);
+
+        // Add field for function output.
+        let outputFieldDiv = makeInputField("Output", "output", "integer");
+        inputFieldset.appendChild(outputFieldDiv);
+
+        functionFieldGroups.push(inputFieldset);
+    }
+
+    return functionFieldGroups;
+}
+
 function generateParameterFieldsFor(deployment) {
     // Get the data to build a form.
     let { operationObj: operation } = getStartEndpoint(deployment);
@@ -194,7 +352,7 @@ function generateParameterFieldsFor(deployment) {
         let inputField = document.createElement("input");
 
         // Fill with data.
-        inputFieldLabel.textContent = param.description
+        inputFieldLabel.textContent = param.name;
         inputField.type = OpenApi3_1_0_SchemaToInputType(param.schema);
         inputField.name = param.name;
 
@@ -205,25 +363,48 @@ function generateParameterFieldsFor(deployment) {
         fieldDivs.push(inputFieldDiv);
     }
 
-    // (Single) File upload based on media type.
     if (operation.requestBody) {
-        let [fileMediaType, _fileSchema] = Object.entries(operation.requestBody.content)[0];
-        let fileInputDiv = document.createElement("div");
-        let fileInputFieldLabel = document.createElement("label");
-        let fileInputField = document.createElement("input");
-        // Data.
-        let executeFileFieldName = "inputFile";
-        let executeFileUploadId = `execute-form-${fileMediaType}-${executeFileFieldName}`;
-        fileInputFieldLabel.textContent = `Upload file (${fileMediaType}):`;
-        fileInputFieldLabel.htmlFor = executeFileUploadId;
-        fileInputField.id = executeFileUploadId;
-        fileInputField.name = executeFileFieldName;
-        fileInputField.type = "file";
-        // Add to form.
-        fileInputDiv.appendChild(fileInputFieldLabel);
-        fileInputDiv.appendChild(fileInputField);
+        files = [];
 
-        fieldDivs.push(fileInputDiv);
+        let [fileMediaType, fileMediaObj] = Object.entries(operation.requestBody.content)[0];
+        fileSchema = fileMediaObj.schema;
+        if (fileMediaType === "multipart/form-data" && fileSchema.type === "object") {
+            // (Single) File upload based on media type.
+            for (let [name, metadata] of Object.entries(fileSchema.properties)) {
+                console.assert(
+                    metadata.type === "string",
+                    "When inputting a file (using multipart/form-data), the type must be 'string' to indicate the binary data contained in the file"
+                );
+                // Do not add deployment-stage files to the form unnecessarily.
+                if (metadata.stage === "execution") {
+                    files.push({ name: name, mediaType: fileMediaObj.encoding[name]["contentType"] });
+                }
+            }
+        } else {
+            // Just a single file.
+            files = [{name: "inputFile", mediaType: fileMediaType}];
+        }
+
+        for (let file of files) {
+            let fileInputDiv = document.createElement("div");
+            let fileInputFieldLabel = document.createElement("label");
+            let fileInputField = document.createElement("input");
+            // Data.
+            let executeFileUploadId = `execute-form-${file.mediaType}-${file.name}`;
+            fileInputFieldLabel.textContent = `File to mount as '${file.name}' (${file.mediaType}):`;
+            fileInputFieldLabel.htmlFor = executeFileUploadId;
+            fileInputField.id = executeFileUploadId;
+            // Name used when mapping to input in function (OpenAPI) description.
+            fileInputField.name = file.name;
+            // Media type used when mapping to input in function (OpenAPI) description.
+            fileInputField.mediaType = file.mediaType;
+            fileInputField.type = "file";
+            // Add to form.
+            fileInputDiv.appendChild(fileInputFieldLabel);
+            fileInputDiv.appendChild(fileInputField);
+
+            fieldDivs.push(fileInputDiv);
+        }
     }
 
     return fieldDivs;
@@ -289,14 +470,18 @@ function addProcedureRow(listId, devicesData, modulesData) {
  * See:
  * https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#uploading_a_file
  */
-function submitFile(url) {
+function submitFormData(url) {
     function handleSubmit(formSubmitEvent) {
         formSubmitEvent.preventDefault()
         let formData = formDataFrom(formSubmitEvent.target);
         // NOTE: Semi-hardcoded route parameter! Used e.g. in '/file/module/:id/upload'.
-        let idUrl = url.replace(":id", formData.get("id"));
+        if (formData.has("id")) {
+            url = url.replace(":id", formData.get("id"));
+            // Remove in order not to resend.
+            formData.delete("id");
+        }
 
-        apiCall(idUrl, "POST", formData, false);
+        apiCall(url, "POST", formData, false);
     }
 
     return handleSubmit;
@@ -366,8 +551,33 @@ function setStatus(result) {
  * Event listeners:
  */
 
-function handleExecutionSubmit(event) {
-    submitFile("/execute/:id")(event);
+/**
+ * Using the module-ID in the event, generate a form for describing functions'
+ * interfaces and (module) mounts.
+ * @param {*} event The event that triggered this function.
+ */
+async function setupModuleDescriptionFields(event) {
+    // Remove all other elements from the form except for the module
+    // selector.
+    let divsWithoutFirst =
+        document.querySelectorAll("#module-properties-form fieldset > div > div:not(:first-child)");
+    for (div of divsWithoutFirst) {
+        div.remove();
+    }
+
+    // Add fields based on the selected module.
+    let moduleId = event.target.value;
+    if (!moduleId) {
+        // Assume the placeholder was selected and thus there is nothing to
+        // show.
+        return;
+    }
+    let modulee = (await fetchModule(moduleId))[0];
+
+    let formTopDiv = document.querySelector("#module-properties-form fieldset > div");
+    for (let div of generateFunctionDescriptionFieldsFor(modulee)) {
+        formTopDiv.appendChild(div);
+    }
 }
 
 /**
@@ -403,24 +613,28 @@ async function setupDeploymentUpdateFields(deployment, devices, modules) {
         item.remove();
     }
     if (deployment) {
-    // Now add the existing deployment content to the fields.
-    // ID into a non-editable field.
-    document.querySelector("#duid").value = deployment._id;
-    // Name.
-    document.querySelector("#duname").value = deployment.name;
-    // Sequence.
-    for (let { device: deviceId, module: moduleId, func } of deployment.sequence) {
-        // TODO: Delete this joke.
-        let stepItem = await addProcedureRow("duprocedure-sequence-list", devices, modules)({
-            preventDefault: () => { },
-        });
+        // Now add the existing deployment content to the fields.
+        // ID into a non-editable field.
+        document.querySelector("#duid").value = deployment._id;
+        // Name.
+        document.querySelector("#duname").value = deployment.name;
+        // Sequence.
+        for (let { device: deviceId, module: moduleId, func } of deployment.sequence) {
+            // TODO: Delete this joke.
+            let stepItem = await addProcedureRow("duprocedure-sequence-list", devices, modules)({
+                preventDefault: () => { },
+            });
 
-        let optionElem = stepItem.querySelector("option");
-        let { value: value, text: textContent } = deploymentSequenceItem(devices.find(x => x._id === deviceId), modules.find(x => x._id === moduleId), func);
-        optionElem.value = value;
-        optionElem.textContent = textContent;
+            let optionElem = stepItem.querySelector("option");
+            let { value: value, text: textContent } = deploymentSequenceItem(devices.find(x => x._id === deviceId), modules.find(x => x._id === moduleId), func);
+            optionElem.value = value;
+            optionElem.textContent = textContent;
+        }
     }
 }
+
+function handleExecutionSubmit(event) {
+    submitFormData("/execute/:id")(event);
 }
 
 /**
@@ -464,13 +678,13 @@ async function setupExecutionParameterFields(event) {
  */
 function setupTab(tabId) {
     const tabSetups = {
-        "resource-listing"  : setupResourceListingTab,
-        "module-create"     : setupModuleCreateTab,
-        "module-upload"     : setupModuleUploadTab,
-        "deployment-create" : setupDeploymentCreateTab,
-        "deployment-update" : setupDeploymentUpdateTab,
-        "deployment-action" : setupDeploymentActionTab,
-        "execution-start"   : setupExecutionStartTab,
+        "resource-listing"   : setupResourceListingTab,
+        "module-create"      : setupModuleCreateTab,
+        "module-description" : setupModuleUploadTab,
+        "deployment-create"  : setupDeploymentCreateTab,
+        "deployment-update"  : setupDeploymentUpdateTab,
+        "deployment-action"  : setupDeploymentActionTab,
+        "execution-start"    : setupExecutionStartTab,
     };
 
     tabSetups[tabId]();
@@ -507,7 +721,7 @@ async function setupModuleCreateTab() {
 }
 
 /**
- * Update the form that is used to upload a Wasm-binary with the current
+ * Update the form that is used to add descriptions to the current
  * selection of modules recorded in database.
  *
  * Needs data about:
@@ -690,28 +904,17 @@ function addHandlersToModuleForms() {
     document.querySelector("#module-form")
         // NOTE: The "submit" event is used in order to have the form make
         // required-field etc. checks automatically.
-        .addEventListener("submit", function (event) {
-            event.preventDefault();
-            const moduleObj = formToObject(event.target);
-
-            // Merge the OpenAPI field into the module. TODO: This is clunky...
-            try {
-                document.querySelector("#status p").classList.add("hidden");
-                moduleObj["openapi"] = JSON.parse(event.target.querySelector("#mopenapi").value);
-            } catch (e) {
-                setStatus({
-                    error: true,
-                    errorText: `Check for 'TODO' in your OpenAPI description: ${e}`
-                });
-                return;
-            }
-
-            apiCall("/file/module", "POST", JSON.stringify(moduleObj));
-        });
+        .addEventListener("submit", submitFormData("/file/module"));
 
     document
-        .querySelector("#wasm-form")
-        .addEventListener("submit", submitFile("/file/module/:id/upload"));
+        .querySelector("#module-properties-form")
+        .addEventListener("submit", submitFormData("/file/module/:id/upload"));
+
+    document
+        .querySelector("#wmodule-select")
+        .addEventListener("change", async (event) => {
+            setupModuleDescriptionFields(event);
+        });
 }
 
 /**
@@ -831,3 +1034,4 @@ window.onload = function () {
     addHandlersToDeploymentForms();
     addHandlersToExecutionForms();
 };
+
