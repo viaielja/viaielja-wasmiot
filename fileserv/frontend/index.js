@@ -366,8 +366,8 @@ function generateParameterFieldsFor(deployment) {
     if (operation.requestBody) {
         files = [];
 
-        let [fileMediaType, fileSchema] = Object.entries(operation.requestBody.content)[0];
-        fileSchema = fileSchema.schema;
+        let [fileMediaType, fileMediaObj] = Object.entries(operation.requestBody.content)[0];
+        fileSchema = fileMediaObj.schema;
         if (fileMediaType === "multipart/form-data" && fileSchema.type === "object") {
             // (Single) File upload based on media type.
             for (let [name, metadata] of Object.entries(fileSchema.properties)) {
@@ -375,7 +375,10 @@ function generateParameterFieldsFor(deployment) {
                     metadata.type === "string",
                     "When inputting a file (using multipart/form-data), the type must be 'string' to indicate the binary data contained in the file"
                 );
-                files.push({name: name, mediaType: metadata.contentMediaType});
+                // Do not add deployment-stage files to the form unnecessarily.
+                if (metadata.stage === "execution") {
+                    files.push({ name: name, mediaType: fileMediaObj.encoding[name]["contentType"] });
+                }
             }
         } else {
             // Just a single file.
@@ -675,13 +678,13 @@ async function setupExecutionParameterFields(event) {
  */
 function setupTab(tabId) {
     const tabSetups = {
-        "resource-listing"  : setupResourceListingTab,
-        "module-create"     : setupModuleCreateTab,
-        "module-upload"     : setupModuleUploadTab,
-        "deployment-create" : setupDeploymentCreateTab,
-        "deployment-update" : setupDeploymentUpdateTab,
-        "deployment-action" : setupDeploymentActionTab,
-        "execution-start"   : setupExecutionStartTab,
+        "resource-listing"   : setupResourceListingTab,
+        "module-create"      : setupModuleCreateTab,
+        "module-description" : setupModuleUploadTab,
+        "deployment-create"  : setupDeploymentCreateTab,
+        "deployment-update"  : setupDeploymentUpdateTab,
+        "deployment-action"  : setupDeploymentActionTab,
+        "execution-start"    : setupExecutionStartTab,
     };
 
     tabSetups[tabId]();
