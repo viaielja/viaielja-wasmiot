@@ -25,10 +25,9 @@ services:
     extends: device-base
     profiles:
       - device
-    build:
-      args:
-        - DEVICE_TYPE='webcam-laptop'
-        - DEVICE_NAME='adequate-webcam-laptop'
+    environment:
+      - DEVICE_TYPE='webcam-laptop'
+      - FLASK_APP='adequate-webcam-laptop'
     ports:
       - 3001:5000
     volumes:
@@ -50,10 +49,9 @@ services:
     extends: device-base
     profiles:
       - device
-    build:
-      args:
-        - DEVICE_TYPE='webcam-laptop'
-        - DEVICE_NAME='lousy-webcam-laptop'
+    environment:
+      - DEVICE_TYPE='webcam-laptop'
+      - FLASK_APP='lousy-webcam-laptop'
     ports:
       - 3002:5000
     volumes:
@@ -74,10 +72,9 @@ services:
     extends: device-base
     profiles:
       - device
-    build:
-      args:
-        - DEVICE_TYPE='temperature-sensor'
-        - DEVICE_NAME='basic-temperature-sensor'
+    environment:
+      - DEVICE_TYPE='temperature-sensor'
+      - FLASK_APP='basic-temperature-sensor'
     ports:
       - 3003:5000
     volumes:
