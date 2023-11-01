@@ -125,7 +125,8 @@ function formDataFrom(form) {
                 funcMountIdx[funcName] = 0;
             }
             mountIdx = funcMountIdx[funcName];
-            formData.append(`${funcName}[mounts][${mountIdx}]`, fileField.name);
+            formData.append(`${funcName}[mounts][${mountIdx}][name]`, fileField.name);
+            formData.append(`${funcName}[mounts][${mountIdx}][stage]`, fileField.dataset.stage);
             funcMountIdx[funcName] += 1;
         }
         formData.append(fileField.name, fileField.files[0]);
@@ -270,6 +271,29 @@ function generateFunctionDescriptionFieldsFor(module) {
 
         function makeMountField(name) {
             let x = makeInputField(name, name, "", type="file");
+            // Add stage selector for when this mount is expected at supervisor.
+            let stageSelect = document.createElement("select");
+            stageSelect.name = "stage";
+            stageSelect.dataset.parent = functionName;
+            let deploymentOption = document.createElement("option");
+            deploymentOption.value = "deployment";
+            deploymentOption.textContent = "Deployment";
+            // Set the stage to 'deployment' by default.
+            deploymentOption.selected = true;
+            let executionOption = document.createElement("option");
+            executionOption.value = "execution";
+            executionOption.textContent = "Execution";
+            stageSelect.appendChild(deploymentOption);
+            stageSelect.appendChild(executionOption);
+
+            // Set the stage to the file's dataset when option changes.
+            stageSelect.addEventListener("change", (event) => {
+                x.querySelector("input[type=file]").dataset.stage = event.target.value;
+            });
+            x.querySelector("input[type=file]").dataset.stage = stageSelect.value;
+
+            x.appendChild(stageSelect);
+
             // Add flag for knowing later that this is a mount.
             x.querySelector("input").dataset.ismount = true;
             return x;

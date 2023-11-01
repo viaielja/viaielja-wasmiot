@@ -304,7 +304,7 @@ const moduleDescription = (modulee, functionDescriptions) => {
     /**
      * Create description for a single function.
      * @param {string} funcName
-     * @param {{ parameters: [ { type: integer | float | schema }], mounts: { "./some/mount/path": mediaType: string }, output: { "media/type": schema} }} func
+     * @param {{ parameters: [ { type: integer | float | schema }], mounts: { "./some/mount/path": { mediaType: string, stage: "deployment" | "execution" }, output: { "media/type": schema} }} func
      * @returns [functionCallPath, functionDescription]
      */
     function funcPathDescription(funcName, func) {
@@ -356,11 +356,16 @@ const moduleDescription = (modulee, functionDescriptions) => {
         let mounts = Object.entries(func.mounts);
         if (mounts.length > 0) {
             let mountEntries = Object.fromEntries(
-                    mounts.map(([path, _mount]) => [
+                    mounts.map(([path, mount]) => [
                         path,
                         {
                             type: "string",
-                            format: "binary"
+                            format: "binary",
+                            // TODO: This is not in line with the OpenAPI spec.
+                            // Could define as a separate component maybe (or
+                            // better yet, ditch the whole OpenAPI business with
+                            // modules altogether :)?
+                            stage: mount.stage,
                         }
                     ])
             );
@@ -451,10 +456,16 @@ const describeModule = async (request, response) => {
                 .map(([k, v]) => ({ name: k, type: v })),
             mounts: "mounts" in func
                 ? Object.fromEntries(
-                    func["mounts"]
-                        .map(k => ([ k, {
-                            // Map files by their form fieldname to this function's mount.
-                            mediaType: request.files.find(x => x.fieldname === k).mimetype
+                    Object.values(func["mounts"])
+                        // Map files by their form fieldname to this function's mount.
+                        .map(({ name, stage }) => ([ name, {
+                            // If no file is given the media type cannot be
+                            // determined and is set to default.
+                            mediaType: (
+                                request.files.find(x => x.fieldname === name)?.mimetype
+                                || "application/octet-stream"
+                            ),
+                            stage: stage,
                         }]))
                 )
                 : {},
