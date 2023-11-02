@@ -172,7 +172,7 @@ const getFileUpdate = async (file) => {
     // database.
     let updateObj = {};
     let updateStruct = {
-        humanReadableName: originalFilename,
+        originalFilename: originalFilename,
         fileName: file.filename,
         path: file.path,
     };
@@ -203,7 +203,7 @@ const getFileUpdate = async (file) => {
         result = new WasmFileUpload(updateObj);
     } else {
         // All other filetypes are to be "mounted".
-        updateObj[originalFilename] = updateStruct;
+        updateObj[file.fieldname] = updateStruct;
         switch (fileExtension) {
             // Model weights etc. for an ML-application.
             case "pb":
@@ -434,17 +434,6 @@ const moduleDescription = (modulee, functionDescriptions) => {
 };
 
 const describeModule = async (request, response) => {
-    // Save associated files ("mounts") adding their info to the database entry.
-    await addModuleDataFiles(request.params.moduleId, request.files);
-
-    // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
-    let [failCode, [modulee]] = await getModuleBy(request.params.moduleId);
-    if (failCode) {
-        console.error(...value);
-        response.status(failCode).json(new utils.Error(value));
-        return;
-    }
-
     // Prepare description for the module based on given info for functions
     // (params & outputs) and files (mounts).
     let functions = {};
@@ -472,6 +461,33 @@ const describeModule = async (request, response) => {
             outputType: func.output
         }
     }
+
+    // Check that the described mounts were actually uploaded.
+    let missingFiles = [];
+    for (let [funcName, func] of Object.entries(functions)) {
+        for (let [mountName, mount] of Object.entries(func.mounts)) {
+            if (mount.stage == "deployment" && !(request.files.find(x => x.fieldname === mountName))) {
+                missingFiles.push([funcName, mountName]);
+            }
+        }
+    }
+    if (missingFiles.length > 0) {
+        response
+            .status(400)
+            .json(new utils.Error(`Functions missing mounts: ${JSON.stringify(missingFiles, null, 2)}`));
+        return;
+    }
+    // Save associated files ("mounts") adding their info to the database entry.
+    await addModuleDataFiles(request.params.moduleId, request.files);
+
+    // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
+    let [failCode, [modulee]] = await getModuleBy(request.params.moduleId);
+    if (failCode) {
+        console.error(...value);
+        response.status(failCode).json(new utils.Error(value));
+        return;
+    }
+
     let description = moduleDescription(modulee, functions);
 
     try {
