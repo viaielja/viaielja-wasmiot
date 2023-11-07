@@ -113,16 +113,15 @@ const fileUpload =
  * @returns { url, path, method, operationObj }
  */
 function getStartEndpoint(deployment) {
+    let startStep = deployment.sequence[0];
     let startEndpoint = deployment
-        .fullManifest[deployment.sequence[0].device]
-        .endpoints[deployment.sequence[0].func];
+        .fullManifest[startStep.device]
+        .endpoints[startStep.module][startStep.func];
 
-    return {
-        url: new URL(startEndpoint.url),
-        path: startEndpoint.path,
-        method: startEndpoint.operation.method,
-        operationObj: startEndpoint.operation.body
-    };
+    // Change the string url to an object.
+    startEndpoint.url = new URL(startEndpoint.url);
+
+    return startEndpoint;
 }
 
 

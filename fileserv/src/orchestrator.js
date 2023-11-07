@@ -172,10 +172,10 @@ class Orchestrator {
      */
     async schedule(deployment, { body, files }) {
         // Pick the starting point based on sequence's first device and function.
-        const { url, path, method, operationObj: operation } = utils.getStartEndpoint(deployment);
+        const { url, path, method, request } = utils.getStartEndpoint(deployment);
 
         // OpenAPI Operation Object's parameters.
-        for (let param of operation.parameters) {
+        for (let param of request.parameters) {
             if (!(param.name in body)) {
                 throw new ParameterMissing(deployment._id, path, param);
             }
@@ -200,8 +200,8 @@ class Orchestrator {
         // Request with GET/HEAD method cannot have body.
         if (!(["get", "head"].includes(method.toLowerCase()))) {
             // OpenAPI Operation Object's requestBody (including files as input).
-            if (operation.requestBody) {
-                let contents = Object.entries(operation.requestBody.content);
+            if (request.request_body) {
+                let contents = Object.entries(request.request_body.content);
                 console.assert(contents.length === 1, "expected one and only one media type");
                 /*
                 let [mediaType, mediaTypeObj] = contents[0];
@@ -213,7 +213,7 @@ class Orchestrator {
                 }
                 options.body = formData;
             } else {
-                options.body = body;
+                options.body = { foo: "bar" };
             }
         }
 
@@ -257,7 +257,18 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
         console.assert(methods.length === 1, "expected one and only one operation on an endpoint");
         let method = methods[0];
 
-        deploymentsToDevices[deviceIdStr].endpoints[step.func] =  {
+        let [responseMediaType, responseObj] = Object.entries(endpoint[method].responses[200].content)[0];
+        let requestBody = endpoint[method].requestBody;
+        let [requestMediaType, requestObj] = [undefined, undefined];
+        if (requestBody != undefined) {
+            [requestMediaType, requestObj] = Object.entries(requestBody.content)[0];
+        }
+        if (!(step.module._id.toString() in deploymentsToDevices[deviceIdStr].endpoints)) {
+            deploymentsToDevices[deviceIdStr]
+                .endpoints[step.module._id.toString()] = {};
+        }
+        deploymentsToDevices[deviceIdStr]
+            .endpoints[step.module._id.toString()][step.func] = {
             // TODO: Hardcodedly selecting first(s) from list(s) and
             // "url" field assumed to be template "http://{serverIp}:{port}".
             // Should this instead be provided by the device or smth?
@@ -265,9 +276,18 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
                 .replace("{serverIp}", step.device.communication.addresses[0])
                 .replace("{port}", step.device.communication.port),
             path: funcPathKey.replace("{deployment}", deploymentId),
-            operation: {
-                method: method,
-                body: endpoint[method],
+            method: method,
+            request: {
+                parameters: endpoint[method].parameters,
+                request_body: {
+                    media_type: requestMediaType,
+                    schema: requestObj?.schema,
+                    encoding: requestObj?.encoding
+                }
+            },
+            response: {
+                media_type: responseMediaType,
+                schema: responseObj?.schema
             }
         };
     }
@@ -299,12 +319,13 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
             // The order of endpoints attached to deployment is still the same
             // as it is based on the execution sequence and endpoints are
             // guaranteed to contain at least one item.
-            forwardEndpoint = forwardDeployment.endpoints[forwardFunc];
+            let forwardModuleId = sequence[i + 1]?.module._id.toString();
+            forwardEndpoint = forwardDeployment.endpoints[forwardModuleId][forwardFunc];
         }
 
         // This is needed at device to figure out how to interpret WebAssembly
         // function's result.
-        let sourceEndpoint = deploymentsToDevices[deviceIdStr].endpoints[func];
+        let sourceEndpoint = deploymentsToDevices[deviceIdStr].endpoints[modulee._id.toString()][func];
 
         let instruction = {
             from: sourceEndpoint,

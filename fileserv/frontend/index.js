@@ -372,11 +372,11 @@ function generateFunctionDescriptionFieldsFor(module) {
 
 async function generateParameterFieldsFor(deployment) {
     // Get the data to build a form.
-    let { operationObj: operation } = getStartEndpoint(deployment);
+    let { request } = getStartEndpoint(deployment);
 
     let fieldDivs = [];
     // Build the form.
-    for (let param of operation.parameters) {
+    for (let param of request.parameters) {
         // Create elems.
         let inputFieldDiv = document.createElement("div");
         let inputFieldLabel = document.createElement("label");
@@ -394,7 +394,7 @@ async function generateParameterFieldsFor(deployment) {
         fieldDivs.push(inputFieldDiv);
     }
 
-    if (operation.requestBody) {
+    if (request.request_body) {
         // Get the mounts described for the function.
         let modulee = (await fetchModule(deployment.sequence[0].module))[0];
         let funcMounts = modulee.mounts[deployment.sequence[0].func];
@@ -405,8 +405,7 @@ async function generateParameterFieldsFor(deployment) {
 
         files = [];
 
-        let [fileMediaType, fileMediaObj] = Object.entries(operation.requestBody.content)[0];
-        fileSchema = fileMediaObj.schema;
+        let { media_type: fileMediaType, schema: fileSchema, encoding: fileEncoding } =  request.request_body;
         if (fileMediaType === "multipart/form-data" && fileSchema.type === "object") {
             // (Single) File upload based on media type.
             for (let [name, metadata] of Object.entries(fileSchema.properties)) {
@@ -416,10 +415,10 @@ async function generateParameterFieldsFor(deployment) {
                 );
                 // Do not add deployment-stage files to the form unnecessarily.
                 if (name in execMounts) {
-                    files.push({ name: name, mediaType: fileMediaObj.encoding[name]["contentType"] });
+                    files.push({ name: name, mediaType: fileEncoding[name]["contentType"] });
                 }
             }
-        } else {
+        } else if (fileMediaType) {
             // Just a single file.
             files = [{name: "inputFile", mediaType: fileMediaType}];
         }
