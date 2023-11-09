@@ -114,9 +114,14 @@ const fileUpload =
  */
 function getStartEndpoint(deployment) {
     let startStep = deployment.sequence[0];
+    let modId = startStep.module;
+    let modName = deployment
+        .fullManifest[startStep.device]
+        .modules
+        .find(x => x.id.toString() === modId.toString()).name;
     let startEndpoint = deployment
         .fullManifest[startStep.device]
-        .endpoints[startStep.module][startStep.func];
+        .endpoints[modName][startStep.func];
 
     // Change the string url to an object.
     startEndpoint.url = new URL(startEndpoint.url);

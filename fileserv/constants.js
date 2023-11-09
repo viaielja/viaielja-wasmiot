@@ -32,7 +32,12 @@ const DEVICE_DESC_ROUTE = "/.well-known/wasmiot-device-description";
 const DEVICE_WOT_ROUTE = "/.well-known/wot-thing-description";
 const DEVICE_HEALTH_ROUTE = "/health";
 
-
+const FILE_TYPES = [
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "application/octet-stream"
+];
 
 
 module.exports = {
@@ -50,4 +55,5 @@ module.exports = {
     DEVICE_HEALTH_CHECK_INTERVAL_MS: 180*1000,
     EXECUTION_INPUT_DIR,
     UTILS_PATH,
+    FILE_TYPES
 };
