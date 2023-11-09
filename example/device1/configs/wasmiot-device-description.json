@@ -18,10 +18,19 @@
         "printInt",
         "rpcCall",
         "takeImage",
-        "fd_write",
         "random_get",
+        "fd_filestat_get",
+        "fd_read",
+        "fd_readdir",
+        "fd_seek",
+        "fd_write",
+        "path_open",
+        "sched_yield",
+        "environ_get",
         "environ_sizes_get",
-        "proc_exit",
-        "environ_get"
+        "fd_close",
+        "fd_prestat_get",
+        "fd_prestat_dir_name",
+        "proc_exit"
     ]
 }
