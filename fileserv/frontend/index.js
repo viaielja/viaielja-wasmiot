@@ -269,36 +269,6 @@ function generateFunctionDescriptionFieldsFor(module) {
             return inputFieldDiv;
         }
 
-        function makeMountField(name) {
-            let x = makeInputField(name, name, "", type="file");
-            // Add stage selector for when this mount is expected at supervisor.
-            let stageSelect = document.createElement("select");
-            stageSelect.name = "stage";
-            stageSelect.dataset.parent = functionName;
-            let deploymentOption = document.createElement("option");
-            deploymentOption.value = "deployment";
-            deploymentOption.textContent = "Deployment";
-            // Set the stage to 'deployment' by default.
-            deploymentOption.selected = true;
-            let executionOption = document.createElement("option");
-            executionOption.value = "execution";
-            executionOption.textContent = "Execution";
-            stageSelect.appendChild(deploymentOption);
-            stageSelect.appendChild(executionOption);
-
-            // Set the stage to the file's dataset when option changes.
-            stageSelect.addEventListener("change", (event) => {
-                x.querySelector("input[type=file]").dataset.stage = event.target.value;
-            });
-            x.querySelector("input[type=file]").dataset.stage = stageSelect.value;
-
-            x.appendChild(stageSelect);
-
-            // Add flag for knowing later that this is a mount.
-            x.querySelector("input").dataset.ismount = true;
-            return x;
-        }
-
         if (parameterCount > 0) {
             for (let i = 0; i < parameterCount; i++) {
                 let inputFieldDiv = makeInputField(`Parameter #${i}`, `param${i}`, "integer");
@@ -309,6 +279,71 @@ function generateFunctionDescriptionFieldsFor(module) {
             let text = document.createElement("p");
             text.textContent = "No parameters.";
             inputFieldset.appendChild(text);
+        }
+
+        // Add field for function output.
+        let outputFieldDiv = makeInputField("Output", "output", "integer");
+        inputFieldset.appendChild(outputFieldDiv);
+
+        function makeMountField(name) {
+            let x = makeInputField(name, name, "", type="file");
+            // Add stage selector for when this mount is expected at supervisor.
+            let stageSelect = document.createElement("select");
+            stageSelect.name = "stage";
+            stageSelect.dataset.parent = functionName;
+            // Deployment
+            let deploymentOption = document.createElement("option");
+            deploymentOption.value = "deployment";
+            deploymentOption.textContent = "Deployment";
+            // Set the stage to 'deployment' by default.
+            deploymentOption.selected = true;
+            stageSelect.appendChild(deploymentOption);
+            // Execution.
+            let executionOption = document.createElement("option");
+            executionOption.value = "execution";
+            executionOption.textContent = "Execution";
+            stageSelect.appendChild(executionOption);
+            // Output.
+            let outputOption = document.createElement("option");
+            outputOption.value = "output";
+            outputOption.textContent = "Output";
+            stageSelect.appendChild(outputOption);
+
+            // Set the stage to the file's dataset when option changes.
+            stageSelect.addEventListener("change", (event) => {
+                x.querySelector("input[type=file]").dataset.stage = event.target.value;
+
+                if (event.target.value === "output") {
+                    // If output is selected, it changes the output field to a
+                    // MIME-type selector.
+                    // Remove text input field.
+                    let outputFieldParent = outputFieldDiv.parentElement;
+                    outputFieldDiv.querySelector("input").remove()
+                    // Add select.
+                    let outputMimeSelect = document.createElement("select");
+                    outputMimeSelect.name = "output";
+                    outputMimeSelect.dataset.parent = functionName;
+                    // Add the different options.
+                    for (let mime of ["image/jpg", "image/jpeg", "image/png"]) {
+                        let option = document.createElement("option");
+                        option.value = mime;
+                        option.textContent = mime;
+                        outputMimeSelect.appendChild(option);
+                    }
+                    // Add the select in place of the input.
+                    outputFieldParent.appendChild(outputMimeSelect);
+                } else {
+                    outputFieldDiv.querySelector("input").disabled = false;
+                    outputFieldDiv.querySelector("input").value = "integer";
+                }
+            });
+            x.querySelector("input[type=file]").dataset.stage = stageSelect.value;
+
+            x.appendChild(stageSelect);
+
+            // Add flag for knowing later that this is a mount.
+            x.querySelector("input").dataset.ismount = true;
+            return x;
         }
 
         // Add button for adding mounts.
@@ -329,23 +364,19 @@ function generateFunctionDescriptionFieldsFor(module) {
         mountsSpan.appendChild(addMountButton);
         inputFieldset.appendChild(mountsSpan);
 
-        // Add field for function output.
-        let outputFieldDiv = makeInputField("Output", "output", "integer");
-        inputFieldset.appendChild(outputFieldDiv);
-
         functionFieldGroups.push(inputFieldset);
     }
 
     return functionFieldGroups;
 }
 
-function generateParameterFieldsFor(deployment) {
+async function generateParameterFieldsFor(deployment) {
     // Get the data to build a form.
-    let { operationObj: operation } = getStartEndpoint(deployment);
+    let { request } = getStartEndpoint(deployment);
 
     let fieldDivs = [];
     // Build the form.
-    for (let param of operation.parameters) {
+    for (let param of request.parameters) {
         // Create elems.
         let inputFieldDiv = document.createElement("div");
         let inputFieldLabel = document.createElement("label");
@@ -363,11 +394,18 @@ function generateParameterFieldsFor(deployment) {
         fieldDivs.push(inputFieldDiv);
     }
 
-    if (operation.requestBody) {
+    if (request.request_body) {
+        // Get the mounts described for the function.
+        let modulee = (await fetchModule(deployment.sequence[0].module))[0];
+        let funcMounts = modulee.mounts[deployment.sequence[0].func];
+        let execMounts = Object.fromEntries(
+            Object.entries(funcMounts)
+                .filter(([_, mount]) => mount.stage === "execution")
+        );
+
         files = [];
 
-        let [fileMediaType, fileMediaObj] = Object.entries(operation.requestBody.content)[0];
-        fileSchema = fileMediaObj.schema;
+        let { media_type: fileMediaType, schema: fileSchema, encoding: fileEncoding } =  request.request_body;
         if (fileMediaType === "multipart/form-data" && fileSchema.type === "object") {
             // (Single) File upload based on media type.
             for (let [name, metadata] of Object.entries(fileSchema.properties)) {
@@ -376,11 +414,11 @@ function generateParameterFieldsFor(deployment) {
                     "When inputting a file (using multipart/form-data), the type must be 'string' to indicate the binary data contained in the file"
                 );
                 // Do not add deployment-stage files to the form unnecessarily.
-                if (metadata.stage === "execution") {
-                    files.push({ name: name, mediaType: fileMediaObj.encoding[name]["contentType"] });
+                if (name in execMounts) {
+                    files.push({ name: name, mediaType: fileEncoding[name]["contentType"] });
                 }
             }
-        } else {
+        } else if (fileMediaType) {
             // Just a single file.
             files = [{name: "inputFile", mediaType: fileMediaType}];
         }
@@ -661,7 +699,7 @@ async function setupExecutionParameterFields(event) {
     let deployment = await fetchDeployment(deploymentId);
 
     let formTopDiv = document.querySelector("#execution-form fieldset > div");
-    for (let div of generateParameterFieldsFor(deployment)) {
+    for (let div of (await generateParameterFieldsFor(deployment))) {
         formTopDiv.appendChild(div);
     }
 }

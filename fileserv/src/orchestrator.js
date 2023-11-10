@@ -31,6 +31,49 @@ class DeploymentFailed extends Error {
 }
 
 
+class MountPathFile {
+    constructor(path, mediaType, stage) {
+        this.path = path;
+        this.media_type = mediaType;
+        this.stage = stage;
+    }
+
+    static listFromMultipart(multipartMediaTypeObj) {
+        const mediaType = multipartMediaTypeObj.media_type;
+        if (mediaType !== 'multipart/form-data') {
+            throw new Error(`Expected multipart/form-data media type, but got "${mediaType}"`);
+        }
+
+        const schema = multipartMediaTypeObj.schema;
+        if (schema.type !== 'object') {
+            throw new Error('Only object schemas supported');
+        }
+        if (!schema.properties) {
+            throw new Error('Expected properties for multipart schema');
+        }
+
+        const mounts = [];
+        const encoding = multipartMediaTypeObj.encoding;
+        for (const [path, _] of getSupportedFileSchemas(schema, encoding)) {
+            const mediaType = encoding[path]['contentType'];
+            // NOTE: The other encoding field ('format') is not regarded here.
+            const mount = new MountPathFile(path, mediaType);
+            mounts.push(mount);
+        }
+
+        return mounts;
+    }
+}
+
+    function* getSupportedFileSchemas(schema, encoding) {
+        for (const [path, property] of Object.entries(schema.properties)) {
+            if (property.type === 'string' && property.format === 'binary') {
+                if (encoding[path] && encoding[path]['contentType']) {
+                    yield [path, property];
+                }
+            }
+        }
+    }
 /**
  * Fields for instruction about reacting to calls to modules and functions on a
  * device.
@@ -68,6 +111,8 @@ class DeploymentNode {
         this.endpoints = {};
         // Chaining of results to others.
         this.instructions = new Instructions();
+        // Mounts needed for the module's functions.
+        this.mounts = {};
     }
 }
 
@@ -172,10 +217,10 @@ class Orchestrator {
      */
     async schedule(deployment, { body, files }) {
         // Pick the starting point based on sequence's first device and function.
-        const { url, path, method, operationObj: operation } = utils.getStartEndpoint(deployment);
+        const { url, path, method, request } = utils.getStartEndpoint(deployment);
 
         // OpenAPI Operation Object's parameters.
-        for (let param of operation.parameters) {
+        for (let param of request.parameters) {
             if (!(param.name in body)) {
                 throw new ParameterMissing(deployment._id, path, param);
             }
@@ -200,20 +245,14 @@ class Orchestrator {
         // Request with GET/HEAD method cannot have body.
         if (!(["get", "head"].includes(method.toLowerCase()))) {
             // OpenAPI Operation Object's requestBody (including files as input).
-            if (operation.requestBody) {
-                let contents = Object.entries(operation.requestBody.content);
-                console.assert(contents.length === 1, "expected one and only one media type");
-                /*
-                let [mediaType, mediaTypeObj] = contents[0];
-                options.headers = { "Content-type": mediaType };
-                */
+            if (request.request_body) {
                 let formData = new FormData();
-                for (let {path, name} of files) {
+                for (let { path, name } of files) {
                     formData.append(name, new Blob([fs.readFileSync(path)]));
                 }
                 options.body = formData;
             } else {
-                options.body = body;
+                options.body = { foo: "bar" };
             }
         }
 
@@ -247,17 +286,30 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
 
         // Add needed endpoint to call function in said module on the device.
         let funcPathKey = utils.supervisorExecutionPath(step.module.name, step.func);
-        let endpoint = step.module.description.paths[funcPathKey];
+        let moduleEndpointTemplate = step.module.description.paths[funcPathKey];
 
         // Build the __SINGLE "MAIN" OPERATION'S__ parameters for the request
         // according to the description.
         const OPEN_API_3_1_0_OPERATIONS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
-        let methods = Object.keys(endpoint)
+        let methods = Object.keys(moduleEndpointTemplate)
             .filter((method) => OPEN_API_3_1_0_OPERATIONS.includes(method.toLowerCase()));
         console.assert(methods.length === 1, "expected one and only one operation on an endpoint");
         let method = methods[0];
 
-        deploymentsToDevices[deviceIdStr].endpoints[step.func] =  {
+        let [responseMediaType, responseObj] = Object.entries(moduleEndpointTemplate[method].responses[200].content)[0];
+        let requestBody = moduleEndpointTemplate[method].requestBody;
+        let [requestMediaType, requestObj] = [undefined, undefined];
+        if (requestBody != undefined) {
+            [requestMediaType, requestObj] = Object.entries(requestBody.content)[0];
+        }
+
+        // Create the module object if this is the first one.
+        if (!(step.module.name in deploymentsToDevices[deviceIdStr].endpoints)) {
+            deploymentsToDevices[deviceIdStr]
+                .endpoints[step.module.name] = {};
+        }
+
+        let endpoint = {
             // TODO: Hardcodedly selecting first(s) from list(s) and
             // "url" field assumed to be template "http://{serverIp}:{port}".
             // Should this instead be provided by the device or smth?
@@ -265,11 +317,33 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
                 .replace("{serverIp}", step.device.communication.addresses[0])
                 .replace("{port}", step.device.communication.port),
             path: funcPathKey.replace("{deployment}", deploymentId),
-            operation: {
-                method: method,
-                body: endpoint[method],
+            method: method,
+            request: {
+                parameters: moduleEndpointTemplate[method].parameters,
+            },
+            response: {
+                media_type: responseMediaType,
+                schema: responseObj?.schema
             }
         };
+        if (requestObj) {
+            endpoint.request.request_body = {
+                media_type: requestMediaType,
+                schema: requestObj?.schema,
+                encoding: requestObj?.encoding
+            };
+        }
+
+        // Finally add mounts needed for the module's functions.
+        if (!(step.module.name in deploymentsToDevices[deviceIdStr].mounts)) {
+            deploymentsToDevices[deviceIdStr].mounts[step.module.name] = {};
+        }
+
+        deploymentsToDevices[deviceIdStr].mounts[step.module.name][step.func] =
+            mountsFor(step.module, step.func, endpoint);
+
+        deploymentsToDevices[deviceIdStr]
+            .endpoints[step.module.name][step.func] = endpoint;
     }
 
     // It does not make sense to have a device without any possible
@@ -299,12 +373,13 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
             // The order of endpoints attached to deployment is still the same
             // as it is based on the execution sequence and endpoints are
             // guaranteed to contain at least one item.
-            forwardEndpoint = forwardDeployment.endpoints[forwardFunc];
+            let forwardModuleId = sequence[i + 1]?.module.name;
+            forwardEndpoint = forwardDeployment.endpoints[forwardModuleId][forwardFunc];
         }
 
         // This is needed at device to figure out how to interpret WebAssembly
         // function's result.
-        let sourceEndpoint = deploymentsToDevices[deviceIdStr].endpoints[func];
+        let sourceEndpoint = deploymentsToDevices[deviceIdStr].endpoints[modulee.name][func];
 
         let instruction = {
             from: sourceEndpoint,
@@ -325,6 +400,84 @@ function createSolution(deploymentId, sequence, packageBaseUrl) {
     return {
         fullManifest: deploymentsToDevices,
         sequence: sequenceAsIds
+    };
+}
+
+MountStage = {
+    DEPLOYMENT: "deployment",
+    EXECUTION: "execution",
+    OUTPUT: "output",
+};
+
+/**
+ * Save the list of mounts for each module in advance. This makes them
+ * ready for actually "mounting" (i.e. creating files in correct
+ * directory) at execution time.
+ *
+ * NOTE: Using the "endpoints" as the source for modules and function
+ * names, as the WebAssembly modules are not instantiated at this point
+ * and might contain functions not intended for explicitly running (e.g.
+ * custom 'alloc()' or WASI-functions).
+ */
+function mountsFor(modulee, func, endpoint) {
+    // Grouped by the mount stage, get the sets of files to be mounted for the
+    // module's function and whether they are mandatory or not.
+
+    // TODO: When the component model is to be integrated, map arguments in
+    // request to the interface described in .wit.
+
+    request = endpoint.request;
+    response = endpoint.response;
+    let request_body_paths = [];
+    if (request.request_body && request.request_body.media_type === 'multipart/form-data') {
+        request_body_paths = MountPathFile.listFromMultipart(request.request_body);
+        // Add the stage accordingly.
+        for (let request_body_path of request_body_paths) {
+            request_body_path.stage = modulee.mounts[func][request_body_path.path].stage
+        }
+    }
+
+    // Check that all the expected media types are supported.
+    let found_unsupported_medias = request_body_paths.filter(x => !constants.FILE_TYPES.includes(x.media_type));
+    if (found_unsupported_medias.length > 0) {
+        throw new Error(`Input file types not supported: "${found_unsupported_medias}"`);
+    }
+
+    // Get a list of expected file parameters. The 'name' is actually
+    // interpreted as a path relative to module root.
+    let param_files = request.parameters
+        .filter(parameter => parameter.in === 'requestBody' && parameter.name !== '')
+        .map(parameter =>
+            new MountPathFile(parameter.name, 'application/octet-stream', MountStage.EXECUTION)
+        );
+
+    // Lastly if the _response_ contains files, the matching filepaths need
+    // to be made available for the module to write as well.
+    let response_files = [];
+    if (response.media_type === 'multipart/form-data') {
+        response_files = MountPathFile.listFromMultipart(response.response_body);
+    } else if (constants.FILE_TYPES.includes(response.media_type)) {
+        let [path, _] = Object.entries(
+                modulee.mounts[func]
+            ).find(([_, mount]) => mount.stage === MountStage.OUTPUT);
+        response_files = [new MountPathFile(path, response.media_type, MountStage.OUTPUT)]
+    }
+    // Add the output stage and required'ness to all these.
+    for (let response_file of response_files) {
+        response_file.stage = MountStage.OUTPUT;
+    }
+
+    let mounts = [...param_files, ...request_body_paths, ...response_files];
+
+    // TODO: Use groupby instead of this triple-set-threat.
+    let execution_stage_mount_paths = mounts.filter(y => y.stage === MountStage.EXECUTION);
+    let deployment_stage_mount_paths = mounts.filter(y => y.stage === MountStage.DEPLOYMENT);
+    let output_stage_mount_paths = mounts.filter(y => y.stage === MountStage.OUTPUT);
+
+    return {
+        [MountStage.EXECUTION]: execution_stage_mount_paths,
+        [MountStage.DEPLOYMENT]: deployment_stage_mount_paths,
+        [MountStage.OUTPUT]: output_stage_mount_paths,
     };
 }
 

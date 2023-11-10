@@ -297,14 +297,18 @@ const addModuleDataFiles = async (moduleId, files) => {
  * "float" }], mounts: { "a/mount/path": { mediaType: string } }, outputType: {
  * "aMediaType": schema} }}} functionDescriptions Mapping of function names to
  * their descriptions.
- * @returns An OpenAPI description of the module primarily its functions and
- * mounts.
+ * @returns {{ openapi: { version: "3.0.*" ... } }} Description for endpoints of
+ * the module in OpenAPI v3.0 format.
  */
-const moduleDescription = (modulee, functionDescriptions) => {
+const moduleEndpointDescriptions = (modulee, functionDescriptions) => {
+    function isPrimitive(type) {
+        return ["integer", "float"].includes(type);
+    }
+
     /**
      * Create description for a single function.
      * @param {string} funcName
-     * @param {{ parameters: [ { type: integer | float | schema }], mounts: { "./some/mount/path": { mediaType: string, stage: "deployment" | "execution" }, output: { "media/type": schema} }} func
+     * @param {{ parameters: [ { type: integer | float | schema }], mounts: { "./some/mount/path": { mediaType: string }, output: { "media/type": schema} }} func
      * @returns [functionCallPath, functionDescription]
      */
     function funcPathDescription(funcName, func) {
@@ -330,42 +334,46 @@ const moduleDescription = (modulee, functionDescriptions) => {
         }));
 
         let funcDescription = {
-            summary: "Auto-generated description",
+            summary: "Auto-generated description of function",
             parameters: sharedParams,
         };
+        let successResponseContent =  {};
+        if (isPrimitive(func.outputType)) {
+            successResponseContent["application/json"] = {
+                schema: {
+                    type: func.outputType
+                }
+            };
+        } else {
+            // Assume the response is a file.
+            successResponseContent[func.outputType] = {
+                schema: {
+                    type: "string",
+                    format: "binary",
+                }
+            };
+        }
         funcDescription[func.method] = {
             tags: [],
-            summary: "Auto-generated description",
+            summary: "Auto-generated description of function call method",
             parameters: funcParams,
             responses: {
                 200: {
-                    description: "Auto-generated description",
-                    content: {
-                        "application/json": { // TODO Where dis?
-                            schema: {
-                                type: func.outputType
-                            }
-                        }
-                    }
+                    description: "Auto-generated description of response",
+                    content: successResponseContent
                 }
             }
         };
-        // Describe mounts if there are any.
-        // TODO: HTTP GET -methods cannot have a requestBody, so it won't
-        // work for describing mounts...
-        let mounts = Object.entries(func.mounts);
+        // Inside the `requestBody`-field, describe mounts that are used as
+        // "input" to functions.
+        let mounts = Object.entries(func.mounts).filter(x => x[1].stage !== "output");
         if (mounts.length > 0) {
             let mountEntries = Object.fromEntries(
-                    mounts.map(([path, mount]) => [
+                    mounts.map(([path, _mount]) => [
                         path,
                         {
                             type: "string",
                             format: "binary",
-                            // TODO: This is not in line with the OpenAPI spec.
-                            // Could define as a separate component maybe (or
-                            // better yet, ditch the whole OpenAPI business with
-                            // modules altogether :)?
-                            stage: mount.stage,
                         }
                     ])
             );
@@ -445,7 +453,7 @@ const describeModule = async (request, response) => {
                 .map(([k, v]) => ({ name: k, type: v })),
             mounts: "mounts" in func
                 ? Object.fromEntries(
-                    Object.values(func["mounts"])
+                    Object.values(func.mounts)
                         // Map files by their form fieldname to this function's mount.
                         .map(({ name, stage }) => ([ name, {
                             // If no file is given the media type cannot be
@@ -456,9 +464,11 @@ const describeModule = async (request, response) => {
                             ),
                             stage: stage,
                         }]))
-                )
-                : {},
-            outputType: func.output
+                ) : {},
+            outputType:
+                // An output file takes priority over any other output type.
+                func.mounts?.find(({ stage }) => stage === "output")?.mimetype
+                || func.output
         }
     }
 
@@ -488,10 +498,14 @@ const describeModule = async (request, response) => {
         return;
     }
 
-    let description = moduleDescription(modulee, functions);
+    let description = moduleEndpointDescriptions(modulee, functions);
+    let mounts = Object.fromEntries(
+        Object.entries(functions)
+            .map(([funcName, func]) => [ funcName, func.mounts || {} ])
+    );
 
     try {
-        await updateModule({ _id: request.params.moduleId }, { description: description });
+        await updateModule({ _id: request.params.moduleId }, { mounts: mounts, description: description });
     } catch (e) {
         let err = ["failed updating module with description", e];
         console.error(...err);
