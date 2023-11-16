@@ -1,13 +1,148 @@
+/**
+ * This module contains the routes for "core services" that come with the
+ * orchestrator and thus needn't be separately uploaded as modules.
+ *
+ * Each service is attached with a supervisor-compatible description like any
+ * other WebAssembly module on the orchestrator, and is mixed into the module
+ * database.
+ */
+
 const express = require("express");
 
 const utils = require("../utils.js");
 
 
+const COLLECTION_NAME = "coreServices";
+
+let serviceIds = [];
+
 let database = null;
 
-function setDatabase(db) {
+/**
+ * Set the reference to database AND add "modules" describing these core
+ * services.
+ * @param {*} db
+ */
+async function setDatabase(db) {
     database = db;
+
+    let datalistServiceDescription = DATALIST_MODULE_DESCRIPTION;
+    let datalistEndpointDescriptions = utils.moduleEndpointDescriptions(
+        { name: datalistServiceDescription.name },
+        DATALIST_FUNCTION_DESCRIPTIONS
+    );
+    datalistServiceDescription.description = datalistEndpointDescriptions;
+
+    let coreServices = [datalistServiceDescription];
+    // Delete and refresh all core services at initialization.
+    await database.delete(COLLECTION_NAME)
+    let id = (await database.create("coreServices", coreServices))
+        .insertedIds[0];
+    serviceIds.push(id);
+    let services = await database.read(COLLECTION_NAME);
+    console.log("Created core services", services.map(x => x.name));
 }
+
+const DATALIST_FUNCTION_DESCRIPTIONS = {
+    init: {
+        parameters: [],
+        method: "POST",
+        output: "application/json",
+        mounts: {
+            id: {
+                mediaType: "application/json",
+                stage: "output"
+            }
+        },
+    },
+    push: {
+        parameters: [],
+        method: "PUT",
+        output: "application/json",
+        mounts: {
+            id: {
+                mediaType: "application/json",
+                stage: "execution"
+            },
+            entry: {
+                mediaType: "application/json",
+                stage: "execution",
+            }
+        },
+    },
+    get: {
+        parameters: [],
+        method: "GET",
+        output: "application/json",
+        mounts: {
+            id: {
+                mediaType: "application/json",
+                stage: "execution"
+            },
+            entry: {
+                mediaType: "application/json",
+                stage: "output",
+            }
+        },
+    },
+    delete: {
+        parameters: [],
+        method: "DELETE",
+        output: "application/json",
+        mounts: {
+            id: {
+                mediaType: "application/json",
+                stage: "execution",
+            }
+        },
+    },
+};
+
+const DATALIST_MODULE_DESCRIPTION = {
+    name: "Datalist",
+    exports: [
+        {
+            name: "init",
+            parameterCount: 0,
+        },
+        {
+            name: "push",
+            parameterCount: 1,
+        },
+        {
+            name: "get",
+            parameterCount: 1,
+        },
+        {
+            name: "delete",
+            parameterCount: 1,
+        },
+    ],
+    requirements: [],
+    wasm: {
+        originalFilename: "datalist.orchestrator",
+        fileName: undefined,
+        path: undefined,
+    },
+    dataFiles: {},
+    // NOTE: Added later.
+    description: null,
+    mounts: {
+        init: DATALIST_FUNCTION_DESCRIPTIONS.init.mounts,
+        push: DATALIST_FUNCTION_DESCRIPTIONS.push.mounts,
+        get: DATALIST_FUNCTION_DESCRIPTIONS.get.mounts,
+        delete: DATALIST_FUNCTION_DESCRIPTIONS.delete.mounts,
+    }
+};
+
+/**
+ * Return list of the core modules that orchestrator provides on its own.
+ * @param {*} request
+ * @param {*} response
+ */
+const getCoreServices = async (request, response) => {
+    response.json(await database.read("coreServices"));
+};
 
 /**
  * Initialize empty list for pushing data to later.
@@ -78,9 +213,10 @@ const deleteData = async (request, response) => {
 };
 
 const router = express.Router();
+router.get("/core", getCoreServices);
 router.post("/datalist", initData);
 router.get("/datalist/:dataId/:index?", getData);
 router.put("/datalist/:dataId", pushData);
 router.delete("/datalist/:dataId", deleteData);
 
-module.exports = { setDatabase, router };
+module.exports = { setDatabase, router, COLLECTION_NAME };

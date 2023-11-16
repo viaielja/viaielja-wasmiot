@@ -145,7 +145,13 @@ class Orchestrator {
         let hydratedManifest = structuredClone(manifest);
         for (let step of hydratedManifest.sequence) {
             step.device = availableDevices.find(x => x._id.toString() === step.device);
-            step.module = (await this.database.read("module", { _id: step.module }))[0];
+            // Fetch the modules from remote URL if they are not found in
+            // the core services, similarly to how Docker fetches from
+            // registry/URL if not found locally.
+            step.module = coreServices.serviceIds.includes(step.module)
+                ? (await this.database.read("coreServices", { _id: step.module }))[0]
+                // TODO: Actually use a remote-fetch.
+                : (await this.database.read("module", { _id: step.module }))[0];
         }
 
         //TODO: Start searching for suitable packages using saved file.

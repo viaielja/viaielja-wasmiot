@@ -78,13 +78,15 @@ async function main() {
         {
             packageManagerBaseUrl: PUBLIC_BASE_URI,
             deviceMessagingFunction: config.deviceMessagingFunction
-        });
-
-    app = initApp({ database, deviceDiscovery, orchestrator, testing });
+        }
+    );
 
     // Must (successfully) wait for database before starting to listen for
     // web-clients or scanning devices.
     await initializeDatabase();
+
+    app = initApp({ database, deviceDiscovery, orchestrator, testing });
+
     initAndRunDeviceDiscovery();
     initServer();
 }
@@ -181,7 +183,7 @@ async function shutDown() {
         deviceDiscovery.destroy();
         console.log("Destroyed the mDNS instance.");
     }
- 
+
     console.log("Finished shutting down.");
     process.exit();
 }

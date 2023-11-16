@@ -62,7 +62,7 @@ function setRoutes(routeDependencies) {
     // NOTE: This is for testing if for example an image file needs to be available
     // after execution of some deployed work.
     app.get("/files/:myPath", (request, response) => {
-        response.sendFile("./files/"+request.params.myPath, { root: "." });
+        response.sendFile("./files/" + request.params.myPath, { root: "." });
     });
 
     // Server utils code for frontend.

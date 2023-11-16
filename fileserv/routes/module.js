@@ -289,158 +289,6 @@ const addModuleDataFiles = async (moduleId, files) => {
     await notifyModuleFileUpdate(filter._id);
 };
 
-/**
- * Map function parameters to names and mounts to files ultimately creating an
- * OpenAPI description for the module.
- * @param {*} module The module to describe (from DB).
- * @param {{"functionName": { parameters: [ { name: string, type: "integer" |
- * "float" }], mounts: { "a/mount/path": { mediaType: string } }, outputType: {
- * "aMediaType": schema} }}} functionDescriptions Mapping of function names to
- * their descriptions.
- * @returns {{ openapi: { version: "3.0.*" ... } }} Description for endpoints of
- * the module in OpenAPI v3.0 format.
- */
-const moduleEndpointDescriptions = (modulee, functionDescriptions) => {
-    function isPrimitive(type) {
-        return ["integer", "float"].includes(type);
-    }
-
-    /**
-     * Create description for a single function.
-     * @param {string} funcName
-     * @param {{ parameters: [ { type: integer | float | schema }], mounts: { "./some/mount/path": { mediaType: string }, output: { "media/type": schema} }} func
-     * @returns [functionCallPath, functionDescription]
-     */
-    function funcPathDescription(funcName, func) {
-        let sharedParams = [
-            {
-                "name": "deployment",
-                "in": "path",
-                "description": "Deployment ID",
-                "required": true,
-                "schema": {
-                    "type": "string"
-                }
-            }
-        ];
-        let funcParams = func.parameters.map(x => ({
-            name: x.name,
-            in: "query", // TODO: Where dis?
-            description: "Auto-generated description",
-            required: true,
-            schema: {
-                type: x.type
-            }
-        }));
-
-        let funcDescription = {
-            summary: "Auto-generated description of function",
-            parameters: sharedParams,
-        };
-        let successResponseContent =  {};
-        if (isPrimitive(func.outputType)) {
-            successResponseContent["application/json"] = {
-                schema: {
-                    type: func.outputType
-                }
-            };
-        } else {
-            // Assume the response is a file.
-            successResponseContent[func.outputType] = {
-                schema: {
-                    type: "string",
-                    format: "binary",
-                }
-            };
-        }
-        funcDescription[func.method] = {
-            tags: [],
-            summary: "Auto-generated description of function call method",
-            parameters: funcParams,
-            responses: {
-                200: {
-                    description: "Auto-generated description of response",
-                    content: successResponseContent
-                }
-            }
-        };
-        // Inside the `requestBody`-field, describe mounts that are used as
-        // "input" to functions.
-        let mounts = Object.entries(func.mounts).filter(x => x[1].stage !== "output");
-        if (mounts.length > 0) {
-            let mountEntries = Object.fromEntries(
-                    mounts.map(([path, _mount]) => [
-                        path,
-                        {
-                            type: "string",
-                            format: "binary",
-                        }
-                    ])
-            );
-            let mountEncodings = Object.fromEntries(
-                mounts.map(([path, mount]) => [path, { contentType: mount.mediaType }])
-            );
-            let content = {
-                "multipart/form-data": {
-                    schema: {
-                        type: "object",
-                        properties: mountEntries
-                    },
-                    encoding: mountEncodings
-                }
-            };
-            funcDescription[func.method].requestBody = {
-                required: true,
-                content,
-            };
-        }
-
-        return [
-            utils.supervisorExecutionPath(modulee.name, funcName),
-            funcDescription
-        ];
-    }
-
-    // TODO: Check that the module (i.e. .wasm binary) and description info match.
-
-    let funcPaths = Object.entries(functionDescriptions).map(x => funcPathDescription(x[0], x[1]));
-    const description = {
-        openapi: "3.0.3",
-        info: {
-            title: `${modulee.name}`,
-            description: "Calling microservices defined as WebAssembly functions",
-            version: "0.0.1"
-        },
-        tags: [
-            {
-            name: "WebAssembly",
-            description: "Executing WebAssembly functions"
-            }
-        ],
-        servers: [
-            {
-                url: "http://{serverIp}:{port}",
-                variables: {
-                    serverIp: {
-                        default: "localhost",
-                        description: "IP or name found with mDNS of the machine running supervisor"
-                    },
-                    port: {
-                        enum: [
-                            "5000",
-                            "80"
-                        ],
-                        default: "5000"
-                    }
-                }
-            }
-        ],
-        paths: {...Object.fromEntries(funcPaths)}
-    };
-
-    return description;
-};
-
 const describeModule = async (request, response) => {
     // Prepare description for the module based on given info for functions
     // (params & outputs) and files (mounts).
@@ -469,7 +317,7 @@ const describeModule = async (request, response) => {
                 // An output file takes priority over any other output type.
                 func.mounts?.find(({ stage }) => stage === "output")?.mimetype
                 || func.output
-        }
+        };
     }
 
     // Check that the described mounts were actually uploaded.
@@ -498,7 +346,7 @@ const describeModule = async (request, response) => {
         return;
     }
 
-    let description = moduleEndpointDescriptions(modulee, functions);
+    let description = utils.moduleEndpointDescriptions(modulee, functions);
     let mounts = Object.fromEntries(
         Object.entries(functions)
             .map(([funcName, func]) => [ funcName, func.mounts || {} ])
@@ -575,7 +423,7 @@ async function notifyModuleFileUpdate(moduleId) {
     // Find devices that have the module deployed and the matching deployment manifests.
     let deployments = (await database.read("deployment"));
     let devicesToUpdatedManifests = {};
-    for (let deployment of deployments) {
+    for (let deployment of deployments.filter(x => x.fullManifest)) {
         // Unpack the mapping of device-id to manifest sent to it.
         let [deviceId, manifest] = Object.entries(deployment.fullManifest)[0];
 
