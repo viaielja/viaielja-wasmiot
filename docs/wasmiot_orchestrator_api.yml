@@ -96,18 +96,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
     post:
-      description: Add description to an existing module
+      description: Generate description to an existing module
       requestBody:
-        description: Function type information and files or 'mounts' to attach to the module
+        description: |
+          Function type information for generating the description
+          and files or 'mounts' to attach to and send along with the module once
+          its deployed.
         required: true
         content:
           multipart/form-data:
             schema:
               properties:
                 functions:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/Function"
+                  $ref: "#/components/schemas/ModuleDescriptionManifest"
                 mounts:
                   type: object
                   items:
@@ -243,6 +244,8 @@ components:
             - "integer"
             - "float"
     ModuleDescription:
+      description: M2M-communication compatible description of module
+        and its functions installable on devices
       type: object
       required:
         - imports
@@ -412,3 +415,48 @@ components:
           type: string
         message:
           type: string
+
+    ModuleDescriptionManifest:
+      description: |
+        Describes a module at a bit higher level and used in creating a M2M
+        compatible description
+      type: object
+      properties:
+        [functionName]:
+          $ref: "#/components/schemas/FunctionDescriptionManifest"
+
+    FunctionDescriptionManifest:
+      description: |
+        Describes a function at a bit higher level and used in creating an
+        endpoint description
+      type: object
+      required:
+        - method
+      properties:
+        method:
+          type: string
+        parameters:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrimitiveType"
+        output:
+          $ref: "#/components/schemas/PrimitiveType"
+        mounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/MountMetadata"
+
+    PrimitiveType:
+      type: string
+      enum: [integer, float]
+
+    MountMetadata:
+      required:
+        - name
+        - stage
+      properties:
+        name:
+          type: string
+        stage:
+          type: string
+          enum: [deployment, execution, output]
