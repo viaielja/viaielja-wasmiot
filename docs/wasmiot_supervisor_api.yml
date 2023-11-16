@@ -1,0 +1,312 @@
+openapi: '3.0.3'
+info:
+  title: Wasm-IoT Supervisor API
+  version: '0.0.1'
+  description: |
+    This API is used by orchestrator and other supervisors to interact with each
+    other for installing deployments, running modules and querying statuses.
+tags:
+  - name: WebAssembly
+    description: Executing WebAssembly workloads
+  - name: IoT
+    description: Inspecting a device and deploying workloads to it
+servers:
+  - url: http://{serverIp}:{port}
+    variables:
+      serverIp:
+        default: localhost
+        description: IP or name found with mDNS of the machine running supervisor
+      port:
+        enum:
+          - '5000'
+          - '80'
+        default: '5000'
+paths:
+  /deploy:
+    post:
+      description: Install a deployment
+      requestBody:
+        description: Information about needed resources on deployment
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Deployment"
+      responses:
+        '200':
+          description: Deployment installed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+components:
+  schemas:
+    Url:
+      type: string
+      format: uri
+      pattern: "^(https?)://"
+    Deployment:
+      type: object
+      properties:
+        deploymentId:
+          type: string
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              urls:
+                type: object
+                properties:
+                  binary:
+                    $ref: "#/components/schemas/Url"
+                  description:
+                    $ref: "#/components/schemas/Url"
+                  other:
+                    $ref: "#/components/schemas/Url"
+        endpoints:
+          type: object
+          properties:
+            [endpointName]:
+              type: object
+              properties:
+                url:
+                  $ref: "#/components/schemas/Url"
+                path:
+                  type: string
+                method:
+                  type: string
+                request:
+                  type: object
+                  properties:
+                    parameters:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          in:
+                            type: string
+                          description:
+                            type: string
+                          required:
+                            type: boolean
+                          schema:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                              format:
+                                type: string
+                    request_body:
+                      type: object
+                      properties:
+                        media_type:
+                          type: string
+                        schema:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                            properties:
+                              type: object
+                              additionalProperties:
+                                type: object
+                                properties:
+                                  type:
+                                    type: string
+                                  format:
+                                    type: string
+                            items:
+                              type: object
+                              properties:
+                                type:
+                                  type: string
+                                format:
+                                  type: string
+                        encoding:
+                          type: object
+                          additionalProperties:
+                            type: object
+                            properties:
+                              contentType:
+                                type: string
+                response:
+                  type: object
+                  properties:
+                    media_type:
+                      type: string
+                    schema:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+        instructions:
+          type: object
+          properties:
+            [instructionName]:
+              type: object
+              properties:
+                from:
+                  type: object
+                  properties:
+                    url:
+                      $ref: "#/components/schemas/Url"
+                    path:
+                      type: string
+                    method:
+                      type: string
+                    request:
+                      type: object
+                      properties:
+                        parameters:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              in:
+                                type: string
+                              description:
+                                type: string
+                              required:
+                                type: boolean
+                              schema:
+                                type: object
+                                properties:
+                                  type:
+                                    type: string
+                                  format:
+                                    type: string
+                        request_body:
+                          type: object
+                          properties:
+                            media_type:
+                              type: string
+                            schema:
+                              type: object
+                              properties:
+                                type:
+                                  type: string
+                                properties:
+                                  type: object
+                                  additionalProperties:
+                                    type: object
+                                    properties:
+                                      type:
+                                        type: string
+                                      format:
+                                        type: string
+                                items:
+                                  type: object
+                                  properties:
+                                    type:
+                                      type: string
+                                    format:
+                                      type: string
+                            encoding:
+                              type: object
+                              additionalProperties:
+                                type: object
+                                properties:
+                                  contentType:
+                                    type: string
+                        response:
+                          type: object
+                          properties:
+                            media_type:
+                              type: string
+                            schema:
+                              type: object
+                              properties:
+                                type:
+                                  type: string
+                to:
+                  type: object
+                  properties:
+                    url:
+                      $ref: "#/components/schemas/Url"
+                    path:
+                      type: string
+                    method:
+                      type: string
+                    request:
+                      type: object
+                      properties:
+                        parameters:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              in:
+                                type: string
+                              description:
+                                type: string
+                              required:
+                                type: boolean
+                              schema:
+                                type: object
+                                properties:
+                                  type:
+                                    type: string
+                                  format:
+                                    type: string
+                        request_body:
+                          type: object
+                          properties:
+                            media_type:
+                              type: string
+                            schema:
+                              type: object
+                              properties:
+                                type:
+                                  type: string
+                                properties:
+                                  type: object
+                                  additionalProperties:
+                                    type: object
+                                    properties:
+                                      type:
+                                        type: string
+                                      format:
+                                        type: string
+                                items:
+                                  type: object
+                                  properties:
+                                    type:
+                                      type: string
+                                    format:
+                                      type: string
+                            encoding:
+                              type: object
+                              additionalProperties:
+                                type: object
+                                properties:
+                                  contentType:
+                                    type: string
+                        response:
+                          type: object
+                          properties:
+                            media_type:
+                              type: string
+                            schema:
+                              type: object
+                              properties:
+                                type:
+                                  type: string
+      required:
+        - deploymentId
+        - modules
+        - endpoints
