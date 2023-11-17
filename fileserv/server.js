@@ -8,7 +8,7 @@ const { MONGO_URI, PUBLIC_PORT, PUBLIC_BASE_URI, DEVICE_TYPE } = require("./cons
 const { init: initApp } = require("./src/app");
 const { MongoDatabase, MockDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
-const Orchestrator = require("./src/orchestrator");
+const { Orchestrator } = require("./src/orchestrator");
 const utils = require("./utils.js");
 
 /**

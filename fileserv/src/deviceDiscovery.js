@@ -6,6 +6,7 @@
 const bonjour = require("bonjour-service");
 const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE, DEVICE_HEALTH_CHECK_INTERVAL_MS, DEVICE_SCAN_DURATION_MS, DEVICE_SCAN_INTERVAL_MS } = require("../constants.js");
 
+const { ORCHESTRATOR_ADVERTISEMENT } = require("./orchestrator.js");
 
 /**
  * Thing running the Wasm-IoT supervisor.
@@ -81,6 +82,17 @@ class DeviceManager {
      * milliseconds.
      */
     startScan(duration=10000) {
+        // Stop advertising orchestrator's core services to "itself" so it does
+        // not clash with the rescan.
+        if (this.orchestratorAdvertiser) {
+            this.orchestratorAdvertiser.unpublishAll();
+        }
+        // Start advertising orchestrator's core services to "itself", so that
+        // it passes through the same pipeline and shows up as any other
+        // supervisor.
+        this.orchestratorAdvertiser = new bonjour.Bonjour();
+        this.orchestratorAdvertiser.publish(ORCHESTRATOR_ADVERTISEMENT);
+
         console.log("Scanning for devices", this.queryOptions, "...");
 
         // Do not start again, if already scanning.
@@ -272,7 +284,7 @@ class DeviceManager {
         if (typeof x === "string") {
             name = x;
         } else {
-            console.log(`Service '${service.name}' seems to have emitted 'goodbye'`);
+            console.log(`Service '${x.name}' seems to have emitted 'goodbye'`);
             // Assume the service data from mDNS is used to remove a device.
             name = x.name;
         }
@@ -326,4 +338,5 @@ class MockDeviceDiscovery {
 module.exports = {
     DeviceDiscovery: DeviceManager,
     MockDeviceDiscovery,
+    Device,
 };

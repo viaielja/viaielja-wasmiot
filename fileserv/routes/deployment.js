@@ -18,11 +18,15 @@ function setOrchestrator(orch) {
  * Validate manifest (this is static typing manually).
  */
 const validateManifest = (mani) => {
-    console.assert(typeof mani.name === "string", "manifest must have a name");
-    console.assert(typeof mani.sequence === "object" && mani.sequence instanceof Array, "manifest must have a sequence of operations");
+    if (!(typeof mani.name === "string"))
+        { throw "manifest must have a name"; }
+    if (!(typeof mani.sequence === "object" && mani.sequence instanceof Array))
+        { throw "manifest must have a sequence of operations"; }
     for (let node of mani.sequence) {
-        console.assert(typeof node.module === "string", "manifest node must have a module");
-        console.assert(typeof node.func === "string", "manifest node must have a function");
+        if (!(typeof node.module === "string"))
+            { throw "manifest node must have a module"; }
+        if (!(typeof node.func === "string"))
+            { throw "manifest node must have a function"; }
     }
 }
 
@@ -60,7 +64,16 @@ const getDeployments = async (request, response) => {
  */
 const createDeployment = async (request, response) => {
     let manifest = request.body;
-    validateManifest(manifest);
+    try {
+        validateManifest(manifest);
+    } catch (err) {
+        let errorMsg = "Failed validating manifest";
+        console.error(errorMsg, err);
+        response
+            .status(400)
+            .json(new utils.Error(errorMsg, err));
+        return;
+    }
 
     try {
         let deploymentId = await orchestrator.solve(manifest);

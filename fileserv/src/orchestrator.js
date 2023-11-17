@@ -145,13 +145,10 @@ class Orchestrator {
         let hydratedManifest = structuredClone(manifest);
         for (let step of hydratedManifest.sequence) {
             step.device = availableDevices.find(x => x._id.toString() === step.device);
-            // Fetch the modules from remote URL if they are not found in
-            // the core services, similarly to how Docker fetches from
-            // registry/URL if not found locally.
-            step.module = coreServices.serviceIds.includes(step.module)
-                ? (await this.database.read("coreServices", { _id: step.module }))[0]
-                // TODO: Actually use a remote-fetch.
-                : (await this.database.read("module", { _id: step.module }))[0];
+            // Fetch the modules from remote URL similarly to how Docker fetches
+            // from registry/URL if not found locally.
+            // TODO: Actually use a remote-fetch.
+            step.module = (await this.database.read("module", { _id: step.module }))[0];
         }
 
         //TODO: Start searching for suitable packages using saved file.
@@ -601,5 +598,30 @@ function moduleData(modulee, packageBaseUrl) {
     };
 }
 
+const ORCHESTRATOR_ADVERTISEMENT = {
+    name: "orchestrator",
+    type: constants.DEVICE_TYPE,
+    port: 3000,
+};
 
-module.exports = Orchestrator;
+const ORCHESTRATOR_WASMIOT_DEVICE_DESCRIPTION = {
+    "platform": {
+        "memory": {
+            "bytes": null
+        },
+        "cpu": {
+            "humanReadableName": null,
+            "clockSpeed": {
+                "Hz": null
+            }
+        }
+    },
+    "supervisorInterfaces": []
+};
+
+
+module.exports = {
+    Orchestrator,
+    ORCHESTRATOR_ADVERTISEMENT,
+    ORCHESTRATOR_WASMIOT_DEVICE_DESCRIPTION
+};
