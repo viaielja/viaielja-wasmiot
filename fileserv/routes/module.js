@@ -56,7 +56,78 @@ const createNewModule = async (metadata, files) => {
 
     // Attach the Wasm binary.
     return addModuleBinary({_id: moduleId}, files[0]).then(() => moduleId);
-}
+};
+
+/**
+ * Implements the logic for describing an existing module.
+ * @param {*} moduleId
+ * @param {*} descriptionManifest
+ * @param {*} files
+ * @returns Promise about generating a description for the module based on
+ * received functions and files and updating it all to the database.
+ */
+const desribeExistingModule = async (moduleId, descriptionManifest, files) => {
+    // Prepare description for the module based on given info for functions
+    // (params & outputs) and files (mounts).
+    let functions = {};
+    for (let [funcName, func] of Object.entries(descriptionManifest).filter(x => typeof x[1] === "object")) {
+        functions[funcName] = {
+            method: func.method.toLowerCase(),
+            parameters: Object.entries(func)
+                .filter(([k, _v]) => k.startsWith("param"))
+                .map(([k, v]) => ({ name: k, type: v })),
+            mounts: "mounts" in func
+                ? Object.fromEntries(
+                    Object.values(func.mounts)
+                        // Map files by their form fieldname to this function's mount.
+                        .map(({ name, stage }) => ([ name, {
+                            // If no file is given the media type cannot be
+                            // determined and is set to default.
+                            mediaType: (
+                                files.find(x => x.fieldname === name)?.mimetype
+                                || "application/octet-stream"
+                            ),
+                            stage: stage,
+                        }]))
+                ) : {},
+            outputType:
+                // An output file takes priority over any other output type.
+                func.mounts?.find(({ stage }) => stage === "output")?.mimetype
+                || func.output
+        };
+    }
+
+    // Check that the described mounts were actually uploaded.
+    let missingFiles = [];
+    for (let [funcName, func] of Object.entries(functions)) {
+        for (let [mountName, mount] of Object.entries(func.mounts)) {
+            if (mount.stage == "deployment" && !(files.find(x => x.fieldname === mountName))) {
+                missingFiles.push([funcName, mountName]);
+            }
+        }
+    }
+    if (missingFiles.length > 0) {
+        throw ["mounts missing", missingFiles];
+    }
+    // Save associated files ("mounts") adding their info to the database entry.
+    await addModuleDataFiles(moduleId, files);
+
+    // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
+    let [failCode, [modulee]] = await getModuleBy(moduleId);
+    if (failCode) {
+        throw "failed reading just updated module from database";
+    }
+
+    let description = utils.moduleEndpointDescriptions(modulee, functions);
+    let mounts = Object.fromEntries(
+        Object.entries(functions)
+            .map(([funcName, func]) => [ funcName, func.mounts || {} ])
+    );
+
+    await updateModule({ _id: moduleId }, { mounts: mounts, description });
+
+    return description;
+};
 
 /**
  *
@@ -302,78 +373,36 @@ const addModuleDataFiles = async (moduleId, files) => {
 };
 
 const describeModule = async (request, response) => {
-    // Prepare description for the module based on given info for functions
-    // (params & outputs) and files (mounts).
-    let functions = {};
-    for (let [funcName, func] of Object.entries(request.body).filter(x => typeof x[1] === "object")) {
-        functions[funcName] = {
-            method: func.method.toLowerCase(),
-            parameters: Object.entries(func)
-                .filter(([k, _v]) => k.startsWith("param"))
-                .map(([k, v]) => ({ name: k, type: v })),
-            mounts: "mounts" in func
-                ? Object.fromEntries(
-                    Object.values(func.mounts)
-                        // Map files by their form fieldname to this function's mount.
-                        .map(({ name, stage }) => ([ name, {
-                            // If no file is given the media type cannot be
-                            // determined and is set to default.
-                            mediaType: (
-                                request.files.find(x => x.fieldname === name)?.mimetype
-                                || "application/octet-stream"
-                            ),
-                            stage: stage,
-                        }]))
-                ) : {},
-            outputType:
-                // An output file takes priority over any other output type.
-                func.mounts?.find(({ stage }) => stage === "output")?.mimetype
-                || func.output
-        };
-    }
+    try {
+        let description = await desribeExistingModule(request.params.moduleId, request.body, request.files);
 
-    // Check that the described mounts were actually uploaded.
-    let missingFiles = [];
-    for (let [funcName, func] of Object.entries(functions)) {
-        for (let [mountName, mount] of Object.entries(func.mounts)) {
-            if (mount.stage == "deployment" && !(request.files.find(x => x.fieldname === mountName))) {
-                missingFiles.push([funcName, mountName]);
-            }
+        response.json(new ModuleDescribed(description));
+    } catch (e) {
+        switch (e) {
+            case "update failed":
+                let err = ["failed updating module with description", e];
+                console.error(...err);
+                response
+                    .status(500)
+                    .json(new utils.Error(...err));
+                break;
+            default:
+                if (typeof e === "object") {
+                    if (e instanceof Array && e[0] === "mounts missing") {
+                        let missingFiles = e[1];
+                        response
+                            .status(400)
+                            .json(new utils.Error(`Functions missing mounts: ${JSON.stringify(missingFiles, null, 2)}`));
+                        break;
+                    }
+                }
+                console.error("unknown error", e);
+                response
+                    .status(500)
+                    .json(new utils.Error("unknown error"));
+                break;
         }
     }
-    if (missingFiles.length > 0) {
-        response
-            .status(400)
-            .json(new utils.Error(`Functions missing mounts: ${JSON.stringify(missingFiles, null, 2)}`));
-        return;
-    }
-    // Save associated files ("mounts") adding their info to the database entry.
-    await addModuleDataFiles(request.params.moduleId, request.files);
-
-    // Get module from DB after file updates (FIXME which is a stupid back-and-forth).
-    let [failCode, [modulee]] = await getModuleBy(request.params.moduleId);
-    if (failCode) {
-        console.error(...value);
-        response.status(failCode).json(new utils.Error(value));
-        return;
-    }
-
-    let description = utils.moduleEndpointDescriptions(modulee, functions);
-    let mounts = Object.fromEntries(
-        Object.entries(functions)
-            .map(([funcName, func]) => [ funcName, func.mounts || {} ])
-    );
-
-    try {
-        await updateModule({ _id: request.params.moduleId }, { mounts: mounts, description: description });
-    } catch (e) {
-        let err = ["failed updating module with description", e];
-        console.error(...err);
-        response.status(500).json(new utils.Error(...err));
-        return;
-    }
-
-    response.json(new ModuleDescribed(description));
 };
 
 /**
@@ -503,4 +532,4 @@ router.get("/:moduleId/description", getModule(true));
 router.get("/:moduleId/:filename", getModuleFile);
 router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
 
-module.exports = { setDatabase, router, createNewModule };
+module.exports = { setDatabase, router, createNewModule, desribeExistingModule  };
