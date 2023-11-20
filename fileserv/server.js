@@ -10,6 +10,7 @@ const { MongoDatabase, MockDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
 const { Orchestrator } = require("./src/orchestrator");
 const utils = require("./utils.js");
+const { initializeCoreServices } = require("./routes/coreServices");
 
 /**
  * The Express app.
@@ -85,7 +86,7 @@ async function main() {
     // web-clients or scanning devices.
     await initializeDatabase();
 
-    app = initApp({ database, deviceDiscovery, orchestrator, testing });
+    app = await initApp({ database, deviceDiscovery, orchestrator, testing });
 
     initAndRunDeviceDiscovery();
     initServer();
@@ -145,6 +146,8 @@ function initServer() {
             "Orchestrator is available at: ",
             PUBLIC_BASE_URI
         );
+        // Now that the server is up, initialize the core services.
+        initializeCoreServices();
     });
 
     server.on("error", (e) => {

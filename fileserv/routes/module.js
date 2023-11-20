@@ -45,6 +45,20 @@ class ImageUploaded {
 }
 
 /**
+ * Implements the logic for creating a new module.
+ * @returns Promise about interpreting the .wasm binary and attaching it to
+ * created module resource. On success it results to the added module's ID.
+ */
+const createNewModule = async (metadata, files) => {
+    // Create the database entry.
+    let moduleId = (await database.create("module", [metadata]))
+        .insertedIds[0];
+
+    // Attach the Wasm binary.
+    return addModuleBinary({_id: moduleId}, files[0]).then(() => moduleId);
+}
+
+/**
  *
  * @param {*} moduleId
  * @returns [failCode, module]
@@ -137,30 +151,28 @@ const getModuleFile = async (request, response) => {
  * Parse metadata from a Wasm-binary to database along with its name.
  */
 const createModule = async (request, response) => {
-    // Create the database entry.
-    let moduleId;
     try {
-        moduleId = (await database.create("module", [request.body]))
-            .insertedIds[0];
-    } catch (e) {
-        response.status(400).json(new utils.Error(undefined, e));
-        return;
-    }
-
-    // Attach the Wasm binary.
-    try {
-        let result = await addModuleBinary({_id: moduleId}, request.files[0]);
+        let result = await createNewModule(request.body, request.files);
 
         response
             .status(201)
             .json(new ModuleCreated(result));
     } catch (e) {
-        let err = ["Failed attaching a file to module", e];
-        console.error(...err);
-        // TODO Handle device not found on update.
-        response
-            .status(500)
-            .json(new utils.Error(...err));
+        if (e === "exists") {
+            response.status(400).json(new utils.Error(undefined, e));
+        } else if (e === "bad") {
+            let err = ["Failed attaching a file to module", e];
+            console.error(...err);
+            // TODO Handle device not found on update.
+            response
+                .status(500)
+                .json(new utils.Error(...err));
+        } else {
+            console.error("unknown error", e);
+            response
+                .status(500)
+                .json(new utils.Error("unknown error"));
+        }
     }
 };
 
@@ -491,4 +503,4 @@ router.get("/:moduleId/description", getModule(true));
 router.get("/:moduleId/:filename", getModuleFile);
 router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
 
-module.exports = { setDatabase, router };
+module.exports = { setDatabase, router, createNewModule };
