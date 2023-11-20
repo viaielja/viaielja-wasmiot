@@ -13,29 +13,36 @@ const utils = require("../utils.js");
 const COLLECTION_NAME = "module";
 const {
     FUNCTION_DESCRIPTIONS: DATALIST_FUNCTION_DESCRIPTIONS,
-    MODULE_DESCRIPTION: DATALIST_MODULE_DESCRIPTION,
-    setDatabase: setDatalistDatabase
+    MODULE_NAME: DATALIST_MODULE_NAME,
+    setDatabase: setDatalistDatabase,
+    MODULE_NAME
 } = require("./datalist.js");
 const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE } = require("../constants.js");
 const { ORCHESTRATOR_WASMIOT_DEVICE_DESCRIPTION } = require("../src/orchestrator.js");
-const { createNewModule } = require("../routes/module.js");
+const { createNewModule, describeExistingModule } = require("../routes/module.js");
+const { ObjectId } = require("mongodb");
 
 
 let serviceIds = {};
 
 let database = null;
 
+const nameFor = (serviceName) => `core:${serviceName}`;
 /**
  * Calling on the orchestrator API, create the core services as "modules".
  * This should be done right after the orchestrator server has fully
  * initialized.
  */
 async function initializeCoreServices() {
+    // Delete and refresh all core services at initialization.
+    let { deletedCount } = await database.collection("module").deleteMany({ isCoreModule: true });
+    console.log(`DEBUG: Deleted existing (${deletedCount}) core services in order to create them anew...`);
+
     console.log("Initializing the core services...");
 
     // Initialize the datalist "module".
     let metadata = {
-        name: DATALIST_MODULE_DESCRIPTION.name,
+        name: nameFor(DATALIST_MODULE_NAME)
     };
     // Fake the object that multer would create off of uploaded files.
     let files = [
@@ -47,25 +54,15 @@ async function initializeCoreServices() {
         }
     ];
     let id = await createNewModule(metadata, files);
-    /*
-    let datalistServiceDescription = DATALIST_MODULE_DESCRIPTION;
-    let datalistEndpointDescriptions = utils.moduleEndpointDescriptions(
-        { name: datalistServiceDescription.name },
-        DATALIST_FUNCTION_DESCRIPTIONS
-    );
-    datalistServiceDescription.description = datalistEndpointDescriptions;
-    setDatalistDatabase(database);
+    // Describe the datalist "module".
+    await describeExistingModule(id, DATALIST_FUNCTION_DESCRIPTIONS, []);
 
-    let coreServices = [datalistServiceDescription];
-    // Delete and refresh all core services at initialization.
-    await database.delete(COLLECTION_NAME)
-    let id = (await database.create(COLLECTION_NAME, coreServices))
-        .insertedIds[0];
-    */
-    serviceIds[DATALIST_MODULE_DESCRIPTION.name] = id;
-    let services = [];//await database.findMany(COLLECTION_NAME, { name: { $in: serviceIds} });
+    // Add a flag to the entry to mark it as core-module.
+    await database.collection("module").updateOne({ _id: ObjectId(id) }, { $set: { isCoreModule: true } });
 
-    console.log("Created core services", services.map(x => x.name));
+    serviceIds[DATALIST_MODULE_NAME] = id;
+
+    console.log("Created core services", Object.entries(serviceIds).map(([name, _]) => name));
 }
 
 /**
@@ -97,7 +94,7 @@ let endpoints = Object.entries(DATALIST_FUNCTION_DESCRIPTIONS)
     .map(
         ([functionName, x]) => ({
             path: utils
-                .supervisorExecutionPath("datalist", functionName)
+                .supervisorExecutionPath(nameFor(MODULE_NAME), functionName)
                 .replace("{deployment}", ":deploymentId"),
             method: x.method,
             func: x.func
@@ -115,6 +112,9 @@ async function init(routeDependencies) {
     // Database is needed by some services, so they can access it from this
     // variable.
     database = routeDependencies.database;
+
+    setDatalistDatabase(database);
+
     return router;
 }
 

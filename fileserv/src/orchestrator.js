@@ -128,7 +128,11 @@ class Orchestrator {
     * devices to pull modules from.
     */
     constructor(dependencies, options) {
-        this.database = dependencies.database;
+        let database = dependencies.database;
+        this.deviceCollection = database.collection("device");
+        this.moduleCollection = database.collection("module");
+        this.deploymentCollection = database.collection("deployment");
+
         this.packageManagerBaseUrl = options.packageManagerBaseUrl || constants.PUBLIC_BASE_URI;
         if (!options.deviceMessagingFunction) {
             throw new utils.Error("method for communicating to devices not given");
@@ -139,7 +143,7 @@ class Orchestrator {
     async solve(manifest, resolving=false) {
         // Gather the devices and modules attached to deployment in "full"
         // (i.e., not just database IDs).
-        let availableDevices = await this.database.read("device");
+        let availableDevices = await (await this.deviceCollection.find()).toArray();
         // The original deployment should be saved to database as is with the
         // IDs TODO: Exactly why should it be saved?.
         let hydratedManifest = structuredClone(manifest);
@@ -148,7 +152,10 @@ class Orchestrator {
             // Fetch the modules from remote URL similarly to how Docker fetches
             // from registry/URL if not found locally.
             // TODO: Actually use a remote-fetch.
-            step.module = (await this.database.read("module", { _id: step.module }))[0];
+            step.module = await this.moduleCollection.findOne(
+                // Find with id or name to support finding core modules more easily.
+                { $or: [{ _id: step.module }, { name: step.module }] }
+            );
         }
 
         //TODO: Start searching for suitable packages using saved file.
@@ -162,17 +169,15 @@ class Orchestrator {
         if (resolving) {
             deploymentId = manifest._id;
         } else {
-            deploymentId = (await this.database.create("deployment", [manifest]))
-                .insertedIds[0];
+            deploymentId = (await this.deploymentCollection.insertOne(manifest)).insertedId;
         }
 
         let solution = createSolution(deploymentId, assignedSequence, this.packageManagerBaseUrl)
 
         // Update the deployment with the created solution.
-        this.database.update(
-            "deployment",
+        this.deploymentCollection.updateOne(
             { _id: deploymentId },
-            solution
+            { $set: solution }
         );
 
         return resolving ? solution : deploymentId;
@@ -183,8 +188,7 @@ class Orchestrator {
 
         let requests = [];
         for (let [deviceId, manifest] of Object.entries(deploymentSolution)) {
-            let device = (await this.database
-                .read("device", { _id: deviceId }))[0];
+            let device = await this.deviceCollection.findOne({ _id: deviceId });
 
             if (!device) {
                 throw new DeviceNotFound("", deviceId);
@@ -498,9 +502,20 @@ function fetchAndFindResources(sequence, availableDevices) {
     let selectedModules = [];
     let selectedDevices = [];
 
+    // Fetch the orchestrator device in advance if there are any core modules
+    // to be used.
+    let orchestratorDevice = availableDevices.find(x => x.name === "orchestrator");
+
     // Iterate all the items in the request's sequence and fill in the given
     // modules and devices or choose most suitable ones.
     for (let [device, modulee, funcName] of sequence.map(Object.values)) {
+        // If the module and device are orchestrator-based, return immediately.
+        if (modulee.isCoreModule) {
+            selectedModules.push(modulee);
+            selectedDevices.push(orchestratorDevice);
+            continue;
+        }
+
         // Selecting the module automatically is useless, as they can
         // only do what their exports allow. So a well formed request should
         // always contain the module-id as well.

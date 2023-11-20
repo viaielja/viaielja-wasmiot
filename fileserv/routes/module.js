@@ -5,10 +5,14 @@ const { MODULE_DIR } = require("../constants.js");
 const utils = require("../utils.js");
 
 
-let database = null;
+let moduleCollection = null;
+let deploymentCollection = null;
+let deviceCollection = null;
 
 function setDatabase(db) {
-    database = db;
+    moduleCollection = db.collection("module");
+    deploymentCollection = db.collection("deployment");
+    deviceCollection = db.collection("device");
 }
 
 class ModuleCreated {
@@ -51,8 +55,7 @@ class ImageUploaded {
  */
 const createNewModule = async (metadata, files) => {
     // Create the database entry.
-    let moduleId = (await database.create("module", [metadata]))
-        .insertedIds[0];
+    let moduleId = (await moduleCollection.insertOne(metadata)).insertedId;
 
     // Attach the Wasm binary.
     return addModuleBinary({_id: moduleId}, files[0]).then(() => moduleId);
@@ -66,16 +69,20 @@ const createNewModule = async (metadata, files) => {
  * @returns Promise about generating a description for the module based on
  * received functions and files and updating it all to the database.
  */
-const desribeExistingModule = async (moduleId, descriptionManifest, files) => {
+const describeExistingModule = async (moduleId, descriptionManifest, files) => {
     // Prepare description for the module based on given info for functions
     // (params & outputs) and files (mounts).
     let functions = {};
     for (let [funcName, func] of Object.entries(descriptionManifest).filter(x => typeof x[1] === "object")) {
+        // The function parameters might be in a list or be in the form of 'paramN'
+        // where N is the order of the parameter.
+        parameters = func.parameters || Object.entries(func)
+                .filter(([k, _v]) => k.startsWith("param"))
+                .map(([k, v]) => ({ name: k, type: v }));
+
         functions[funcName] = {
             method: func.method.toLowerCase(),
-            parameters: Object.entries(func)
-                .filter(([k, _v]) => k.startsWith("param"))
-                .map(([k, v]) => ({ name: k, type: v })),
+            parameters: parameters,
             mounts: "mounts" in func
                 ? Object.fromEntries(
                     Object.values(func.mounts)
@@ -140,7 +147,7 @@ const getModuleBy = async (moduleId) => {
     let matches;
     try {
         let filter = getAllModules ? {} : { _id: moduleId };
-        matches = await database.read("module", filter);
+        matches = await (await moduleCollection.find(filter)).toArray();
     } catch (e) {
         let err = ["database query failed", e];
         return [500, err];
@@ -191,7 +198,7 @@ const getModule = (justDescription) => (async (request, response) => {
  * Serve the a file relate to a module based on module ID and file extension.
  */
 const getModuleFile = async (request, response) => {
-    let doc = (await database.read("module", { _id: request.params.moduleId }))[0];
+    let doc = await moduleCollection.findOne({ _id: request.params.moduleId });
     let filename = request.params.filename;
     if (doc) {
         let fileObj;
@@ -374,7 +381,7 @@ const addModuleDataFiles = async (moduleId, files) => {
 
 const describeModule = async (request, response) => {
     try {
-        let description = await desribeExistingModule(request.params.moduleId, request.body, request.files);
+        let description = await describeExistingModule(request.params.moduleId, request.body, request.files);
 
         response.json(new ModuleDescribed(description));
     } catch (e) {
@@ -411,7 +418,7 @@ const describeModule = async (request, response) => {
 const deleteModule = async (request, response) => {
     let deleteAllModules = request.params.moduleId === undefined;
     let filter = deleteAllModules ? {} : { _id: request.params.moduleId };
-    let deletedCount = (await database.delete("module", filter)).deletedCount;
+    let { deletedCount } = await moduleCollection.deleteMany(filter);
     if (deleteAllModules) {
         response.json({ deletedCount: deletedCount });
     } else {
@@ -462,7 +469,7 @@ async function parseWasmModule(data, outFields) {
 */
 async function notifyModuleFileUpdate(moduleId) {
     // Find devices that have the module deployed and the matching deployment manifests.
-    let deployments = (await database.read("deployment"));
+    let deployments = await (await deploymentCollection.find()).toArray();
     let devicesToUpdatedManifests = {};
     for (let deployment of deployments.filter(x => x.fullManifest)) {
         // Unpack the mapping of device-id to manifest sent to it.
@@ -479,8 +486,7 @@ async function notifyModuleFileUpdate(moduleId) {
     // Deploy all the manifests again, which has the same effect as the first
     // time (following the idempotence of ReST).
     for (let [deviceId, manifests] of Object.entries(devicesToUpdatedManifests)) {
-        let device = (await database
-            .read("device", { _id: deviceId }))[0];
+        let device = await deviceCollection.findOne({ _id: deviceId });
 
         if (!device) {
             throw new utils.Error(`No device found for '${deviceId}' in manifest#${i}'`);
@@ -498,8 +504,8 @@ async function notifyModuleFileUpdate(moduleId) {
 * @param {*} fields To add to the matched modules.
 */
 async function updateModule(filter, fields) {
-    let updateRes = await database.update("module", filter, fields, false);
-    if (updateRes.matchedCount === 0) {
+    let { matchedCount } = await moduleCollection.updateMany(filter, { $set: fields }, { upsert: true });
+    if (matchedCount === 0) {
         throw "no module matched the filter";
     }
 }
@@ -532,4 +538,9 @@ router.get("/:moduleId/description", getModule(true));
 router.get("/:moduleId/:filename", getModuleFile);
 router.delete("/:moduleId?", /*authenticationMiddleware,*/ deleteModule);
 
-module.exports = { setDatabase, router, createNewModule, desribeExistingModule  };
+module.exports = {
+    setDatabase,
+    router,
+    createNewModule,
+    describeExistingModule,
+};

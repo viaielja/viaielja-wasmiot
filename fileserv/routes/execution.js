@@ -1,13 +1,14 @@
+const { ObjectId } = require("mongodb");
 const express = require("express");
 
 const { EXECUTION_INPUT_DIR } = require("../constants.js");
 const utils = require("../utils.js");
 
 
-let database = null
+let deploymentCollection = null
 
 function setDatabase(db) {
-    database = db;
+    deploymentCollection = db.collection("deployment");
 }
 
 let orchestrator = null
@@ -21,7 +22,11 @@ function setOrchestrator(orch) {
  * kickstart the application execution.
  */
 const execute = async (request, response) => {
-    let deployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
+    let deployment = await deploymentCollection.findOne({ _id: ObjectId(request.params.deploymentId) });
+    if (!deployment) {
+        response.status(404).send();
+        return;
+    }
 
     try {
         let args = {};
@@ -50,11 +55,12 @@ const execute = async (request, response) => {
 
             // TODO: This is just temporary way to check for result. Would be
             // better that supervisor responds with error code, not 200.
+            let redirectUrl;
             if (json.result) {
                 if (json.status !== "error") {
                     // Check if the result is a URL to follow...
                     try {
-                        url = new URL(json.result);
+                        redirectUrl = new URL(json.result);
                         depth += 1;
                     } catch (e) {
                         // Assume this is the final result.
@@ -68,14 +74,14 @@ const execute = async (request, response) => {
                 result = new utils.Error(json.error);
                 break;
             } else if (json.resultUrl) {
-                url = json.resultUrl;
+                redirectUrl = json.resultUrl;
                 depth += 1;
             }
 
             options = { method: "GET" };
 
-            console.log(`(Try ${tries}, depth ${depth}) Fetching result from: ${url}`);
-            execResponse = await fetch(url, options);
+            console.log(`(Try ${tries}, depth ${depth}) Fetching result from: ${redirectUrl}`);
+            execResponse = await fetch(redirectUrl, options);
 
             if (!execResponse.ok) {
                 // Wait for a while, if the URL is not yet available.

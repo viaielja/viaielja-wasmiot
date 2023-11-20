@@ -4,9 +4,10 @@
 
 const { chdir } = require('process');
 
+const { MongoClient, ObjectId } = require("mongodb");
+
 const { MONGO_URI, PUBLIC_PORT, PUBLIC_BASE_URI, DEVICE_TYPE } = require("./constants.js");
 const { init: initApp } = require("./src/app");
-const { MongoDatabase, MockDatabase } = require("./src/database");
 const discovery = require("./src/deviceDiscovery");
 const { Orchestrator } = require("./src/orchestrator");
 const utils = require("./utils.js");
@@ -49,26 +50,18 @@ if (testing) {
     console.log("! RUNNING IN TEST MODE");
 }
 
-/**
- * Configuration for the orchestrator to use between testing and "production".
- */
-const config = {
-    databaseType:            testing ? MockDatabase                  : MongoDatabase,
-    deviceDiscoveryType:     testing ? discovery.MockDeviceDiscovery : discovery.DeviceDiscovery,
-    deviceMessagingFunction: testing ? async (_) => ({ a: "test" })  : utils.messageDevice
-};
-
-
 ///////////
 // RUN MAIN:
 
 async function main() {
     console.log("Orchestrator starting...")
 
-    // Select between configurations for testing and "production".
-    database = new config.databaseType(MONGO_URI);
+    // Must (successfully) wait for database before starting to listen for
+    // web-clients or scanning devices.
+    await initializeDatabase();
+
     try {
-        deviceDiscovery = new config.deviceDiscoveryType(type=DEVICE_TYPE, database);
+        deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, database);
     } catch(e) {
         console.log("Device discovery initialization failed: ", e);
         throw e;
@@ -78,13 +71,9 @@ async function main() {
         { database, deviceDiscovery },
         {
             packageManagerBaseUrl: PUBLIC_BASE_URI,
-            deviceMessagingFunction: config.deviceMessagingFunction
+            deviceMessagingFunction: utils.messageDevice
         }
     );
-
-    // Must (successfully) wait for database before starting to listen for
-    // web-clients or scanning devices.
-    await initializeDatabase();
 
     app = await initApp({ database, deviceDiscovery, orchestrator, testing });
 
@@ -108,10 +97,12 @@ main()
 * @throws If the connection fails (timeouts).
 */
 async function initializeDatabase() {
-    console.log("Connecting to database: ", database);
+    let client = new MongoClient(MONGO_URI);
+    console.log("Connecting to database client: ", client);
 
     try {
-        await database.connect();
+        await client.connect();
+        database = client.db();
         console.log("Database connection success!");
     } catch(e) {
         console.error("Database connection fail.");
@@ -127,7 +118,7 @@ async function initializeDatabase() {
  */
 function initAndRunDeviceDiscovery() {
     try {
-        deviceDiscovery = new config.deviceDiscoveryType(type=DEVICE_TYPE, database);
+        deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, database);
     } catch(e) {
         console.log("Device discovery initialization failed: ", e);
         throw e;

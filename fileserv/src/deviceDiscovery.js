@@ -45,7 +45,7 @@ class DeviceManager {
         }
         this.bonjourInstance = new bonjour.Bonjour();
         this.browser = null;
-        this.database = database;
+        this.deviceCollection = database.collection("device");
         this.queryOptions = { type };
 
         this.deviceScanDuration = DEVICE_SCAN_DURATION_MS;
@@ -145,11 +145,11 @@ class DeviceManager {
      * known.
      */
     async #addNewDevice(serviceData) {
-        let device = (await this.database.read("device", { name: serviceData.name }))[0];
+        let device = await this.deviceCollection.findOne({ name: serviceData.name });
         if (!device) {
             // Transform the service into usable device data.
             device = new Device(serviceData.name, serviceData.addresses, serviceData.port);
-            this.database.create("device", [device]);
+            this.deviceCollection.insertOne(device);
         } else {
             if (device.description && device.description.platform) {
                 return null;
@@ -205,7 +205,7 @@ class DeviceManager {
             return;
         }
 
-        this.database.update("device", { name: device.name }, { description: deviceDescription });
+        this.deviceCollection.updateOne({ name: device.name }, { $set: { description: deviceDescription } });
 
         console.log(`Added description for device '${device.name}'`);
 
@@ -235,7 +235,7 @@ class DeviceManager {
      * given, check all.
      */
     async healthCheck(deviceName) {
-        let devices = await this.database.read("device", deviceName ? { name: deviceName } : {});
+        let devices = await this.deviceCollection.find(deviceName ? { name: deviceName } : {});
 
         let date = new Date();
         let healthChecks = devices.map(x => ({
@@ -259,13 +259,14 @@ class DeviceManager {
                 continue;
             }
 
-            this.database.update(
-                "device",
+            this.deviceCollection.updateOne(
                 { name: x.device },
                 {
-                    health: {
-                        report: health,
-                        timeOfQuery: x.timestamp,
+                    $set: {
+                        health: {
+                            report: health,
+                            timeOfQuery: x.timestamp,
+                        }
                     }
                 }
             );
@@ -289,7 +290,7 @@ class DeviceManager {
             name = x.name;
         }
 
-        this.database.delete("device", { name: name });
+        this.deviceCollection.deleteOne({ name: name });
     }
 
 
