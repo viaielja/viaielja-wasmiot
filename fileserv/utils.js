@@ -288,6 +288,43 @@ const moduleEndpointDescriptions = (modulee, functionDescriptions) => {
 };
 
 
+/**
+ * Small wrapper for calling the orchestrator API.
+ * @param {*} url
+ * @param {*} method
+ * @param {*} body
+ * @param {*} headers
+ * @returns
+ */
+async function apiCall(url, method, body, headers={"Content-Type": "application/json"}) {
+    let options = {
+        method: method,
+        body: body
+    };
+    if (headers) {
+        options.headers = headers;
+    }
+    const response = await fetch(url, options);
+
+    if (response.status === 204) {
+        return { success: "API call succeeded with no further response data" };
+    }
+
+    // Assume parsing JSON will fail.
+    let result = {
+        error: true,
+        errorText: `Parsing API response to JSON failed (see console)`
+    };
+    try {
+        const theJson = await response.json();
+        // Replace with successfull result.
+        result = { success: theJson };
+    } catch(e) {
+        console.error(e)
+    }
+
+    return result;
+}
 
 if (!runningInBrowser) {
     module.exports = {
@@ -298,6 +335,7 @@ if (!runningInBrowser) {
         validateFileFormSubmission,
         fileUpload,
         getStartEndpoint,
-        moduleEndpointDescriptions
+        moduleEndpointDescriptions,
+        apiCall,
     };
 }

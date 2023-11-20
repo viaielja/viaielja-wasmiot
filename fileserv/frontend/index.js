@@ -519,7 +519,7 @@ function submitFormData(url) {
             formData.delete("id");
         }
 
-        apiCall(url, "POST", formData, false);
+        apiCallSetStatus(url, "POST", formData, false);
     }
 
     return handleSubmit;
@@ -904,36 +904,11 @@ async function addHandlersToTabSelectors() {
     }
 }
 
-async function apiCall(url, method, body, headers={"Content-Type": "application/json"}) {
-    let options = {
-        method: method,
-        body: body
-    };
-    if (headers) {
-        options.headers = headers;
-    }
-    const response = await fetch(url, options);
-
-    if (response.status === 204) {
-        setStatus({ success: "API call succeeded with no further response data" });
-        return;
-    }
-
-    // Assume parsing JSON will fail.
-    let result = {
-        error: true,
-        errorText: `Parsing API response to JSON failed (see console)`
-    };
-    try {
-        const theJson = await response.json();
-        // Replace with successfull result.
-        result = { success: theJson };
-    } catch(e) {
-        console.error(e)
-    }
-
+async function apiCallSetStatus(url, method, body, headers={"Content-Type": "application/json"}) {
+    let result = await apiCall(url, method, body, headers);
     setStatus(result);
 }
+
 
 /**
  * Add event handlers for the forms creating or updating a module.
@@ -963,7 +938,7 @@ function addHandlersToDeploymentForms() {
         .addEventListener("submit", function (event) {
             event.preventDefault();
             const deploymentObj = formToObject(event.target);
-            apiCall("/file/manifest", "POST", JSON.stringify(deploymentObj));
+            apiCallSetStatus("/file/manifest", "POST", JSON.stringify(deploymentObj));
 
         });
 
@@ -971,7 +946,7 @@ function addHandlersToDeploymentForms() {
         .addEventListener("submit", async function (event) {
             event.preventDefault();
             const deploymentObj = formToObject(event.target);
-            await apiCall(`/file/manifest/${deploymentObj.id}`, "PUT", JSON.stringify(deploymentObj));
+            await apiCallSetStatus(`/file/manifest/${deploymentObj.id}`, "PUT", JSON.stringify(deploymentObj));
 
             // Hide the form after the update.
             document.querySelector("#deployment-update-form div div:nth-child(2)").classList.add("hidden");
@@ -984,7 +959,7 @@ function addHandlersToDeploymentForms() {
             async (event) => {
                 event.preventDefault();
                 let deploymentObj = formToObject(event.target);
-                apiCall(`/file/manifest/${deploymentObj["id"]}`, "POST", JSON.stringify(deploymentObj));
+                apiCallSetStatus(`/file/manifest/${deploymentObj["id"]}`, "POST", JSON.stringify(deploymentObj));
             }
         );
 
