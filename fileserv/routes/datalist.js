@@ -38,7 +38,7 @@ const getData = async (request, response) => {
 
     let history;
     try {
-        let { history: theHistory } = await collection.findOne({ _id: id });
+        let { history: theHistory } = await collection.findOne({ _id: ObjectId(id) });
         history = theHistory;
     } catch (error) {
         console.log("Error reading data from database: ", error);
@@ -53,7 +53,7 @@ const getData = async (request, response) => {
         data = history;
     }
 
-    response.json(data);
+    response.json({ result: data });
 };
 
 /**
@@ -67,18 +67,31 @@ const pushData = async (request, response) => {
     // but this implementation aims to emulate current supervisor behavior,
     // where any other than primitive integer-data is passed as a file.
     let id = await readFile("./files/exec/core/datalist/id", encoding="utf-8");
-    let { entry } = JSON.parse(
-        await readFile(
-            request.files.find(x => x.fieldname == "entry").path,
-            encoding="utf-8"
-        )
+    let entry = await readFile(
+        request.files.find(x => x.fieldname == "entry").path,
+        encoding="utf-8"
     );
     await collection.updateOne({ _id: ObjectId(id) }, { $push: { history: entry } });
 
     // TODO: Notify subscribers about the new entry.
 
-    let history = await collection.findOne({ _id: ObjectId(id) });
-    response.status(200).json({ result: history });
+    // Respond with a URL that links to the whole history (even though its not
+    // part of the deployment).
+    let deploymentBasePath = request.originalUrl.split("/").slice(0, -1).join("/");
+    let getUrl = new URL(
+        request.protocol
+        + "://"
+        + request.get("host")
+        + deploymentBasePath
+        + "/"
+        + "get"
+    );
+
+    response
+        .status(200)
+        .json({
+            result: getUrl
+        });
 };
 
 /**

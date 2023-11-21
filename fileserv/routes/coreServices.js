@@ -27,7 +27,12 @@ let serviceIds = {};
 
 let database = null;
 
-const nameFor = (serviceName) => `core:${serviceName}`;
+/**
+ * Give a core-service type name based on service name.
+ */
+const coreNameFor = (serviceName) => `core:${serviceName}`;
+
+
 /**
  * Calling on the orchestrator API, create the core services as "modules".
  * This should be done right after the orchestrator server has fully
@@ -42,7 +47,7 @@ async function initializeCoreServices() {
 
     // Initialize the datalist "module".
     let metadata = {
-        name: nameFor(DATALIST_MODULE_NAME)
+        name: coreNameFor(DATALIST_MODULE_NAME)
     };
     // Fake the object that multer would create off of uploaded files.
     let files = [
@@ -114,7 +119,7 @@ let endpoints = Object.entries(DATALIST_FUNCTION_DESCRIPTIONS)
     .map(
         ([functionName, x]) => ({
             path: utils
-                .supervisorExecutionPath(nameFor(MODULE_NAME), functionName)
+                .supervisorExecutionPath(coreNameFor(MODULE_NAME), functionName)
                 .replace("{deployment}", ":deploymentId"),
             method: x.method,
             middlewares: x.middlewares
