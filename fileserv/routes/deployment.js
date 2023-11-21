@@ -80,11 +80,14 @@ const createDeployment = async (request, response) => {
     try {
         let deploymentId = await orchestrator.solve(manifest);
 
-        response.status(201).json({ id: deploymentId });
+        // NOTE: Sending plain text, not e.g., JSON! (This removes the need to
+        // parse the ID from some structural format.)
+        response.set("Content-Type", "text/plain");
+        response.status(201).send(deploymentId);
     } catch (err) {
         let errorMsg = "Failed constructing solution for manifest";
 
-        console.error(errorMsg, err.stack);
+        console.error(errorMsg, err, err.stack);
 
         response
             .status(500)

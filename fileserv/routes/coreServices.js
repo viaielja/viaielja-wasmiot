@@ -17,7 +17,7 @@ const {
     setDatabase: setDatalistDatabase,
     MODULE_NAME
 } = require("./datalist.js");
-const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE } = require("../constants.js");
+const { DEVICE_DESC_ROUTE, DEVICE_HEALTH_ROUTE, WASMIOT_INIT_FUNCTION_NAME } = require("../constants.js");
 const { ORCHESTRATOR_WASMIOT_DEVICE_DESCRIPTION } = require("../src/orchestrator.js");
 const { createNewModule, describeExistingModule } = require("../routes/module.js");
 const { ObjectId } = require("mongodb");
@@ -55,12 +55,18 @@ async function initializeCoreServices() {
     ];
     let id = await createNewModule(metadata, files);
     // Describe the datalist "module".
-    await describeExistingModule(id, DATALIST_FUNCTION_DESCRIPTIONS, []);
+    try {
+        await describeExistingModule(id, DATALIST_FUNCTION_DESCRIPTIONS, []);
+    } catch (e) {
+        console.error("The core services are probably not properly described: ", e);
+        console.log("Exiting...");
+        process.exit(1);
+    }
 
     // Add a flag to the entry to mark it as core-module.
     await database.collection("module").updateOne({ _id: ObjectId(id) }, { $set: { isCoreModule: true } });
 
-    serviceIds[DATALIST_MODULE_NAME] = id;
+    serviceIds[metadata.name] = id;
 
     console.log("Created core services", Object.entries(serviceIds).map(([name, _]) => name));
 }
@@ -84,24 +90,38 @@ router.get(DEVICE_HEALTH_ROUTE, (_, response) => {
     response.json({ status: "ok" });
 });
 // Deploy always succeeds, because no setup is needed.
-router.post("/deploy", (_, response) => {
+router.post("/deploy", async (request, response) => {
+    let modules = request.body.instructions.modules;
+    // On a real supervisor, the WebAssembly module would be fetched, and the
+    // init-function ran from it for setting up the runtime. Here we only check
+    // if any of the _core_modules installed on this "supervisor" contain the
+    // init and run it.
+    for (let modName of Object.keys(modules)) {
+        if (modName in serviceIds) {
+            console.log(`DEBUG: Running init function for '${modName}'.`);
+            await DATALIST_FUNCTION_DESCRIPTIONS[WASMIOT_INIT_FUNCTION_NAME].init()
+        }
+    }
     response.status(200).json({ status: "ok" });
 });
 
 
 // Prepare similar routes as on supervisor.
 let endpoints = Object.entries(DATALIST_FUNCTION_DESCRIPTIONS)
+    // Filter out the init function, because it's not a real endpoint but
+    // something that the supervisor should run at deployment-time.
+    .filter(([functionName, _]) => functionName !== WASMIOT_INIT_FUNCTION_NAME)
     .map(
         ([functionName, x]) => ({
             path: utils
                 .supervisorExecutionPath(nameFor(MODULE_NAME), functionName)
                 .replace("{deployment}", ":deploymentId"),
             method: x.method,
-            func: x.func
+            middlewares: x.middlewares
         })
     );
-for (let { path, method, func } of endpoints) {
-    router[method.toLowerCase()](path, func);
+for (let { path, method, middlewares } of endpoints) {
+    router[method.toLowerCase()](path, ...middlewares);
 }
 
 /**

@@ -3,7 +3,7 @@ const express = require("express");
 
 const { ObjectId } = require("mongodb");
 
-const { MODULE_DIR } = require("../constants.js");
+const { MODULE_DIR, WASMIOT_INIT_FUNCTION_NAME } = require("../constants.js");
 const utils = require("../utils.js");
 
 
@@ -115,8 +115,27 @@ const describeExistingModule = async (moduleId, descriptionManifest, files) => {
             }
         }
     }
+
+    // NOTE: This code looks horribly confusing, sorry.
     if (missingFiles.length > 0) {
-        throw ["mounts missing", missingFiles];
+        // Check if the module-wide init-function is present and if its output
+        // mount(s) match to deployment-mounts of the functions reported to be
+        // "missing files" (which then means the files are not actually missing).
+        if (WASMIOT_INIT_FUNCTION_NAME in functions) {
+            let actuallyMissingFiles = [];
+            for (let [funcName, mountName] of missingFiles) {
+                if (mountName in functions[WASMIOT_INIT_FUNCTION_NAME].mounts) {
+                    console.log(`NOTE: Function '${funcName}' should receive mount '${mountName}' from init-function later.`);
+                } else {
+                    actuallyMissingFiles.push([funcName, mountName]);
+                }
+            }
+            if (actuallyMissingFiles.length > 0) {
+                throw ["mounts missing", missingFiles];
+            }
+        } else {
+            throw ["mounts missing", missingFiles];
+        }
     }
     // Save associated files ("mounts") adding their info to the database entry.
     await addModuleDataFiles(moduleId, files);
@@ -335,7 +354,7 @@ const addModuleBinary = async (module, file) => {
     // caller.
     await updateModule(module._id, updateObj);
 
-    console.log(`Updated module '${module.id}' with data:`, result.updateObj);
+    console.log(`Updated module '${module._id}' with data:`, result.updateObj);
 
     // Tell devices to fetch updated files on modules.
     await notifyModuleFileUpdate(module._id);

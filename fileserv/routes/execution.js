@@ -33,6 +33,8 @@ const execute = async (request, response) => {
         args.body = request.body;
         if (request.files) {
             args.files = request.files.map(file => ({ path: file.path, name: file.fieldname }));
+        } else {
+            args.files = [];
         }
         let execResponse = await orchestrator.schedule(deployment, args);
         if (!execResponse.ok) {
@@ -49,7 +51,7 @@ const execute = async (request, response) => {
             try {
                 json = await execResponse.json();
             } catch (e) {
-                result = new utils.Error("parsing result to JSON failed: " + json.statusText);
+                result = new utils.Error("parsing result to JSON failed: " + e.errorText);
                 break;
             }
 

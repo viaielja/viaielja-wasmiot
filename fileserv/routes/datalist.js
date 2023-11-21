@@ -2,8 +2,13 @@
  * Define the descriptions and implementation of Datalist core service.
  */
 
-const { readFile } = require("node:fs/promises");
+const { readFile, writeFile } = require("node:fs/promises");
+
+const { ObjectId } = require("mongodb");
+
 const utils = require("../utils");
+const { WASMIOT_INIT_FUNCTION_NAME } = require("../constants");
+
 
 let collection = null;
 
@@ -11,14 +16,15 @@ async function setDatabase(db) {
     collection = db.collection("supervisorData");
 }
 
+const fileUpload = utils.fileUpload("./files/exec/core/datalist");
+
 /**
- * Initialize empty list for pushing data to later.
- * @param {*} request
- * @param {*} response
+ * Set up the environment for inserting entries to a document later.
  */
-const initData = async (request, response) => {
+const initData = async () => {
     let { insertedId } = await collection.insertOne({ history: [] });
-    response.json({ result: { id: insertedId } });
+    let docId = insertedId.toString();
+    await writeFile("./files/exec/core/datalist/id", docId, encoding="utf-8");
 };
 
 /**
@@ -27,7 +33,7 @@ const initData = async (request, response) => {
  * @param {*} response
  */
 const getData = async (request, response) => {
-    let id = request.params.dataId;
+    let id = await readFile("./files/exec/core/datalist/id", encoding="utf-8");
     let index = request.params.index;
 
     let history;
@@ -51,19 +57,28 @@ const getData = async (request, response) => {
 };
 
 /**
- * Add data in request to list for others to retrieve later.
+ * Add data in the request to document and notify subscribers about the new
+ * entry.
  * @param {*} request
  * @param {*} response
  */
 const pushData = async (request, response) => {
-    let id = await readFile(request.files.find(x => x.name == "id").path, encoding="utf-8");
-    let entry = await readFile(request.files.find(x => x.name == "entry").path, encoding="utf-8");
-    // Handle the update async so that the response can be sent immediately.
-    // FIXME: This operation is not atomic, so if two requests are made at the
-    // same time, one of them will be overwritten! Using MongoDB's $push would
-    // be preferred but also requires to stronger commit into using it...
-    collection.updateOne({ _id: id }, { $push: { history: entry } });
-    response.status(202).send();
+    // NOTE: The parameters would ideally be in a JSON body or path or similar,
+    // but this implementation aims to emulate current supervisor behavior,
+    // where any other than primitive integer-data is passed as a file.
+    let id = await readFile("./files/exec/core/datalist/id", encoding="utf-8");
+    let { entry } = JSON.parse(
+        await readFile(
+            request.files.find(x => x.fieldname == "entry").path,
+            encoding="utf-8"
+        )
+    );
+    await collection.updateOne({ _id: ObjectId(id) }, { $push: { history: entry } });
+
+    // TODO: Notify subscribers about the new entry.
+
+    let history = await collection.findOne({ _id: ObjectId(id) });
+    response.status(200).json({ result: history });
 };
 
 /**
@@ -80,30 +95,19 @@ const deleteData = async (request, response) => {
 
 
 const FUNCTION_DESCRIPTIONS = {
-    init: {
-        parameters: [],
-        method: "POST",
-        // TODO: All these octet streams should eventually be JSON instead of
-        // just storing/retrieving integers.
-        output: "application/octet-stream",
-        mounts: [
-            {
-                name: "id",
-                mediaType: "application/octet-stream",
-                stage: "output"
-            }
-        ],
-        func: initData
-    },
+    /**
+     * Save the 'entry' to the document identified by 'id' and then forward
+     * the 'entry' to registered listeners.
+     */
     push: {
         parameters: [],
         method: "PUT",
-        output: "application/octet-stream",
+        output: "integer", // Which index the entry was stored at.
         mounts: [
             {
                 name: "id",
                 mediaType: "application/octet-stream",
-                stage: "execution"
+                stage: "deployment"
             },
             {
                 name: "entry",
@@ -111,17 +115,19 @@ const FUNCTION_DESCRIPTIONS = {
                 stage: "execution",
             }
         ],
-        func: pushData
+        middlewares: [fileUpload, pushData]
     },
     get: {
         parameters: [],
         method: "GET",
+        // TODO: All these octet streams should eventually be JSON, as they're
+        // interpreted as such.
         output: "application/octet-stream",
         mounts: [
             {
                 name: "id",
                 mediaType: "application/octet-stream",
-                stage: "execution"
+                stage: "deployment"
             },
             {
                 name: "entry",
@@ -129,7 +135,7 @@ const FUNCTION_DESCRIPTIONS = {
                 stage: "output",
             }
         ],
-        func: getData
+        middlewares: [fileUpload, getData]
     },
     delete: {
         parameters: [],
@@ -142,11 +148,29 @@ const FUNCTION_DESCRIPTIONS = {
                 stage: "execution",
             }
         ],
-        func: deleteData
+        middlewares: [fileUpload, deleteData]
     },
+};
+// Set the init function.
+FUNCTION_DESCRIPTIONS[WASMIOT_INIT_FUNCTION_NAME] = {
+    // These fields are necessary for the module-upload to handle the function
+    // like it was found in a .wasm binary.
+    parameters: [],
+    method: "POST",
+    output: "application/octet-stream",
+    mounts: [
+        {
+            name: "id",
+            mediaType: "application/octet-stream",
+            stage: "output"
+        }
+    ],
+    // This field is special for init-functions.
+    init: initData
 };
 
 const MODULE_NAME = "Datalist";
+
 
 module.exports = {
     MODULE_NAME,

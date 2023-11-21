@@ -472,9 +472,13 @@ function mountsFor(modulee, func, endpoint) {
     if (response.media_type === 'multipart/form-data') {
         response_files = MountPathFile.listFromMultipart(response.response_body);
     } else if (constants.FILE_TYPES.includes(response.media_type)) {
-        let [path, _] = Object.entries(
+        let outputMount = Object.entries(
                 modulee.mounts[func]
             ).find(([_, mount]) => mount.stage === MountStage.OUTPUT);
+        if (!outputMount) {
+            throw `output mount of '${response.media_type}' expected but is missing`;
+        }
+        let path = outputMount[0];
         response_files = [new MountPathFile(path, response.media_type, MountStage.OUTPUT)]
     }
     // Add the output stage and required'ness to all these.
