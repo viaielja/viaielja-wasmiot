@@ -147,7 +147,12 @@ function deploymentSequenceItem(device, mod, exportt) {
     return {
         // Data for parsing later into values compatible with the
         // deploy-endpoint.
-        value: JSON.stringify({ "device": device._id, "module": mod._id, "func": exportt }),
+        value: JSON.stringify({
+            "device": device._id,
+            // Use name for core modules, as the ID changes on each server startup.
+            "module": mod.isCoreModule ? mod.name : mod._id,
+            "func": exportt
+        }),
         // Make something that a human could understand from the interface.
         // TODO/FIXME?: XSS galore?
         text: `Use ${device.name} for ${mod.name}:${exportt}`
@@ -172,13 +177,18 @@ function sequenceItemSelectOptions(devicesData, modulesData) {
     // selectable.
     for (let device of [anyDevice].concat(devicesData)) {
         for (let mod of modulesData) {
-            if (mod.exports === undefined) {
-                // Do not include modules without uploaded Wasm's at all.
-                continue;
+            if (mod.exports.length > 0) {
+                for (let exportt of mod.exports) {
+                    options.push(deploymentSequenceItem(device, mod, exportt.name));
+                }
+            } else if (device.name === "orchestrator" && mod.isCoreModule) {
+                // Build the option from description instead.
+                for (let path of Object.keys(mod.description.paths)) {
+                    // NOTE: Removing the path's parts for just showing the assumed function name.
+                    options.push(deploymentSequenceItem(device, mod, path.replace(/\/.*\//, "")));
+                }
             }
-            for (let exportt of mod.exports) {
-                options.push(deploymentSequenceItem(device, mod, exportt.name));
-            }
+            // Do not include non-core modules without uploaded Wasm's at all.
         }
     }
 

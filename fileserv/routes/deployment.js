@@ -1,11 +1,13 @@
 const express = require("express");
+const { ObjectId } = require("mongodb");
+
 
 const utils = require("../utils.js");
 
-let database = null;
+let deploymentCollection = null;
 
 function setDatabase(db) {
-    database = db;
+    deploymentCollection = db.collection("deployment");
 }
 
 let orchestrator = null;
@@ -35,10 +37,9 @@ const validateManifest = (mani) => {
  */
 const getDeployment = async (request, response) => {
     // FIXME Crashes on bad _format_ of id (needs 12 byte or 24 hex).
-    let doc = (await database.read(
-        "deployment",
-        { _id: request.params.deploymentId }
-    ))[0];
+    let doc = await deploymentCollection.findOne(
+        { _id: ObjectId(request.params.deploymentId) }
+    );
 
     if (doc) {
         response.json(doc);
@@ -54,7 +55,8 @@ const getDeployment = async (request, response) => {
  */
 const getDeployments = async (request, response) => {
     // TODO What should this ideally return? Only IDs and descriptions?
-    response.json(await database.read("deployment"));
+    let deployments = await (await deploymentCollection.find()).toArray();
+    response.json(deployments);
 }
 
 /**
@@ -80,13 +82,13 @@ const createDeployment = async (request, response) => {
 
         response.status(201).json({ id: deploymentId });
     } catch (err) {
-        errorMsg = "Failed constructing solution for manifest" + err;
+        let errorMsg = "Failed constructing solution for manifest";
 
         console.error(errorMsg, err.stack);
 
         response
             .status(500)
-            .json(new utils.Error(errorMsg));
+            .json(new utils.Error(errorMsg, err));
     }
 }
 
@@ -97,10 +99,9 @@ const tryDeploy = async (deploymentDoc, response) => {
         console.log("Deploy-responses from devices: ", responses);
 
         // Update the deployment to "active" status.
-        await database.update(
-            "deployment",
-            { _id: deploymentDoc._id },
-            { active: true }
+        await deploymentCollection.updateOne(
+            { _id: ObjectId(deploymentDoc._id) },
+            { $set: { active: true } }
         );
 
         response.json({ deviceResponses: responses });
@@ -133,8 +134,8 @@ const tryDeploy = async (deploymentDoc, response) => {
  *  deployment.
  */
 const deploy = async (request, response) => {
-    let deploymentDoc = (await database
-        .read("deployment", { _id: request.params.deploymentId }))[0];
+    let deploymentDoc = await deploymentCollection
+        .findOne({ _id: ObjectId(request.params.deploymentId) });
 
     if (!deploymentDoc) {
         response
@@ -150,8 +151,10 @@ const deploy = async (request, response) => {
  * Delete all the deployment manifests from database.
  */
 const deleteDeployments = async (request, response) => {
-    await database.delete("deployment");
-    response.status(204).send();
+    let { deletedCount } = await deploymentCollection.deleteMany();
+    response
+        .status(200)
+        .json({ deletedCount });
 }
 
 /**
@@ -161,7 +164,8 @@ const deleteDeployments = async (request, response) => {
  * @param {*} response
  */
 const updateDeployment = async (request, response) => {
-    let oldDeployment = (await database.read("deployment", { _id: request.params.deploymentId }))[0];
+    let oldDeployment = await deploymentCollection
+        .findOne({ _id: ObjectId(request.params.deploymentId) });
 
     if (!oldDeployment) {
         response

@@ -59,6 +59,13 @@ class DeviceManager {
      * discovery's reach.
      */
     startDiscovery() {
+        // NOTE: Start advertising orchestrator's core services to "itself", so
+        // that it passes through the same pipeline and shows up as any other
+        // supervisor would.
+        this.orchestratorAdvertiser = new bonjour.Bonjour();
+        this.orchestratorAdvertiser.publish(ORCHESTRATOR_ADVERTISEMENT);
+
+
         // Continuously do new scans for devices in an interval.
         let scanBound = this.startScan.bind(this);
         scanBound(this.deviceScanDuration);
@@ -82,17 +89,6 @@ class DeviceManager {
      * milliseconds.
      */
     startScan(duration=10000) {
-        // Stop advertising orchestrator's core services to "itself" so it does
-        // not clash with the rescan.
-        if (this.orchestratorAdvertiser) {
-            this.orchestratorAdvertiser.unpublishAll();
-        }
-        // Start advertising orchestrator's core services to "itself", so that
-        // it passes through the same pipeline and shows up as any other
-        // supervisor.
-        this.orchestratorAdvertiser = new bonjour.Bonjour();
-        this.orchestratorAdvertiser.publish(ORCHESTRATOR_ADVERTISEMENT);
-
         console.log("Scanning for devices", this.queryOptions, "...");
 
         // Do not start again, if already scanning.
@@ -235,7 +231,7 @@ class DeviceManager {
      * given, check all.
      */
     async healthCheck(deviceName) {
-        let devices = await this.deviceCollection.find(deviceName ? { name: deviceName } : {});
+        let devices = await (await this.deviceCollection.find(deviceName ? { name: deviceName } : {})).toArray();
 
         let date = new Date();
         let healthChecks = devices.map(x => ({

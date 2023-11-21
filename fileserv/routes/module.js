@@ -1,6 +1,8 @@
 const { readFile } = require("node:fs/promises");
 const express = require("express");
 
+const { ObjectId } = require("mongodb");
+
 const { MODULE_DIR } = require("../constants.js");
 const utils = require("../utils.js");
 
@@ -131,7 +133,7 @@ const describeExistingModule = async (moduleId, descriptionManifest, files) => {
             .map(([funcName, func]) => [ funcName, func.mounts || {} ])
     );
 
-    await updateModule({ _id: moduleId }, { mounts: mounts, description });
+    await updateModule(moduleId, { mounts, description });
 
     return description;
 };
@@ -146,7 +148,7 @@ const getModuleBy = async (moduleId) => {
     let getAllModules = moduleId === undefined;
     let matches;
     try {
-        let filter = getAllModules ? {} : { _id: moduleId };
+        let filter = getAllModules ? {} : { _id: ObjectId(moduleId) };
         matches = await (await moduleCollection.find(filter)).toArray();
     } catch (e) {
         let err = ["database query failed", e];
@@ -198,7 +200,7 @@ const getModule = (justDescription) => (async (request, response) => {
  * Serve the a file relate to a module based on module ID and file extension.
  */
 const getModuleFile = async (request, response) => {
-    let doc = await moduleCollection.findOne({ _id: request.params.moduleId });
+    let doc = await moduleCollection.findOne({ _id: ObjectId(request.params.moduleId) });
     let filename = request.params.filename;
     if (doc) {
         let fileObj;
@@ -329,15 +331,14 @@ const addModuleBinary = async (module, file) => {
     }
     let updateObj = result.updateObj;
 
-    let filter = { _id: module._id };
     // Now actually update the database-document, devices and respond to
     // caller.
-    await updateModule(filter, updateObj);
+    await updateModule(module._id, updateObj);
 
-    console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, result.updateObj);
+    console.log(`Updated module '${module.id}' with data:`, result.updateObj);
 
     // Tell devices to fetch updated files on modules.
-    await notifyModuleFileUpdate(filter._id);
+    await notifyModuleFileUpdate(module._id);
 
     return result;
 };
@@ -362,21 +363,20 @@ const addModuleDataFiles = async (moduleId, files) => {
         }
 
         if (result.type === "wasm") {
-            throw new utils.Error("Wasm file not allowed at data file update");
+            throw "data cannot be wasm";
         }
         let [[key, obj]] = Object.entries(result.updateObj);
         update.dataFiles[key] = obj;
     }
 
-    let filter = { _id: moduleId };
     // Now actually update the database-document, devices and respond to
     // caller.
-    await updateModule(filter, update);
+    await updateModule(moduleId, update);
 
-    console.log(`Updated module '${JSON.stringify(filter, null, 2)}' with data:`, update);
+    console.log(`Updated module '${moduleId}' with data:`, update);
 
     // Tell devices to fetch updated files on modules.
-    await notifyModuleFileUpdate(filter._id);
+    await notifyModuleFileUpdate(moduleId);
 };
 
 const describeModule = async (request, response) => {
@@ -385,21 +385,29 @@ const describeModule = async (request, response) => {
 
         response.json(new ModuleDescribed(description));
     } catch (e) {
+        let err;
         switch (e) {
             case "update failed":
-                let err = ["failed updating module with description", e];
+                err = ["failed updating module with description", e];
                 console.error(...err);
                 response
                     .status(500)
                     .json(new utils.Error(...err));
                 break;
+            case "data cannot be wasm":
+                err = ["failed attaching file to module", e];
+                console.error(...err);
+                response
+                    .status(400)
+                    .json(new utils.Error(...err));
+                break
             default:
                 if (typeof e === "object") {
                     if (e instanceof Array && e[0] === "mounts missing") {
                         let missingFiles = e[1];
                         response
                             .status(400)
-                            .json(new utils.Error(`Functions missing mounts: ${JSON.stringify(missingFiles, null, 2)}`));
+                            .json(new utils.Error(`Functions missing mounts: ${JSON.stringify(missingFiles)}`));
                         break;
                     }
                 }
@@ -417,7 +425,7 @@ const describeModule = async (request, response) => {
  */
 const deleteModule = async (request, response) => {
     let deleteAllModules = request.params.moduleId === undefined;
-    let filter = deleteAllModules ? {} : { _id: request.params.moduleId };
+    let filter = deleteAllModules ? {} : { _id: ObjectId(request.params.moduleId) };
     let { deletedCount } = await moduleCollection.deleteMany(filter);
     if (deleteAllModules) {
         response.json({ deletedCount: deletedCount });
@@ -475,7 +483,7 @@ async function notifyModuleFileUpdate(moduleId) {
         // Unpack the mapping of device-id to manifest sent to it.
         let [deviceId, manifest] = Object.entries(deployment.fullManifest)[0];
 
-        if (manifest.modules.some(x => x.id.toString() === moduleId)) {
+        if (manifest.modules.some(x => x.id === moduleId.toString())) {
             if (devicesToUpdatedManifests[deviceId] === undefined) {
                 devicesToUpdatedManifests[deviceId] = [];
             }
@@ -503,8 +511,8 @@ async function notifyModuleFileUpdate(moduleId) {
 * @param {*} filter To match the modules to update.
 * @param {*} fields To add to the matched modules.
 */
-async function updateModule(filter, fields) {
-    let { matchedCount } = await moduleCollection.updateMany(filter, { $set: fields }, { upsert: true });
+async function updateModule(id, fields) {
+    let { matchedCount } = await moduleCollection.updateMany({ _id: ObjectId(id) }, { $set: fields }, { upsert: true });
     if (matchedCount === 0) {
         throw "no module matched the filter";
     }

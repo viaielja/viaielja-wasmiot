@@ -1,5 +1,7 @@
 const fs = require("fs");
 
+const { ObjectId } = require("mongodb");
+
 const constants = require("../constants.js");
 const utils = require("../utils.js");
 
@@ -149,13 +151,19 @@ class Orchestrator {
         let hydratedManifest = structuredClone(manifest);
         for (let step of hydratedManifest.sequence) {
             step.device = availableDevices.find(x => x._id.toString() === step.device);
+            // Find with id or name to support finding core modules more easily.
+            let filter = {};
+            try {
+                filter._id = ObjectId(step.module)
+            } catch (e) {
+                console.error(`Passed in module-ID '${step.module}' not compatible as ObjectID. Using it as 'name' instead`);
+                filter.name = step.module;
+            }
+
             // Fetch the modules from remote URL similarly to how Docker fetches
             // from registry/URL if not found locally.
             // TODO: Actually use a remote-fetch.
-            step.module = await this.moduleCollection.findOne(
-                // Find with id or name to support finding core modules more easily.
-                { $or: [{ _id: step.module }, { name: step.module }] }
-            );
+            step.module = await this.moduleCollection.findOne(filter);
         }
 
         //TODO: Start searching for suitable packages using saved file.
@@ -176,7 +184,7 @@ class Orchestrator {
 
         // Update the deployment with the created solution.
         this.deploymentCollection.updateOne(
-            { _id: deploymentId },
+            { _id: ObjectId(deploymentId) },
             { $set: solution }
         );
 
@@ -188,7 +196,7 @@ class Orchestrator {
 
         let requests = [];
         for (let [deviceId, manifest] of Object.entries(deploymentSolution)) {
-            let device = await this.deviceCollection.findOne({ _id: deviceId });
+            let device = await this.deviceCollection.findOne({ _id: ObjectId(deviceId) });
 
             if (!device) {
                 throw new DeviceNotFound("", deviceId);
