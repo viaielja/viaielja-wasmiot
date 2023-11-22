@@ -516,7 +516,12 @@ function fetchAndFindResources(sequence, availableDevices) {
 
     // Fetch the orchestrator device in advance if there are any core modules
     // to be used.
-    let orchestratorDevice = availableDevices.find(x => x.name === "orchestrator");
+    let orchestratorDeviceIdx = availableDevices.findIndex(x => x.name === "orchestrator");
+    let orchestratorDevice = availableDevices[orchestratorDeviceIdx];
+    // At the same time, remove the orchestrator from the list of available
+    // devices (i.e., Wasm-workloads shouldn't be possible to be deployed on
+    // orchestrator).
+    availableDevices.splice(orchestratorDeviceIdx, 1);
 
     // Iterate all the items in the request's sequence and fill in the given
     // modules and devices or choose most suitable ones.

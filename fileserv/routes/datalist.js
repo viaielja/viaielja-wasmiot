@@ -57,8 +57,9 @@ const getData = async (request, response) => {
 };
 
 /**
- * Add data in the request to document and notify subscribers about the new
- * entry.
+ * Add data in the request (NOTE: Data can be a string in a file, or in the
+ * query-string (if URL-encodable)) to document and notify subscribers about the
+ * new entry.
  * @param {*} request
  * @param {*} response
  */
@@ -67,10 +68,12 @@ const pushData = async (request, response) => {
     // but this implementation aims to emulate current supervisor behavior,
     // where any other than primitive integer-data is passed as a file.
     let id = await readFile("./files/exec/core/datalist/id", encoding="utf-8");
-    let entry = await readFile(
-        request.files.find(x => x.fieldname == "entry").path,
-        encoding="utf-8"
-    );
+    let entry = request.files
+        ? await readFile(
+            request.files.find(x => x.fieldname == "entry").path,
+            encoding="utf-8"
+        )
+        : request.params.param0;
     await collection.updateOne({ _id: ObjectId(id) }, { $push: { history: entry } });
 
     // TODO: Notify subscribers about the new entry.
@@ -90,7 +93,7 @@ const pushData = async (request, response) => {
     response
         .status(200)
         .json({
-            result: getUrl
+            resultUrl: getUrl
         });
 };
 
@@ -113,7 +116,9 @@ const FUNCTION_DESCRIPTIONS = {
      * the 'entry' to registered listeners.
      */
     push: {
-        parameters: [],
+        // NOTE/TODO: The type is integer, because thats what Wasm mostly spits
+        // out.
+        parameters: [{ name: "param0", type: "integer" }],
         method: "PUT",
         output: "integer", // Which index the entry was stored at.
         mounts: [

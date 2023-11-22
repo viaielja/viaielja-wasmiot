@@ -47,7 +47,12 @@ async function initializeCoreServices() {
     await writeFile("./files/empty.wasm", emptyWasmBytes);
 
     // Delete and refresh all core services at initialization.
-    let { deletedCount } = await database.collection("module").deleteMany({ isCoreModule: true });
+    let coreServiceNames = [coreNameFor(DATALIST_MODULE_NAME)];
+    let { deletedCount } = await database
+        .collection("module")
+        // Delete also based on name to avoid clashes (or more likely, broken
+        // state left in database from developer-testing).
+        .deleteMany({ $or: [{ isCoreModule: true }, { name: { $in: coreServiceNames } }] });
     console.log(`DEBUG: Deleted existing (${deletedCount}) core services in order to create them anew...`);
 
     console.log("Initializing the core services...");
