@@ -2,6 +2,7 @@
 # core:Datalist service on a running orchestrator.
 # PARAMETERS: $1: A string to use as the entry-data. Defaults to "kissa".
 
+
 # Set this script to exit on error.
 set -e
 
@@ -9,8 +10,7 @@ set -e
 mkdir -p tmp
 
 # Create a deployment by posting a manifest that describes you wanting to use
-# the 'push' and 'get' endpoints. Store the received deployment response
-# containing its ID.
+# the 'push' endpoint. Store the received deployment response containing its ID.
 curl http://localhost:3000/file/manifest \
     --fail \
     -X POST \
