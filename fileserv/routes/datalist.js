@@ -73,7 +73,7 @@ const pushData = async (request, response) => {
             request.files.find(x => x.fieldname == "entry").path,
             encoding="utf-8"
         )
-        : request.params.param0;
+        : request.query.param0;
     await collection.updateOne({ _id: ObjectId(id) }, { $push: { history: entry } });
 
     // TODO: Notify subscribers about the new entry.
