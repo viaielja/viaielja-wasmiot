@@ -7,6 +7,8 @@
  * database.
  */
 
+const { writeFile } = require("node:fs/promises");
+
 const express = require("express");
 
 const utils = require("../utils.js");
@@ -39,6 +41,11 @@ const coreNameFor = (serviceName) => `core:${serviceName}`;
  * initialized.
  */
 async function initializeCoreServices() {
+    // Create a minimal "empty" .wasm module for sending to the module-creation
+    // "pipeline".
+    let emptyWasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d, 1, 0, 0 ,0]);
+    await writeFile("./files/empty.wasm", emptyWasmBytes);
+
     // Delete and refresh all core services at initialization.
     let { deletedCount } = await database.collection("module").deleteMany({ isCoreModule: true });
     console.log(`DEBUG: Deleted existing (${deletedCount}) core services in order to create them anew...`);

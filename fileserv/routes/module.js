@@ -288,15 +288,7 @@ const getFileUpdate = async (file) => {
         path: file.path,
     };
 
-    let data;
-    try {
-        data = await readFile(file.path);
-    } catch (err) {
-        console.log("couldn't read Wasm binary from file ", file.path, err);
-        // TODO: Should this really be considered server-side error (500)?
-        response.status(500).json({err: `Bad Wasm file: ${err}`});
-        return;
-    }
+    let data = await readFile(file.path);
 
     // Perform actions specific for the filetype to update
     // non-filepath-related metadata fields.
@@ -345,6 +337,7 @@ const getFileUpdate = async (file) => {
  */
 const addModuleBinary = async (module, file) => {
     let result = await getFileUpdate(file);
+
     if (result.type !== "wasm") {
         throw new utils.Error("file given as module binary is not a .wasm file");
     }
