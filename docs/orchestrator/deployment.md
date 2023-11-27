@@ -59,7 +59,7 @@ functions and 'data-files' for semi-static data like ML-models or
 configurations), instantiating WebAssembly runtimes and giving access to
 HTTP-endpoints for calling and chaining functions to each other.
 
-The following sequence diagram depicts the deploying-process:
+The following sequence diagram depicts a deploying-process where two supervisors are associated with a deployment solution:
 
 ```mermaid
 sequenceDiagram
@@ -71,7 +71,7 @@ sequenceDiagram
     participant SB as Supervisor B
 
     activate U
-    U->>+O: Deploy this deployment Dx
+    U->>+O: Deploy according to solution Dx
         O-)+SA: Install these endpoints DxA
         O-)+SB: Install these endpoints DxB
         SA-)+P: Give me WebAssembly modules and associated data-files DxAp
@@ -95,7 +95,51 @@ multi-device distributed batch job) is ready to be executed. Execution from
 orchestrator selects the manifest's starting device's starting endpoint or
 'node', and calls it with any provided parameters. Orchestrator is configured
 to then start polling the function-call-chain, which by convention is made to
-leave a trace of URL's `resultUrl` redirecting to a final `result`. Polling
-gives up after some attempts, to give time for the supervisors to perform
+leave a trace of URL's `resultUrl` redirecting to a final `result`. This
+"trace" allows supervisors to respond immediately, by providing a link to
+where the long-running execution result will be later made available (see [execution history at supervisor's `make_history` function](https://github.com/LiquidAI-project/wasmiot-supervisor/blob/main/host_app/flask_app/app.py#L190)).
+For practical purposes, the orchestrator gives up on polling after some
+attempts in order to give time for the supervisors to perform
 application-computation instead of the HTTP-server hogging all CPU-cycles.
+
+The following state diagram depicts execution-process on the supervisor:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Ready: Deploy
+    state Ready {
+        [*] --> ExecuteHandling: Execute
+        --
+        [*] --> ResultHandling: Get result
+    }
+    state ResultHandling {
+        [*] --> HistorySearch: Match by execution ID
+        HistorySearch --> RespondWithResultData: Matching result found
+        RespondWithResultData --> [*]
+    }
+    state ExecuteHandling {
+        [*] --> RespondWithResultUrl
+        note left of RespondWithResultUrl: Here the caller gets an immediate response even though the result is not ready yet
+        RespondWithResultUrl --> IsWorkLong
+        state if_long <<choice>>
+        IsWorkLong --> if_long
+        if_long --> DequeueBlocking: Yes (e.g. HTTP-POST)
+        if_long --> Execution: No (i.e. HTTP-GET)
+    }
+    state Execution {
+        [*] --> ParseParams
+        ParseParams --> RunWebAssembly
+        RunWebAssembly --> ParseResult
+        ParseResult --> IsChainComplete
+        state if_complete <<choice>>
+        IsChainComplete --> if_complete
+        if_complete --> SaveToResultUrl: Yes
+        if_complete --> RemoteProcedureCall: No
+        note left of RemoteProcedureCall: This starts ExecuteHandling again (on the same or another device)  
+        RemoteProcedureCall --> SaveToResultUrl: Responds with URL
+        SaveToResultUrl --> [*]
+    }
+    DequeueBlocking --> Execution: Queue free
+```
+
 
