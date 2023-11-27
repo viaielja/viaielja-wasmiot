@@ -1,4 +1,3 @@
-
 # Deployment
 
 Deployment and managing the distributed application state during runtime is
@@ -48,6 +47,8 @@ dynamic decision affected by e.g., current device load or network speed. This
 
 ## From solution to deployment
 
+Once a solution is found, interaction with the supervisor increases with deploying, executing and (TODO) monitoring.
+
 ### Deploying
 
 When a `/deploy` is requested on orchestrator API, the devices are sent their
@@ -57,6 +58,34 @@ overlap). The setting up involves pulling needed files (e.g. `.wasm` for
 functions and 'data-files' for semi-static data like ML-models or
 configurations), instantiating WebAssembly runtimes and giving access to
 HTTP-endpoints for calling and chaining functions to each other.
+
+The following sequence diagram depicts the deploying-process:
+
+```mermaid
+sequenceDiagram
+    %% Definitions:
+    actor U as User
+    participant O as Orchestrator
+    participant P as Package registry
+    participant SA as Supervisor A
+    participant SB as Supervisor B
+
+    activate U
+    U->>+O: Deploy this deployment Dx
+        O-)+SA: Install these endpoints DxA
+        O-)+SB: Install these endpoints DxB
+        SA-)+P: Give me WebAssembly modules and associated data-files DxAp
+        SB-)P: Give me WebAssembly modules and associated data-files DxBp
+        P-)SA: DxAp
+        P-)-SB: DxBp
+        SA->>SA: Install DxA
+        SA-)-O: I am ready
+        SB->>SB: Install DxB
+        SB-)-O: I am ready
+    O->>U: Deployment Dx is ready
+    deactivate U
+    deactivate O
+```
 
 ### Executing
 
