@@ -34,6 +34,8 @@ Supporting such recursion would have its own problems and is currently prevented
 and the [supervisor](https://github.com/LiquidAI-project/wasmiot-supervisor/blob/440c90b6c2366110977a720215a844a1a74298a2/host_app/utils/deployment.py#L168)
 and [orchestrator implementation](https://github.com/LiquidAI-project/wasmiot-orchestrator/blob/main/fileserv/src/orchestrator.js#L90).
 
+See [the manifest schema](/docs/orchestrator/api/manifest.yml) attached to orchestrator's OpenAPI document for details on the manifest.
+
 ## From manifest to solution
 
 A solution is the result of the orchestrator trying to find a 1) possible and
@@ -44,6 +46,15 @@ camera (module requirement vs. device capability) and you cannot infer an object
 dynamic decision affected by e.g., current device load or network speed. This
 2-step process at least conceptually resembles the _filtering_ and _scoring_ steps in
 [Kubernetes scheduler](https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/#kube-scheduler-implementation).
+
+### Dependency resolving
+The possibility-step is meant to rely on a __package manager__ to solve dependencies of installable modules on a device.
+This takes into account the physical functionality (e.g. cameras, sensors etc.) of the device and the modules that a 
+single module might depend on (e.g. reading a file can't be done without access to the filesystem (WASI) or a module for
+image manipulation might want to use a certain version of a matrix-library). NOTE that the current implementation
+simply [matches module import names to device description](https://github.com/LiquidAI-project/wasmiot-orchestrator/blob/main/fileserv/src/orchestrator.js#L512)
+and expects that modules are otherwise self-contained once they're sent to a supervisor (I.e. only a single `.wasm`
+file is expected to be fetched per module. See singular [`binary` field in prepared instructions](https://github.com/LiquidAI-project/wasmiot-orchestrator/blob/main/fileserv/src/orchestrator.js#L568).).
 
 ## From solution to deployment
 
@@ -141,5 +152,7 @@ stateDiagram-v2
     }
     DequeueBlocking --> Execution: Queue free
 ```
-
+### Monitoring
+NOTE: The implementation of monitoring is not yet usable! Only health-checks are performed 
+to simply drop devices without any regard for the impact on deployed applications.
 
