@@ -1,0 +1,43 @@
+type: object
+required:
+  - id
+  - name
+  - ip
+  - port
+  - requirements
+  - platform
+properties:
+  id:
+    type: string
+  name:
+    type: string
+  ip:
+    type: string
+  port:
+    type: integer
+  modules:
+    description: |
+      An array of modules that are currently running on the device.
+      This allows others to know what capabilities the device currently has.
+    type: array
+    items:
+      $ref: "./ModuleDescription.yml"
+  platform:
+    type: object
+    properties:
+      memory:
+        type: object
+        properties:
+          bytes:
+            type: integer
+      cpu:
+        type: object
+        properties:
+          humanReadableName:
+            type: string
+          clockSpeed:
+            type: object
+            properties:
+              Hz:
+                type: integer
+

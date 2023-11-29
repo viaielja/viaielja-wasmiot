@@ -16,14 +16,14 @@ servers:
     variables:
       serverIp:
         default: localhost
-        description: IP or name found with mDNS of the machine running supervisor
+        description: Address where the orchestrator API is available
       port:
         enum:
-          - '5000'
+          - '3000'
           - '80'
-        default: '5000'
+        default: '3000'
 paths:
-  /api/module:
+  /file/module:
     get:
       description: Return information about all available modules
       responses:
@@ -32,7 +32,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Modules"
+                $ref: "./schemas/Module.yml"
         '404':
           description: No modules found
           content:
@@ -59,7 +59,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Module"
+                $ref: "./schemas/Module.yml"
         '400':
           description: Invalid request
           content:
@@ -88,7 +88,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Module"
+                $ref: "./schemas/Module.yml"
         '404':
           description: No modules found
           content:
@@ -108,7 +108,7 @@ paths:
             schema:
               properties:
                 functions:
-                  $ref: "#/components/schemas/ModuleDescriptionManifest"
+                  $ref: "./schemas/ModuleManifest.yml"
                 mounts:
                   type: object
                   items:
@@ -171,7 +171,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Device"
+                  $ref: "./schemas/Device.yml"
         '404':
           description: No devices found
           content:
@@ -200,7 +200,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Deployment"
+                  $ref: "./schemas/Deployment.yml"
     post:
       description: Create and enact a new deployment
       requestBody:
@@ -211,7 +211,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Manifest"
+              $ref: "./schemas/Manifest.yml"
       responses:
         '204':
           description: The deployment was created and enacted
@@ -224,187 +224,6 @@ paths:
 
 components:
   schemas:
-    Function:
-      type: object
-      required:
-        - name
-        - parameterTypes
-        - outputType
-      properties:
-        name:
-          type: string
-        parameterTypes:
-          type: array
-          items:
-            enum:
-              - "integer"
-              - "float"
-        outputType:
-          enum:
-            - "integer"
-            - "float"
-    ModuleDescription:
-      description: M2M-communication compatible description of module
-        and its functions installable on devices
-      type: object
-      required:
-        - imports
-        - exports
-      properties:
-        imports:
-          type: array
-          items:
-            $ref: "#/components/schemas/Function"
-        exports:
-          type: array
-          items:
-            $ref: "#/components/schemas/Function"
-    Module:
-      type: object
-      required:
-        - id
-        - name
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          $ref: "#/components/schemas/ModuleDescription"
-        mounts:
-          type: object
-          items:
-            type: string
-            format: binary
-    Modules:
-      type: array
-      items:
-        $ref: "#/components/schemas/Module"
-    Device:
-      type: object
-      required:
-        - id
-        - name
-        - ip
-        - port
-        - requirements
-        - platform
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        ip:
-          type: string
-        port:
-          type: integer
-        modules:
-          description: |
-            An array of modules that are currently running on the device.
-            This allows others to know what capabilities the device currently has.
-          type: array
-          items:
-            $ref: "#/components/schemas/ModuleDescription"
-        platform:
-          type: object
-          properties:
-            memory:
-              type: object
-              properties:
-                bytes:
-                  type: integer
-            cpu:
-              type: object
-              properties:
-                humanReadableName:
-                  type: string
-                clockSpeed:
-                  type: object
-                  properties:
-                    Hz:
-                      type: integer
-
-    ManifestNode:
-      description: Describes a workload that should appear in the deployment
-      required:
-        - device
-        - module
-        - function
-      properties:
-        name:
-          type: string
-        device:
-          description: |
-            The ID of the device that the workload should be deployed to.
-            If the device is not connected, the deployment will be queued until
-            the device is connected(?)
-          type: string
-        module:
-          description: A module ID
-          type: string
-        function:
-          description: |
-            The name of the function that should be callable on the node. The
-            function must be exported by the module.
-          type: string
-
-    Manifest:
-      description: Document that a deployment is created based on
-      required:
-        - name
-        - nodes
-      properties:
-        name:
-          type: string
-        nodes:
-          type: array
-          items:
-            $ref: "#/components/schemas/ManifestNode"
-
-    DeploymentNode:
-      description: Information for a device to set itself up for a workload
-      required:
-        - modules
-        - peers
-      properties:
-        modules:
-          type: array
-          items:
-            $ref: "#/components/schemas/ModuleDescription"
-        peers:
-          description: |
-            An array of device IDs that are expected to have connection to and from this node
-          type: array
-          items:
-            type: string
-
-    DeploymentSolution:
-      description: |
-        Solution for how the manifest is to be enacted based on
-        manifest and available resources
-      required:
-        - nodes
-      properties:
-        nodes:
-          type: array
-          items:
-            $ref: "#/components/schemas/DeploymentNode"
-
-    Deployment:
-      description: |
-        Contains information about a deployment and its current manifest
-      required:
-        - id
-        - manifest
-        - solution
-      properties:
-        id:
-          type: string
-        manifest:
-          $ref: "#/components/schemas/Manifest"
-        solution:
-          $ref: "#/components/schemas/DeploymentSolution"
-
     Error:
       type: object
       required:
@@ -415,48 +234,3 @@ components:
           type: string
         message:
           type: string
-
-    ModuleDescriptionManifest:
-      description: |
-        Describes a module at a bit higher level and used in creating a M2M
-        compatible description
-      type: object
-      properties:
-        [functionName]:
-          $ref: "#/components/schemas/FunctionDescriptionManifest"
-
-    FunctionDescriptionManifest:
-      description: |
-        Describes a function at a bit higher level and used in creating an
-        endpoint description
-      type: object
-      required:
-        - method
-      properties:
-        method:
-          type: string
-        parameters:
-          type: array
-          items:
-            $ref: "#/components/schemas/PrimitiveType"
-        output:
-          $ref: "#/components/schemas/PrimitiveType"
-        mounts:
-          type: array
-          items:
-            $ref: "#/components/schemas/MountMetadata"
-
-    PrimitiveType:
-      type: string
-      enum: [integer, float]
-
-    MountMetadata:
-      required:
-        - name
-        - stage
-      properties:
-        name:
-          type: string
-        stage:
-          type: string
-          enum: [deployment, execution, output]
