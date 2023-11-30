@@ -1,7 +1,16 @@
-components:
-  schemas:
-    ManifestNode:
+description: Document that a deployment is created based on
+type: object
+required:
+- name
+- nodes
+properties:
+  name:
+    type: string
+  nodes:
+    type: array
+    items:
       description: Describes a workload that should appear in the deployment
+      type: object
       required:
         - device
         - module
@@ -23,16 +32,4 @@ components:
             The name of the function that should be callable on the node. The
             function must be exported by the module.
           type: string
-
-description: Document that a deployment is created based on
-required:
-  - name
-  - nodes
-properties:
-  name:
-    type: string
-  nodes:
-    type: array
-    items:
-      $ref: "#/components/schemas/ManifestNode"
 

@@ -150,3 +150,7 @@ target/
 
 # VSCode NodeJS profiling file.
 *.cpuprofile
+
+# Directory where the npm-script 'generate' places the automatically generated
+# API-client code.
+generatedApiClient/

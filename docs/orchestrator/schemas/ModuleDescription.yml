@@ -1,37 +1,15 @@
-components:
-  schemas:
-    Function:
-      type: object
-      required:
-        - name
-        - parameterTypes
-        - outputType
-      properties:
-        name:
-          type: string
-        parameterTypes:
-          type: array
-          items:
-            enum:
-              - "integer"
-              - "float"
-        outputType:
-          enum:
-            - "integer"
-            - "float"
-
-description: M2M-communication compatible description of module
-  and its functions installable on devices
-type: object
-required:
-  - imports
-  - exports
-properties:
-  imports:
-    type: array
-    items:
-      $ref: "#/components/schemas/Function"
-  exports:
-    type: array
-    items:
-      $ref: "#/components/schemas/Function"
+  description: M2M-communication compatible description of module
+    and its functions installable on devices
+  type: object
+  required:
+    - imports
+    - exports
+  properties:
+    imports:
+      type: array
+      items:
+        $ref: "./Function.yml"
+    exports:
+      type: array
+      items:
+        $ref: "./Function.yml"

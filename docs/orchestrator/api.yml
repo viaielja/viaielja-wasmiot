@@ -32,7 +32,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./schemas/Module.yml"
+                $ref: "#/components/schemas/Module"
         '404':
           description: No modules found
           content:
@@ -59,7 +59,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./schemas/Module.yml"
+                $ref: "#/components/schemas/Module"
         '400':
           description: Invalid request
           content:
@@ -88,7 +88,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./schemas/Module.yml"
+                $ref: "#/components/schemas/Module"
         '404':
           description: No modules found
           content:
@@ -108,7 +108,7 @@ paths:
             schema:
               properties:
                 functions:
-                  $ref: "./schemas/ModuleManifest.yml"
+                  $ref: "#/components/schemas/ModuleManifest"
                 mounts:
                   type: object
                   items:
@@ -171,7 +171,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "./schemas/Device.yml"
+                  $ref: "#/components/schemas/Device"
         '404':
           description: No devices found
           content:
@@ -200,7 +200,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "./schemas/Deployment.yml"
+                  $ref: "#/components/schemas/Deployment"
     post:
       description: Create and enact a new deployment
       requestBody:
@@ -211,7 +211,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "./schemas/Manifest.yml"
+              $ref: "#/components/schemas/Manifest"
       responses:
         '204':
           description: The deployment was created and enacted
@@ -234,3 +234,25 @@ components:
           type: string
         message:
           type: string
+    # "Redefine" the schemas here, because the automatic generation tool
+    # (openapi-typescript-codegen) does not currently seem to find them inside
+    # the paths (see
+    # https://github.com/ferdikoomen/openapi-typescript-codegen/issues/1475).
+    Deployment:
+      $ref: "./schemas/Deployment.yml"
+    Device:
+      $ref: "./schemas/Device.yml"
+    Manifest:
+      $ref: "./schemas/Manifest.yml"
+    Module:
+      $ref: "./schemas/Module.yml"
+    ModuleManifest:
+      $ref: "./schemas/ModuleManifest.yml"
+    # "Redefine" also some of the repeated "inner" schemas (maybe same problem
+    # as above?).
+    Function:
+      $ref: "./schemas/Function.yml"
+    ModuleDescription:
+      $ref: "./schemas/ModuleDescription.yml"
+    PrimitiveType:
+      $ref: "./schemas/PrimitiveType.yml"

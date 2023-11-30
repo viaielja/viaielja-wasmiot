@@ -1,46 +1,34 @@
-components:
-  schemas:
-    PrimitiveType:
-      type: string
-      enum: [integer, float]
-
-    MountMetadata:
-      required:
-        - name
-        - stage
-      properties:
-        name:
-          type: string
-        stage:
-          type: string
-          enum: [deployment, execution, output]
-
-    FunctionDescriptionManifest:
-      description: |
-        Describes a function at a bit higher level and used in creating an
-        endpoint description
-      type: object
-      required:
-        - method
-      properties:
-        method:
-          type: string
-        parameters:
-          type: array
-          items:
-            $ref: "#PrimitiveType"
-        output:
-          $ref: "#PrimitiveType"
-        mounts:
-          type: array
-          items:
-            $ref: "#MountMetadata"
-
 description: |
   Describes a module at a bit higher level and used in creating a M2M
   compatible description
 type: object
 properties:
   [functionName]:
-    $ref: "#/components/schemas/FunctionDescriptionManifest"
-
+    description: |
+      Describes a function at a bit higher level and used in creating an
+      endpoint description
+    type: object
+    required:
+      - method
+    properties:
+      method:
+        type: string
+      parameters:
+        type: array
+        items:
+          $ref: "./PrimitiveType.yml"
+      output:
+        $ref: "./PrimitiveType.yml"
+      mounts:
+        type: array
+        items:
+          type: object
+          required:
+            - name
+            - stage
+          properties:
+            name:
+              type: string
+            stage:
+              type: string
+              enum: [deployment, execution, output]

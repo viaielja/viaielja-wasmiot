@@ -1,36 +1,6 @@
-components:
-  schemas:
-    DeploymentNode:
-      description: Information for a device to set itself up for a workload
-      required:
-        - modules
-        - peers
-      properties:
-        modules:
-          type: array
-          items:
-            $ref: "./ModuleDescription.yml"
-        peers:
-          description: |
-            An array of device IDs that are expected to have connection to and from this node
-          type: array
-          items:
-            type: string
-
-    DeploymentSolution:
-      description: |
-        Solution for how the manifest is to be enacted based on
-        manifest and available resources
-      required:
-        - nodes
-      properties:
-        nodes:
-          type: array
-          items:
-            $ref: "#/components/schemas/DeploymentNode"
-
 description: |
   Contains information about a deployment and its current manifest
+type: object
 required:
   - id
   - manifest
@@ -41,4 +11,4 @@ properties:
   manifest:
     $ref: "./Manifest.yml"
   solution:
-    $ref: "#/components/schemas/DeploymentSolution"
+    $ref: "./DeploymentSolution.yml"
