@@ -190,7 +190,7 @@ const getFileUpdate = async (file) => {
     // Perform actions specific for the filetype to update
     // non-filepath-related metadata fields.
     let result;
-    if (fileExtension === "wasm") {
+    if (file.mimetype === "application/wasm") {
         updateObj["wasm"] = updateStruct;
 
         try {
