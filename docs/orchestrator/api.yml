@@ -47,6 +47,10 @@ paths:
         content:
           multipart/form-data:
             schema:
+              type: object
+              required:
+                - name
+                - wasm
               properties:
                 name:
                   type: string
@@ -106,6 +110,7 @@ paths:
         content:
           multipart/form-data:
             schema:
+              type: object
               properties:
                 functions:
                   $ref: "#/components/schemas/ModuleManifest"

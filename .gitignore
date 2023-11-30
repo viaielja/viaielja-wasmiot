@@ -154,3 +154,6 @@ target/
 # Directory where the npm-script 'generate' places the automatically generated
 # API-client code.
 generatedApiClient/
+
+# Typescript built directory.
+built/
