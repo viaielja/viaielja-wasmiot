@@ -10,7 +10,7 @@
     "typescript": "^5.3.2"
   },
   "scripts": {
-    "generate": "openapi --input ../docs/orchestrator/api.yml --output ./cli/generatedApiClient",
+    "generate": "openapi --input ../docs/orchestrator/api.yml --output ./cli/generatedApiClient --request ./cli/requestsBlobPatch.ts",
     "compile": "tsc --project ./cli/tsconfig.json",
     "client": "node ./cli/built/src/client.js"
   }

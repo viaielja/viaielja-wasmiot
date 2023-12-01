@@ -237,7 +237,7 @@ const getModuleFile = async (request, response) => {
         }
         console.log(`Sending '${filename}' file from file-path: `, fileObj.path);
         // TODO: A 'datafile' might not be application/binary in every case.
-        let options = { headers: { 'Content-Type': filename == "wasm" ? 'application/wasm' : 'application/binary' } };
+        let options = { headers: { 'Content-Type': filename == "wasm" ? 'application/wasm' : 'application/octet-stream' } };
         response.sendFile(fileObj.path, options);
     } else {
         let errmsg = `Failed querying for module id: ${request.params.moduleId}`;

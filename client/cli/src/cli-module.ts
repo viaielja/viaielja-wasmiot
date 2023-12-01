@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 
 import { Command } from "commander";
 
@@ -55,6 +55,21 @@ program
         const result = await Api.deleteFileModule();
 
         console.log(JSON.stringify(result, null, 4));
+    })
+
+program
+    .command("file")
+    .description("Fetch an associated file")
+    .argument("<module-id-string>", "ID of the module")
+    .argument("<file-name>", "Name of an associated file")
+    .argument("<output-file>", "Path where to save the fetched file")
+    .action(async (id, name, outputPath) => {
+        const result = await Api.getFileModule2(id, name);
+        const bytes = await result.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        await writeFile(outputPath, buffer);
+
+        console.log(`Wrote ${buffer.length} bytes`);
     })
 
 program
