@@ -68,6 +68,7 @@ async function initializeCoreServices() {
             originalname: "datalist.wasm",
             filename: "empty.wasm",
             path: "./files/empty.wasm",
+            mimetype: "application/wasm",
         }
     ];
     let id = await createNewModule(metadata, files);
