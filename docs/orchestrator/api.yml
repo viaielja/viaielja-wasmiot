@@ -33,12 +33,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Module"
-        '404':
-          description: No modules found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
     post:
       description: Create a new module
       requestBody:
@@ -91,13 +85,13 @@ paths:
       description: Return information about a single module
       responses:
         '200':
-          description: The module information
+          description: An array of module information
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Module"
         '404':
-          description: No modules found
+          description: Module not found
           content:
             application/json:
               schema:
