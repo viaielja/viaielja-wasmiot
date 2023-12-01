@@ -70,8 +70,15 @@ paths:
     delete:
       description: Delete all modules
       responses:
-        '204':
+        '200':
           description: All modules deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
 
   /file/module/{module_id}:
     parameters:

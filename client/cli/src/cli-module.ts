@@ -25,5 +25,14 @@ program
     });
 
 program
+    .command("rm")
+    .description("Remove all modules")
+    .action(async () => {
+        const result = await Api.deleteFileModule();
+
+        console.log(JSON.stringify(result, null, 4));
+    })
+
+program
     .showHelpAfterError()
     .parse();
