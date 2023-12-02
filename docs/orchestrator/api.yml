@@ -32,7 +32,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Module"
+                type: array
+                items:
+                  $ref: "#/components/schemas/Module"
     post:
       description: Create a new module
       requestBody:
@@ -96,7 +98,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Module"
+                type: array
+                items:
+                  $ref: "#/components/schemas/Module"
         '404':
           description: Module not found
           content:
@@ -189,7 +193,7 @@ paths:
 
   /file/device:
     get:
-      description: Return information about all currently connected devices
+      description: Return information about all available devices
       responses:
         '200':
           description: An array of device information
@@ -199,22 +203,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Device"
-        '404':
-          description: No devices found
+    delete:
+      description: Delete all devices
+      responses:
+        '200':
+          description: All devices deleted
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
+
+  /file/device/discovery/reset:
     post:
       description: Force device scanning in orchestrator network
       responses:
         '204':
           description: The rescan was started
-    delete:
-      description: Delete all devices
-      responses:
-        '204':
-          description: All devices deleted
 
   /file/manifest:
     get:
