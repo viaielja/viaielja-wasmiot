@@ -1,43 +1,57 @@
 type: object
 required:
-  - id
+  - _id
   - name
-  - ip
-  - port
-  - requirements
-  - platform
+  - communication
+  - description
+  - health
 properties:
   id:
     type: string
   name:
     type: string
-  ip:
-    type: string
-  port:
-    type: integer
-  modules:
-    description: |
-      An array of modules that are currently running on the device.
-      This allows others to know what capabilities the device currently has.
-    type: array
-    items:
-      $ref: "./ModuleDescription.yml"
-  platform:
+  communication:
     type: object
     properties:
-      memory:
+      addresses:
+        type: array
+        items:
+          type: string
+      port:
+        type: integer
+  description:
+    type: object
+    properties:
+      platform:
         type: object
         properties:
-          bytes:
-            type: integer
-      cpu:
-        type: object
-        properties:
-          humanReadableName:
-            type: string
-          clockSpeed:
+          memory:
             type: object
             properties:
-              Hz:
+              bytes:
                 type: integer
-
+          cpu:
+            type: object
+            properties:
+              humanReadableName:
+                type: string
+              clockSpeed:
+                type: object
+                properties:
+                  Hz:
+                    type: integer
+      supervisorInterfaces:
+        type: array
+        items:
+          description: Name of function imported by host e.g. 'print' (from wasm3_api) or 'fd_read' (from WASI).
+          type: string
+  health:
+    type: object
+    properties:
+      report:
+        type: object
+        properties:
+          status:
+            type: string
+      timeOfQuery:
+        type: string
