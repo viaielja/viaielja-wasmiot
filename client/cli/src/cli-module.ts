@@ -23,14 +23,37 @@ program
 
 program
     .command("desc")
-    .description("Describe an existing module")
+    .description(`Describe an existing module
+A description file tells how the functions of a module can be called and what files (mounts) are expected at which stage.
+If a mount is expected at _deployment stage_, a matching file should be submitted e.g. if the mount is named 'model.pb' you should pass the options like so: '-m model.pb' -p ./path/to/model.dat`)
     .argument("<module-id-string>", "ID of the module")
     .argument("<description-file>", "Path to JSON file describing functions of the module")
-    .action(async (id, descPath) => {
+    .option("-m --mount [mount-name...]", "Name of a mount in functions description")
+    .option("-p --path [mount-path...]", "Path of a file to send (as mount)")
+    .action(async (id, descPath, options, _) => {
         const descObj = JSON.parse(
             await readFile(descPath, "utf8")
         );
-        const result = await Api.postFileModuleUpload(id, descObj);
+
+        const files = options.path
+            ? await Promise.all(
+                options.path.map((p: string) => readFile(p))
+            )
+            : [];
+
+        const mounts = options.mount
+            // Zip the mount names to blobs read from local file paths.
+            ? Object.fromEntries(options.mount
+                .map((m: string, i: number) => {
+                    const blob =  new Blob([files[i]]);
+                    return [m, blob];
+                }))
+            : {};
+        const result = await Api.postFileModuleUpload(
+            id,
+            { functions: descObj, ...mounts }
+        );
+
         console.log(JSON.stringify(result, null, 4));
     });
 

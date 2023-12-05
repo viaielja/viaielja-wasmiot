@@ -131,11 +131,9 @@ paths:
               properties:
                 functions:
                   $ref: "#/components/schemas/ModuleManifest"
-                mounts:
-                  type: object
-                  items:
-                    type: string
-                    format: binary
+                [mountName]:
+                  type: string
+                  format: binary
       responses:
         '200':
           description: The module description was successful.
