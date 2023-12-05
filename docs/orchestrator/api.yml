@@ -236,7 +236,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/Deployment"
     post:
-      description: Create and enact a new deployment
+      description: Create a new deployment
       requestBody:
         description: |
           Function type information and files or 'mounts' to attach to the
@@ -255,6 +255,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    delete:
+      description: Delete all deployments
+      responses:
+        '200':
+          description: All deployments deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
+
+
+  /file/manifest/{deployment_id}:
+    parameters:
+      - name: deployment_id
+        in: path
+        description: ID of the deployment
+        required: true
+        schema:
+          type: string
+    get:
+      description: Return information about a single deployment
+      responses:
+        '200':
+          description: An array of deployment information
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deployment"
+        '404':
+          description: Deployment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 
 components:
   schemas:

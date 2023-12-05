@@ -2,11 +2,11 @@ description: Document that a deployment is created based on
 type: object
 required:
 - name
-- nodes
+- sequence
 properties:
   name:
     type: string
-  nodes:
+  sequence:
     type: array
     items:
       description: Describes a workload that should appear in the deployment
@@ -16,13 +16,9 @@ properties:
         - module
         - function
       properties:
-        name:
-          type: string
         device:
           description: |
             The ID of the device that the workload should be deployed to.
-            If the device is not connected, the deployment will be queued until
-            the device is connected(?)
           type: string
         module:
           description: A module ID
