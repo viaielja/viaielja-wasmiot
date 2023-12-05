@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { Command } from "commander";
 
 import { DefaultService as Api } from "../generatedApiClient";
+import { getMounts } from "./utils";
 
 
 const program = new Command();
@@ -35,20 +36,8 @@ If a mount is expected at _deployment stage_, a matching file should be submitte
             await readFile(descPath, "utf8")
         );
 
-        const files = options.path
-            ? await Promise.all(
-                options.path.map((p: string) => readFile(p))
-            )
-            : [];
+        const mounts = getMounts(options.path, options.mount);
 
-        const mounts = options.mount
-            // Zip the mount names to blobs read from local file paths.
-            ? Object.fromEntries(options.mount
-                .map((m: string, i: number) => {
-                    const blob =  new Blob([files[i]]);
-                    return [m, blob];
-                }))
-            : {};
         const result = await Api.postFileModuleUpload(
             id,
             { functions: descObj, ...mounts }
