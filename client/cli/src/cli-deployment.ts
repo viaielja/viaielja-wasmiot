@@ -15,18 +15,18 @@ combine together in the order given e.g. '-d a -m x -f g -d b -m y -f h' will
 create the sequence [(a x g), (b y h)]`)
     .argument("<deployment-name-string>", "Name to give to deployment")
     .option("--file <manifest-file>", "Path to deployment's JSON-manifest")
-    .option("-d --device [device-id...]", "Device to use")
-    .option("-m --module [module-id...]", "Module to use")
-    .option("-f --func [function-name...]", "Function to call")
+    .option("-d --device [device-id...]", "Device to use; leave out the value for selecting automatically")
+    .option("-m --module <module-id...>", "Module to use")
+    .option("-f --func <function-name...>", "Function to call")
     .action(async (name, options, _) => {
         const sequence = options.file
             ? JSON.parse(
                 await readFile(options.file, "utf8"))
             // Zip the 3 arrays together.
-            : options.device
-                .map((d: string, i: number) => ({
-                        device: d,
-                        module: options.module[i],
+            : options.module
+                .map((m: string, i: number) => ({
+                        device: options.device[i] || null,
+                        module: m,
                         func: options.func[i],
                     }));
         const result = await Api.postFileManifest({
