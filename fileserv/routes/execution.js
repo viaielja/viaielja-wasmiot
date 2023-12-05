@@ -22,7 +22,13 @@ function setOrchestrator(orch) {
  * kickstart the application execution.
  */
 const execute = async (request, response) => {
-    let deployment = await deploymentCollection.findOne({ _id: ObjectId(request.params.deploymentId) });
+    let deployment;
+    try {
+        deployment = await deploymentCollection.findOne({ _id: ObjectId(request.params.deploymentId) });
+    } catch (e) {
+        console.log("Passed in bad ObjectID", request.params.deploymentId);
+    }
+
     if (!deployment) {
         response.status(404).send();
         return;
