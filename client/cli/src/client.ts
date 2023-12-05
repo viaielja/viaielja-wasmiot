@@ -9,5 +9,6 @@ program
     .command("module", "Operate on modules")
     .command("device", "Operate on devices")
     .command("deployment", "Operate on deployments")
+    .command("execute", "Call the starting endpoint of a deployment")
     .showHelpAfterError()
     .parse();
