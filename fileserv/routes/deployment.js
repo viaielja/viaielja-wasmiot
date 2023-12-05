@@ -137,8 +137,13 @@ const tryDeploy = async (deploymentDoc, response) => {
  *  deployment.
  */
 const deploy = async (request, response) => {
-    let deploymentDoc = await deploymentCollection
-        .findOne({ _id: ObjectId(request.params.deploymentId) });
+    let deploymentDoc;
+    try {
+        deploymentDoc = await deploymentCollection
+            .findOne({ _id: ObjectId(request.params.deploymentId) });
+    } catch (e) {
+        console.log("Passed in bad ObjectID", request.params.deploymentId);
+    }
 
     if (!deploymentDoc) {
         response

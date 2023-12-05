@@ -294,6 +294,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    post:
+      description: Enact a deployment installing it on associated devices
+      responses:
+        '200':
+          description: Deployment found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviceResponses:
+                    type: object
+                    properties:
+                      [deviceId]:
+                        $ref: "#/components/schemas/DeviceDeployResponse"
+        '404':
+          description: Deployment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Deployment failed in some way
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 
 components:
@@ -308,6 +335,19 @@ components:
           type: string
         message:
           type: string
+    DeviceDeployResponse:
+      description: How the device responded to deployment
+      type: object
+      properties:
+        status: 
+          type: integer
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [success]
+
     # "Redefine" the schemas here, because the automatic generation tool
     # (openapi-typescript-codegen) does not currently seem to find them inside
     # the paths (see

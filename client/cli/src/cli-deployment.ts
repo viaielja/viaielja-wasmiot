@@ -36,6 +36,16 @@ create the sequence [(a x g), (b y h)]`)
     });
 
 program
+    .command("deploy")
+    .description("Enact a deployment installing it on associated devices")
+    .argument("<deployment-id-string>", "ID of the deployment")
+    .action(async (deployment, _) => {
+        const result = await Api.postFileManifest1(deployment);
+
+        console.log(JSON.stringify(result, null, 4));
+    });
+ 
+program
     .command("show")
     .description("Return information related to deployments")
     .option("-d --deployment <deployment-id-string>", "ID of a single deployment")
