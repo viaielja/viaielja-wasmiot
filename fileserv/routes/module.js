@@ -36,14 +36,7 @@ class WasmFileUpload {
     }
 }
 
-class MlModelFileUploaded {
-    constructor(type, updateObj) {
-        this.type = type;
-        this.updateObj = updateObj;
-    }
-}
-
-class ImageUploaded {
+class DataFileUpload {
     constructor(type, updateObj) {
         this.type = type;
         this.updateObj = updateObj;
@@ -75,7 +68,7 @@ const describeExistingModule = async (moduleId, descriptionManifest, files) => {
     // Prepare description for the module based on given info for functions
     // (params & outputs) and files (mounts).
     let functions = {};
-    for (let [funcName, func] of Object.entries(descriptionManifest).filter(x => typeof x[1] === "object")) {
+        for (let [funcName, func] of Object.entries(descriptionManifest).filter(x => typeof x[1] === "object")) {
         // The function parameters might be in a list or be in the form of 'paramN'
         // where N is the order of the parameter.
         parameters = func.parameters || Object.entries(func)
@@ -307,23 +300,7 @@ const getFileUpdate = async (file) => {
     } else {
         // All other filetypes are to be "mounted".
         updateObj[file.fieldname] = updateStruct;
-        switch (fileExtension) {
-            // Model weights etc. for an ML-application.
-            case "pb":
-            case "onnx":
-                result = new MlModelFileUploaded(fileExtension, updateObj);
-                break;
-            default:
-                switch (file.mimetype) {
-                    case "image/jpeg":
-                    case "image/jpg":
-                    case "image/png":
-                        result = new ImageUploaded(fileExtension, updateObj);
-                        return result;
-                }
-                let err = `unsupported file extension: '${fileExtension}'`;
-                throw new utils.Error(err);
-        }
+        result = new DataFileUpload(fileExtension, updateObj);
     }
 
     return result;
@@ -393,7 +370,14 @@ const addModuleDataFiles = async (moduleId, files) => {
 
 const describeModule = async (request, response) => {
     try {
-        let description = await describeExistingModule(request.params.moduleId, request.body, request.files);
+        let description = await describeExistingModule(
+            request.params.moduleId,
+            // If received stringified JSON (because of multipart/form-data -reasons), parse the object from it.
+            request.body.functions
+                ? JSON.parse(request.body.functions)
+                : request.body,
+            request.files
+        );
 
         response.json(new ModuleDescribed(description));
     } catch (e) {
