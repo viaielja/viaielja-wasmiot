@@ -34,7 +34,7 @@ Supporting such recursion would have its own problems and is currently prevented
 and the [supervisor](https://github.com/LiquidAI-project/wasmiot-supervisor/blob/440c90b6c2366110977a720215a844a1a74298a2/host_app/utils/deployment.py#L168)
 and [orchestrator implementation](https://github.com/LiquidAI-project/wasmiot-orchestrator/blob/main/fileserv/src/orchestrator.js#L90).
 
-See [the manifest schema](/docs/orchestrator/api/manifest.yml) attached to orchestrator's OpenAPI document for details on the manifest.
+See [the manifest schema](/docs/orchestrator/schemas/Manifest.yml) attached to orchestrator's OpenAPI document for details on the manifest.
 
 ## From manifest to solution
 
