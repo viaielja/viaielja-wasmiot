@@ -2,8 +2,10 @@ import { readFile } from "node:fs/promises";
 
 import { Command } from "commander";
 
-import { DefaultService as Api } from "../generatedApiClient";
+import { getClient } from "./utils";
 
+
+const client = getClient();
 
 const program = new Command();
 
@@ -29,7 +31,7 @@ create the sequence [(a x g), (b y h)]`)
                         module: m,
                         func: options.func[i],
                     }));
-        const result = await Api.postFileManifest({
+        const result = await client.default.postFileManifest({
             name, sequence
         });
         console.log(JSON.stringify(result, null, 4));
@@ -40,7 +42,7 @@ program
     .description("Enact a deployment installing it on associated devices")
     .argument("<deployment-id-string>", "ID of the deployment")
     .action(async (deployment, _) => {
-        const result = await Api.postFileManifest1(deployment);
+        const result = await client.default.postFileManifest1(deployment);
 
         console.log(JSON.stringify(result, null, 4));
     });
@@ -52,8 +54,8 @@ program
     .action(async (options, _) => {
         const result = 
             options.deployment
-            ? await Api.getFileManifest1(options.deployment)
-            : await Api.getFileManifest();
+            ? await client.default.getFileManifest1(options.deployment)
+            : await client.default.getFileManifest();
 
         console.log(JSON.stringify(result, null, 4));
     });
@@ -62,7 +64,7 @@ program
     .command("rm")
     .description("Remove all deployments")
     .action(async () => {
-        const result = await Api.deleteFileManifest();
+        const result = await client.default.deleteFileManifest();
 
         console.log(JSON.stringify(result, null, 4));
     })

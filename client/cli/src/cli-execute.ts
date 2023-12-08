@@ -1,10 +1,9 @@
-import { readFile } from "node:fs/promises";
-
 import { Command } from "commander";
 
-import { DefaultService as Api } from "../generatedApiClient";
-import { getMounts } from "./utils";
+import { getMounts, getClient } from "./utils";
 
+
+const client = getClient();
 
 const program = new Command();
 
@@ -18,7 +17,7 @@ program
 
         const mounts = await getMounts(options.path, options.mount);
 
-        const result = await Api.postExecute(
+        const result = await client.default.postExecute(
             deployment, { ...args, ...mounts }
         );
 

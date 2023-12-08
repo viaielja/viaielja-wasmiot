@@ -2,9 +2,10 @@ import { readFile, writeFile } from "node:fs/promises";
 
 import { Command } from "commander";
 
-import { DefaultService as Api } from "../generatedApiClient";
-import { getMounts } from "./utils";
+import { getMounts, getClient } from "./utils";
 
+
+const client = getClient();
 
 const program = new Command();
 
@@ -16,7 +17,7 @@ program
     .action(async (name, wasmPath) => {
         const wasm = await readFile(wasmPath);
         const wasmBlob = new Blob([wasm], { type: "application/wasm" });
-        const result = await Api.postFileModule({
+        const result = await client.default.postFileModule({
             name, wasm: wasmBlob
         });
         console.log(JSON.stringify(result, null, 4));
@@ -38,7 +39,7 @@ If a mount is expected at _deployment stage_, a matching file should be submitte
 
         const mounts = getMounts(options.path, options.mount);
 
-        const result = await Api.postFileModuleUpload(
+        const result = await client.default.postFileModuleUpload(
             id,
             { functions: descObj, ...mounts }
         );
@@ -54,8 +55,8 @@ program
     .action(async (options, _) => {
         const result = 
             options.module
-            ? await Api.getFileModule1(options.module)
-            : await Api.getFileModule();
+            ? await client.default.getFileModule1(options.module)
+            : await client.default.getFileModule();
 
         console.log(JSON.stringify(result, null, 4));
     });
@@ -64,7 +65,7 @@ program
     .command("rm")
     .description("Remove all modules")
     .action(async () => {
-        const result = await Api.deleteFileModule();
+        const result = await client.default.deleteFileModule();
 
         console.log(JSON.stringify(result, null, 4));
     })
@@ -76,7 +77,7 @@ program
     .argument("<file-name>", "Name of an associated file")
     .argument("<output-file>", "Path where to save the fetched file")
     .action(async (id, name, outputPath) => {
-        const result = await Api.getFileModule2(id, name);
+        const result = await client.default.getFileModule2(id, name);
         const bytes = await result.arrayBuffer();
         const buffer = Buffer.from(bytes);
         await writeFile(outputPath, buffer);

@@ -1,7 +1,8 @@
 import { Command } from "commander";
 
-import { DefaultService as Api } from "../generatedApiClient";
+import { getClient } from "./utils";
 
+const client = getClient();
 
 const program = new Command();
 
@@ -9,7 +10,7 @@ program
     .command("show")
     .description("Return information related to devices")
     .action(async () => {
-        const result = await Api.getFileDevice();
+        const result = await client.default.getFileDevice();
         console.log(JSON.stringify(result, null, 4));
     });
 
@@ -17,7 +18,7 @@ program
     .command("scan")
     .description("Scan for device advertisements")
     .action(async () => {
-        await Api.postFileDeviceDiscoveryReset();
+        await client.default.postFileDeviceDiscoveryReset();
         console.log("Rescan started");
     });
 
@@ -25,7 +26,7 @@ program
     .command("rm")
     .description("Delete all devices")
     .action(async () => {
-        const result = await Api.deleteFileDevice();
+        const result = await client.default.deleteFileDevice();
         console.log(JSON.stringify(result, null, 4));
     });
 

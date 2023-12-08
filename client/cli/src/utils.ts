@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 
+import { Orcli } from "../generatedApiClient";
+
 
 export async function getMounts(
     paths: Array<string>,
@@ -19,4 +21,10 @@ export async function getMounts(
                 return [m, blob];
             }))
         : {};
+}
+
+export function getClient() {
+    return new Orcli({
+        BASE: process.env.ORCHESTRATOR_ADDRESS,
+    });
 }
