@@ -52,6 +52,7 @@ const execute = async (request, response) => {
         let depth = 0;
         let statusCode = 500;
         let result = new utils.Error("undefined error");
+        let redirectUrl;
         while (true) {
             let json;
             try {
@@ -63,26 +64,27 @@ const execute = async (request, response) => {
 
             // TODO: This is just temporary way to check for result. Would be
             // better that supervisor responds with error code, not 200.
-            let redirectUrl;
-            if (json.result) {
-                if (json.status !== "error") {
-                    // Check if the result is a URL to follow...
-                    try {
-                        redirectUrl = new URL(json.result);
-                        depth += 1;
-                    } catch (e) {
-                        // Assume this is the final result.
-                        console.log("Result found!", JSON.stringify(json, null, 2));
-                        result = json.result;
-                        statusCode = 200;
-                        break;
-                    }
+            if (json.result && json.status !== "error") {
+                // Check if the result is a URL to follow...
+                try {
+                    redirectUrl = new URL(json.result);
+                    depth += 1;
+                } catch (e) {
+                    // Assume this is the final result.
+                    console.log("Result found!", JSON.stringify(json, null, 2));
+                    result = json.result;
+                    statusCode = 200;
+                    break;
                 }
             } else if (json.error) {
                 result = new utils.Error(json.error);
                 break;
             } else if (json.resultUrl) {
-                redirectUrl = json.resultUrl;
+                try {
+                    redirectUrl = new URL(json.resultUrl);
+                } catch (e) {
+                    console.log(`received a bad redirection-URL`, e);
+                }
                 depth += 1;
             }
 
