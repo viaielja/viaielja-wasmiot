@@ -22,15 +22,18 @@ create the sequence [(a x g), (b y h)]`)
     .option("-f --func <function-name...>", "Function to call")
     .action(async (name, options, _) => {
         const sequence = options.file
-            ? JSON.parse(
-                await readFile(options.file, "utf8"))
+            ? JSON.parse(await readFile(options.file, "utf8"))
             // Zip the 3 arrays together.
-            : options.module
-                .map((m: string, i: number) => ({
-                        device: options.device[i] || null,
-                        module: m,
-                        func: options.func[i],
-                    }));
+            : (
+                options.module
+                ? options.module.map((m: string, i: number) => ({
+                            device: options.device ? (options.device[i] || null) : null,
+                            module: m,
+                            func: options.func ? options.func[i] : null,
+                        }))
+                // Send empty manifest and let orchestrator server deal with it.
+                : []
+            );
         const result = await client.default.postFileManifest({
             name, sequence
         });
