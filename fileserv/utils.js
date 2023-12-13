@@ -133,12 +133,10 @@ function getStartEndpoint(deployment) {
  * Map function parameters to names and mounts to files ultimately creating an
  * OpenAPI description for the module.
  * @param {*} module The module to describe (from DB).
- * @param {{"functionName": { parameters: [ { name: string, type: "integer" |
- * "float" }], mounts: { "a/mount/path": { mediaType: string } }, outputType: {
- * "aMediaType": schema} }}} functionDescriptions Mapping of function names to
- * their descriptions.
- * @returns {{ openapi: { version: "3.0.*" ... } }} Description for endpoints of
- * the module in OpenAPI v3.0 format.
+ * @param {*} functionDescriptions Mapping of function names to their
+ * descriptions.
+ * @returns {*} Description for endpoints of the module in OpenAPI v3.0
+ * format.
  */
 const moduleEndpointDescriptions = (modulee, functionDescriptions) => {
     function isPrimitive(type) {
@@ -148,13 +146,7 @@ const moduleEndpointDescriptions = (modulee, functionDescriptions) => {
     /**
      * Create description for a single function.
      * @param {string} funcName
-     * @param {{
-     *     parameters: [ { type: integer | float | schema }],
-     *     mounts: {
-     *         "./some/mount/path": { mediaType: string },
-     *         output: { "media/type": schema }
-     *     }
-     * }} func
+     * @param {*} func
      * @returns [functionCallPath, functionDescription]
      */
     function funcPathDescription(funcName, func) {

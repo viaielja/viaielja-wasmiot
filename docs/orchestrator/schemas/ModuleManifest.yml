@@ -25,10 +25,14 @@ properties:
           type: object
           required:
             - name
+            - mediaType
             - stage
           properties:
             name:
               type: string
+            mediaType:
+              type: string
+              enum: [application/octet-stream, image/jpeg]
             stage:
               type: string
               enum: [deployment, execution, output]

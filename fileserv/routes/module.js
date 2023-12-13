@@ -94,7 +94,7 @@ const describeExistingModule = async (moduleId, descriptionManifest, files) => {
                 ) : {},
             outputType:
                 // An output file takes priority over any other output type.
-                func.mounts?.find(({ stage }) => stage === "output")?.mimetype
+                func.mounts?.find(({ stage }) => stage === "output")?.mediaType
                 || func.output
         };
     }
