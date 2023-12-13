@@ -37,7 +37,8 @@ If a mount is expected at _deployment stage_, a matching file should be submitte
             await readFile(descPath, "utf8")
         );
 
-        const mounts = getMounts(options.path, options.mount);
+        const mounts = await getMounts(options.path, options.mount);
+        console.log(mounts);
 
         const result = await client.default.postFileModuleUpload(
             id,
