@@ -44,6 +44,21 @@ class DataFileUpload {
 }
 
 /**
+ * Return a filter for querying a module based on a string value x.
+ * @param {*} x string
+ */
+const moduleFilter = (x) => {
+    let filter = {};
+    try {
+        filter._id = ObjectId(x);
+    } catch (e) {
+        console.error(`Passed in module-ID '${x}' not compatible as ObjectID. Using it as 'name' instead`);
+        filter.name = x;
+    }
+    return filter;
+};
+
+/**
  * Implements the logic for creating a new module.
  * @returns Promise about interpreting the .wasm binary and attaching it to
  * created module resource. On success it results to the added module's ID.
@@ -152,15 +167,20 @@ const describeExistingModule = async (moduleId, descriptionManifest, files) => {
 
 /**
  *
- * @param {*} moduleId
+ * @param {*} moduleId ObjectID __or__ name.
  * @returns [failCode, module]
  */
 const getModuleBy = async (moduleId) => {
     // Common database query in any case.
     let getAllModules = moduleId === undefined;
+
+    let filter = {};
+    if (!getAllModules) {
+        filter = moduleFilter(moduleId);
+    }
+
     let matches;
     try {
-        let filter = getAllModules ? {} : { _id: ObjectId(moduleId) };
         matches = await (await moduleCollection.find(filter)).toArray();
     } catch (e) {
         let err = ["database query failed", e];
@@ -212,7 +232,9 @@ const getModule = (justDescription) => (async (request, response) => {
  * Serve the a file relate to a module based on module ID and file extension.
  */
 const getModuleFile = async (request, response) => {
-    let doc = await moduleCollection.findOne({ _id: ObjectId(request.params.moduleId) });
+    let doc = await moduleCollection.findOne(
+        moduleFilter(request.params.moduleId)
+    );
     let filename = request.params.filename;
     if (doc) {
         let fileObj;
@@ -421,7 +443,7 @@ const describeModule = async (request, response) => {
  */
 const deleteModule = async (request, response) => {
     let deleteAllModules = request.params.moduleId === undefined;
-    let filter = deleteAllModules ? {} : { _id: ObjectId(request.params.moduleId) };
+    let filter = deleteAllModules ? {} : moduleFilter(request.params.moduleId);
     let { deletedCount } = await moduleCollection.deleteMany(filter);
     if (deleteAllModules) {
         response.json({ deletedCount: deletedCount });
@@ -508,7 +530,7 @@ async function notifyModuleFileUpdate(moduleId) {
 * @param {*} fields To add to the matched modules.
 */
 async function updateModule(id, fields) {
-    let { matchedCount } = await moduleCollection.updateMany({ _id: ObjectId(id) }, { $set: fields }, { upsert: true });
+    let { matchedCount } = await moduleCollection.updateMany(moduleFilter(id), { $set: fields }, { upsert: true });
     if (matchedCount === 0) {
         throw "no module matched the filter";
     }

@@ -22,12 +22,14 @@ function setOrchestrator(orch) {
  * kickstart the application execution.
  */
 const execute = async (request, response) => {
-    let deployment;
+    let filter = {};
     try {
-        deployment = await deploymentCollection.findOne({ _id: ObjectId(request.params.deploymentId) });
+        filter._id = ObjectId(request.params.deploymentId);
     } catch (e) {
-        console.log("Passed in bad ObjectID", request.params.deploymentId);
+        console.error(`Passed in deployment-ID '${request.params.deploymentId}' not compatible as ObjectID. Using it as 'name' instead`);
+        filter.name = request.params.deploymentId;
     }
+    let deployment = await deploymentCollection.findOne(filter);
 
     if (!deployment) {
         response.status(404).send();
