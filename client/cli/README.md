@@ -56,7 +56,7 @@ alias dorcli="docker run \
 ```
 
 Then for example creating a new module resource would happen like so:
-```
+```bash
 # Define a variable for the mobilenet model needed as data file.
 my_path_to_mobilenet_model_file=<relative/to/wasmiot-modules/modules/model>
 
@@ -67,5 +67,5 @@ dorcli module desc \
     -m model -p /app/modules/$my_path_to_mobilenet_model_file
 ```
 
-See the provided [`/example/icwe23-demo.sh`](example/icwe23-demo.sh) for a whole example of a workflow.
+See the provided [`/example/icwe23-demo.sh`](/example/icwe23-demo.sh) for a whole example of a workflow.
 
