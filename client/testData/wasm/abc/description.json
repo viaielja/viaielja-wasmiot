@@ -9,12 +9,12 @@
         "mounts": [
             {
                 "name": "deployFile",
-                "mimetype": "application/octet-stream",
+                "mediaType": "application/octet-stream",
                 "stage": "deployment"
             },
             {
                 "name": "execFile",
-                "mimetype": "application/octet-stream",
+                "mediaType": "application/octet-stream",
                 "stage": "execution"
             }
         ]
@@ -32,7 +32,7 @@
         "mounts": [
             {
                 "name": "outFile",
-                "mimetype": "application/octet-stream",
+                "mediaType": "application/octet-stream",
                 "stage": "output"
             }
         ]
