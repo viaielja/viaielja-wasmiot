@@ -1,8 +1,0 @@
-{
-    "add1": {
-        "parameters": [{ "name": "param0", "type": "integer"}],
-        "method": "GET",
-        "output": "integer",
-        "mounts": []
-    }    
-}
