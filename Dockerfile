@@ -10,7 +10,8 @@ FROM app AS devcontainer
 WORKDIR /app
 
 # Install nodemon (https://nodemon.io/) for automatic reloads on code changes.
-RUN npm install -g nodemon
+RUN --mount=type=cache,target=/root/.npm \
+     npm install -g nodemon
 
 # In MS provided node devcontainer, the user is `node`, not `vscode`.
 USER node
