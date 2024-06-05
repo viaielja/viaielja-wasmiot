@@ -1,4 +1,4 @@
-# vilin_projekti
+# LiquidAI Wasmiot Orchestrator Project
 
 ## Description
 This project (under development) is to contain package managing and

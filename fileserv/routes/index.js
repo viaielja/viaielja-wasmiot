@@ -8,6 +8,7 @@ const modules = require("./module");
 const deployment = require("./deployment");
 const execution = require("./execution");
 const { init: initCoreServices } = require("./coreServices");
+const supervisorLogs = require("./logs");
 
 
 /* Set common dependencies between the API routes. */
@@ -24,6 +25,7 @@ async function init(routeDependencies) {
     execution.setOrchestrator(routeDependencies.orchestrator);
 
     let coreServicesRouter = await initCoreServices(routeDependencies);
+    supervisorLogs.setDatabase(routeDependencies.database);
 
     return {
         device: device.router,
@@ -31,6 +33,7 @@ async function init(routeDependencies) {
         deployment: deployment.router,
         execution: execution.router,
         coreServicesRouter,
+        logs: supervisorLogs.router
     };
 }
 
