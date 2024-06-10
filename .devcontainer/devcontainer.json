@@ -32,6 +32,9 @@
 	"remoteUser": "node",
 	"customizations": {
 		"vscode": {
+			"settings": {
+				"redhat.telemetry.enabled": false
+			},
 			"extensions": [
 				"ms-azuretools.vscode-docker",
 				"dtsvet.vscode-wasm",
@@ -39,5 +42,5 @@
 				"42Crunch.vscode-openapi"
 			]
 		}
-	},
+	}
 }
