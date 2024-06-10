@@ -5,6 +5,8 @@ on:
   push:
     branches: 
       - "main"
+    tags:
+      - "v*"  # Push events to matching v*, i.e. v1.0, v20.15.10
 
 env:
   # github.repository as <account>/<repo>
@@ -46,12 +48,17 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: fileserv/
+          #platforms: ${{ env.PLATFORMS }}
           push: true
-          tags: ${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Build and push devcontainer
+      - name: Build and push devcontainer when pushing to main
         uses: devcontainers/ci@v0.3
+        if: github.ref == 'refs/heads/main'
         with:
           eventFilterForPush:
+
+          cacheFrom: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
           imageName: ${{ env.IMAGE_NAME }}
           imageTag: devcontainer
