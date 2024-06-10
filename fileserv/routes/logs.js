@@ -3,8 +3,10 @@ const express = require("express");
 
 let database = null;
 
-function setDatabase(db) {
-    database = db;
+let collection = null;
+
+async function setDatabase(db) {
+    collection = db.collection("supervisorLogs");
 }
 
 /**
@@ -13,7 +15,7 @@ function setDatabase(db) {
 const createSupervisorLogs = async (req, res) => {
     try {
         const logData = JSON.parse(req.body.logData);
-        await database.create("supervisorLogs", [logData]);
+        await collection.insertOne(logData);
         res.status(200).send({ message: 'Log received and saved' });
     } catch (e) {
         console.error(e);
@@ -26,7 +28,7 @@ const createSupervisorLogs = async (req, res) => {
  * Get all supervisor related logs from the database.
  */
 const getSupervisorLogs= async (request, response) => {
-    response.json(await database.read("supervisorLogs"));
+    response.json(await database.findAll("supervisorLogs"));
 }
 
 const router = express.Router();

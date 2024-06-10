@@ -13,6 +13,11 @@ WORKDIR /app
 RUN --mount=type=cache,target=/root/.npm \
      npm install -g nodemon
 
+# Install other dev dependencies.
+COPY package.json .
+COPY package-lock.json .
+RUN npm install
+
 # In MS provided node devcontainer, the user is `node`, not `vscode`.
 USER node
 
