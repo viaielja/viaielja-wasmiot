@@ -1,5 +1,3 @@
-version: '3.4'
-
 services:
   orchestrator:
     image: ghcr.io/liquidai-project/wasmiot-orchestrator:devcontainer
@@ -34,11 +32,6 @@ services:
     extends:
       file: docker-compose.yml
       service: mongo
-
-  debug-device:
-    extends:
-      file: docker-compose.example-devices.yml
-      service: adequate-webcam-laptop
 
 volumes:
   mongo-config:
