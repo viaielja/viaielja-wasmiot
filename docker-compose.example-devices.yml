@@ -20,10 +20,8 @@ services:
         target: /app/host_app
   
     env_file:
-      - path: .env
-        required: false
-      - path: .env.example
-        required: false
+      - .env
+      - .env.example
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
