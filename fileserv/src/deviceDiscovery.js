@@ -101,7 +101,7 @@ class DeviceManager {
 
         // Binding the callbacks is needed in order to refer to outer "this"
         // instead of the bonjour-browser-"this" inside the callback...
-        this.browser.on("up", this.#saveDevice.bind(this));
+        this.browser.on("up", this.saveDevice.bind(this));
         this.browser.on("down", this.#forgetDevice.bind(this));
 
         setTimeout(this.#stopScan.bind(this), duration);
@@ -122,7 +122,8 @@ class DeviceManager {
      * additional information like WoT-description and platform.
      * @param {*} serviceData Object containing needed data of the service discovered via mDNS.
      */
-    async #saveDevice(serviceData) {
+    async saveDevice(serviceData) {
+        console.log("Service found:", serviceData);
         let newDevice = await this.#addNewDevice(serviceData);
         // Check for duplicate or unknown (i.e., non-queried) device.
         if (!newDevice) {
