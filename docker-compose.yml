@@ -16,10 +16,11 @@ services:
       MONGO_PORT: ${MONGO_PORT:-27017}
       MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-example}
+      WASMIOT_INIT_FOLDER: ${WASMIOT_INIT_FOLDER:-/init}
     command: nodejs ./server.js
 
   mongo:
-    image: mongo
+    image: mongo:6.0.15
     restart: unless-stopped
     networks:
       default:

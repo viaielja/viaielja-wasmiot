@@ -19,6 +19,8 @@ const public_host = process.env.PUBLIC_HOST || `http://${require("os").hostname(
 const PUBLIC_PORT = process.env.PUBLIC_PORT || "3000";
 const PUBLIC_BASE_URI = `${public_host}:${PUBLIC_PORT}/`;
 
+const INIT_FOLDER = process.env.WASMIOT_INIT_FOLDER || "/init";
+
 const MODULE_DIR = path.join(__dirname, "files", "wasm");
 const EXECUTION_INPUT_DIR = path.join(__dirname, "files", "exec");
 const FRONT_END_DIR = path.join(__dirname, "frontend");
@@ -69,4 +71,5 @@ module.exports = {
     UTILS_PATH,
     FILE_TYPES,
     WASMIOT_INIT_FUNCTION_NAME,
+    INIT_FOLDER,
 };
