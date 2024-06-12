@@ -17,6 +17,7 @@ services:
       MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       WASMIOT_INIT_FOLDER: ${WASMIOT_INIT_FOLDER:-/init}
+      WASMIOT_CLEAR_LOGS: ${WASMIOT_CLEAR_LOGS:-true}
     command: nodejs ./server.js
 
   mongo:
