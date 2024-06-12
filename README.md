@@ -18,12 +18,22 @@ orchestrating logic for WebAssembly-based microservices.
   - If you're on Ubuntu the version available with `apt` (at the time of writing `Docker version 24.0.5, build 24.0.5-0ubuntu1~22.04.1`)
     can be used.
 - [`docker compose`](https://docs.docker.com/compose/)
-  - Again the version available with `apt` (at the time of writing `docker-compose version 1.29.2`) can be used. 
+  - Again the version available with `apt` (at the time of writing `docker-compose version 1.29.2`) can be used.
 
 ### Installation
-Clone the project and its submodules and use `docker compose` to build and start the server.
 
-Using Windows 10 you could do the following:
+Clone the project and its submodules, and create environment variable file.
+
+```bash
+git clone --recursive git@github.com:LiquidAI-project/wasmiot-orchestrator.git
+cd wasmiot-orchestrator
+cp .env.example .env
+# edit .env with appropriate values
+```
+
+Use `docker compose` to build and start the server.
+
+With Windows 10, if you have some access issues with the previous, you could do the following:
 ```powershell
 git clone git@github.com:LiquidAI-project/wasmiot-orchestrator.git
 cd .\wasmiot-orchestrator\
@@ -138,6 +148,35 @@ This assumes that both the orchestrator and the supervisor are in the same local
     ```
 
 - The discovery and deployment with a supervisor instance running in a separate device has only been tested when the supervisor has been started locally as a Python application. See the [Supervisor repository](https://github.com/LiquidAI-project/wasmiot-supervisor) for installation instructions.
+
+### Adding initial data to the database at startup
+
+The following assumes that the orchestrator is available at `http://localhost:3000`, and that the curl commands are run at the root folder of the repository.
+
+- Start the orchestrator and the supervisors without initial data, i.e., no `.json` files in the `./init` folders.
+- Make sure that all the supervisors have been discovered by the orchestrator.
+- Create the wanted modules and deployment manifests with the orchestrator.
+- Extract the discovered devices from the orchestrator:
+
+    ```bash
+    curl http://localhost:3000/file/device > ./init/device/devices.json
+    ```
+
+- Extract the created modules from the orchestrator:
+
+    ```bash
+    curl http://localhost:3000/file/module > ./init/module/modules.json
+    ```
+
+- Copy all the files (WASM files and any additional data files) used in the module creation to the folder `./init/files`.
+
+- Extract the created modules from the orchestrator:
+
+    ```bash
+    curl http://localhost:3000/file/manifest > ./init/deployment/manifests.json
+    ```
+
+When the orchestrator is started the device, module, and deployment manifest will be available. No actual deployments to the supervisors is done, but they can be made without any additional steps.
 
 ## Help and known issues
 - __Network `wasm-iot` missing__ :

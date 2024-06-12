@@ -7,17 +7,20 @@ const path = require("path");
 
 require('dotenv').config({path: path.join(__dirname, "..", ".env"), override: true});
 
-const mongo_host = process.env.MONGODB_HOST || "mongo";
-const mongo_port = process.env.MONGODB_PORT || "27017";
-const mongo_user = process.env.MONGO_ROOT_USERNAME;
-const mongo_pass = process.env.MONGO_ROOT_PASSWORD;
-const MONGO_URI = `mongodb://${mongo_user}:${mongo_pass}@${mongo_host}:${mongo_port}/`;
+const MONGO_HOST = process.env.MONGO_HOST || "mongo";
+const MONGO_PORT = process.env.MONGO_PORT || "27017";
+const MONGO_USER = process.env.MONGO_ROOT_USERNAME;
+const MONGO_PASS = process.env.MONGO_ROOT_PASSWORD;
+const MONGO_URI = `mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}:${MONGO_PORT}/`;
 
 const SENTRY_DSN = process.env.SENTRY_DSN;
 
-const public_host = process.env.PUBLIC_HOST || `http://${require("os").hostname()}`;
+const PUBLIC_HOST = process.env.PUBLIC_HOST || `http://${require("os").hostname()}`;
 const PUBLIC_PORT = process.env.PUBLIC_PORT || "3000";
-const PUBLIC_BASE_URI = `${public_host}:${PUBLIC_PORT}/`;
+const PUBLIC_BASE_URI = `${PUBLIC_HOST}:${PUBLIC_PORT}/`;
+
+const INIT_FOLDER = process.env.WASMIOT_INIT_FOLDER || "/init";
+const CLEAR_LOGS = process.env.WASMIOT_CLEAR_LOGS === "true";
 
 const MODULE_DIR = path.join(__dirname, "files", "wasm");
 const EXECUTION_INPUT_DIR = path.join(__dirname, "files", "exec");
@@ -69,4 +72,6 @@ module.exports = {
     UTILS_PATH,
     FILE_TYPES,
     WASMIOT_INIT_FUNCTION_NAME,
+    INIT_FOLDER,
+    CLEAR_LOGS,
 };
