@@ -3,6 +3,7 @@
  */
 
 const fs = require("fs");
+const { ObjectId,  } = require("mongodb");
 const { INIT_FOLDER } = require("../constants.js");
 
 const DEVICE = "device";
@@ -22,6 +23,30 @@ async function addDataToCollection(collection, data) {
 }
 
 function loadJsonData(folder) {
+    function addObjectToList(itemList, item, filename) {
+        if (item && item.constructor === Object) {
+            if (item._id) {
+                item._id = ObjectId(item._id);
+            }
+            itemList.push(item);
+        }
+        else {
+            console.error(`Invalid JSON data in file: ${filename}`);
+        }
+    }
+
+    function addDataToList(itemList, dataItem) {
+        // only consider objects or arrays of objects
+        if (dataItem && dataItem.constructor === Array) {
+            for (let item of dataItem) {
+                addObjectToList(itemList, item);
+            }
+        }
+        else {
+            addObjectToList(itemList, dataItem);
+        }
+    }
+
     let files = [];
     try {
         files = fs.readdirSync(folder);
@@ -40,21 +65,7 @@ function loadJsonData(folder) {
         try {
             let content = fs.readFileSync(`${folder}/${file}`);
             let parsed = JSON.parse(content);
-
-            // only consider objects or arrays of objects
-            if (parsed && parsed.constructor === Object) {
-                data.push(parsed);
-            }
-            else if (parsed.constructor === Array) {
-                for (let item of parsed) {
-                    if (item && item.constructor === Object) {
-                        data.push(item);
-                    }
-                }
-            }
-            else {
-                console.error(`Invalid JSON data in file: ${file}`);
-            }
+            addDataToList(data, parsed);
         }
         catch (error) {
             console.error(`Failed to read ${file}.`);
@@ -68,6 +79,14 @@ function loadJsonData(folder) {
 async function initDevices(database) {
     const deviceCollection = database.collection(DEVICE);
     const deviceData = loadJsonData(`${INIT_FOLDER}/${DEVICE}`);
+    // set all device heath check time to the current time
+    const timestamp = new Date();
+    for (let device of deviceData) {
+        if (device.health && device.health.timeOfQuery) {
+            device.health.timeOfQuery = timestamp;
+        }
+    }
+
     if (deviceData.length > 0) {
         console.log("Clearing devices from the database.");
         await clearCollection(deviceCollection);
