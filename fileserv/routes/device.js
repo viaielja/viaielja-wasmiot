@@ -43,10 +43,43 @@ const rescanDevices = (request, response) => {
     response.status(204).send();
 }
 
+/**
+ * Inform orchestrator about a device.
+ * 
+ * Supervisors can force registration to the orchestrator by sending a POST
+ * request to this endpoint containing the device's information (see `serviceData` below).
+ */
+const registerDevice = async (request, response) => {
+    if (!deviceDiscovery) {
+        response.status(500).send("Device discovery not set up.");
+        return;
+    }
+
+    // Structure post data to match the expected (bonjour) format.
+    let serviceData = {
+        addresses: request.body.addresses || [request.ip],
+        host: request.body.host || request.ip,
+        name: request.body.name || request.body.host || request.ip,
+        port: request.body.port || 5000,
+        protocol: request.body.protocol || "tcp",
+        txt: request.body.properties || {
+            'path': '/',
+            'tls': '0',
+        },
+        type: 'webthing',
+    };
+
+    console.log("Registering device:", serviceData);
+
+    await deviceDiscovery.saveDevice(serviceData);
+    response.status(204).send();
+
+}
+
 const router = express.Router();
 router.get("/", getDevices);
 router.delete("/", deleteDevices);
 router.post("/discovery/reset", rescanDevices);
-
+router.post("/discovery/register", registerDevice);
 
 module.exports = { setDatabase, setDeviceDiscovery, router };
