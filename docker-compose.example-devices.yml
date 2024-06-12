@@ -18,7 +18,7 @@ services:
       - type: bind
         source: ./wasmiot-supervisor/host_app
         target: /app/host_app
-  
+
     env_file:
       - path: .env
         required: false
@@ -47,6 +47,9 @@ services:
       - ./example/device1/configs:/app/instance/configs
       - ./example/device1/modules:/app/instance/modules
       - ./example/device1/output:/app/instance/output
+    networks:
+      default:
+        ipv4_address: 172.15.0.21
     deploy:
       # Simulate constrained memory. See
       # https://docs.docker.com/config/containers/resource_constraints/
@@ -73,6 +76,9 @@ services:
       - ./example/device2/configs:/app/instance/configs
       - ./example/device2/modules:/app/instance/modules
       - ./example/device2/output:/app/instance/output
+    networks:
+      default:
+        ipv4_address: 172.15.0.22
     devices:
       - /dev/video0:/dev/video0
     deploy:
@@ -95,6 +101,9 @@ services:
       - ./example/device3/configs:/app/instance/configs
       - ./example/device3/modules:/app/instance/modules
       - ./example/device3/output:/app/instance/output
+    networks:
+      default:
+        ipv4_address: 172.15.0.23
     deploy:
       resources:
         limits:
@@ -106,3 +115,8 @@ services:
 networks:
   default:
     name: wasmiot-net
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.15.0.0/24
