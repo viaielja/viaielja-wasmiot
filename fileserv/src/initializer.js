@@ -182,7 +182,7 @@ async function initModules(database) {
 async function initDeployments(database) {
     const deploymentCollection = database.collection(DEPLOYMENT);
     const deploymentData = loadJsonData(`${INIT_FOLDER}/${DEPLOYMENT}`);
-    // modify relevant ids to ObjectIds and modify the URI to the current one
+    // modify relevant ids to ObjectIds, modify the URI to the current one, and remove active flag
     for (let deployment of deploymentData) {
         if (deployment.sequence && deployment.sequence.constructor === Array) {
             for (let sequenceItem of deployment.sequence) {
@@ -223,6 +223,9 @@ async function initDeployments(database) {
                     }
                 }
             }
+        }
+        if (deployment.active) {
+            delete deployment.active;
         }
     }
 
