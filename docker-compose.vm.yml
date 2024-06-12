@@ -26,8 +26,8 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
     command: mongod --port ${MONGO_PORT:-27017}
     volumes:
-      - mongo-config:/DATA/CONFIGDB
-      - mongo-db:/DATA/DB
+      - mongo-config:/data/configdb
+      - mongo-db:/data/db
 
   mdns-reflector:
     image: flungo/avahi
