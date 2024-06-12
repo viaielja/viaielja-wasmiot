@@ -4,7 +4,7 @@
 
 const fs = require("fs");
 const { ObjectId,  } = require("mongodb");
-const { INIT_FOLDER } = require("../constants.js");
+const { INIT_FOLDER, PUBLIC_BASE_URI } = require("../constants.js");
 
 const DEVICE = "device";
 const MODULE = "module";
@@ -119,6 +119,12 @@ function copyFiles(files) {
     console.log(`Copied ${copyCount} files.`);
 }
 
+function replacePublicBaseUri(url) {
+    const URL_SPLITTER = "file/module";
+    const urlParts = url.split(URL_SPLITTER);
+    return `${PUBLIC_BASE_URI}${URL_SPLITTER}${urlParts.slice(1).join("")}`;
+}
+
 async function initDevices(database) {
     const deviceCollection = database.collection(DEVICE);
     const deviceData = loadJsonData(`${INIT_FOLDER}/${DEVICE}`);
@@ -159,9 +165,63 @@ async function initModules(database) {
     }
 }
 
+async function initDeployments(database) {
+    const deploymentCollection = database.collection(DEPLOYMENT);
+    const deploymentData = loadJsonData(`${INIT_FOLDER}/${DEPLOYMENT}`);
+    // modify relevant ids to ObjectIds and modify the URI to the current one
+    for (let deployment of deploymentData) {
+        if (deployment.sequence && deployment.sequence.constructor === Array) {
+            for (let sequenceItem of deployment.sequence) {
+                if (sequenceItem.device) {
+                    sequenceItem.device = ObjectId(sequenceItem.device);
+                }
+                if (sequenceItem.module) {
+                    sequenceItem.module = ObjectId(sequenceItem.module);
+                }
+            }
+        }
+        if (deployment.fullManifest && deployment.fullManifest.constructor === Object) {
+            for (const [_, device] of Object.entries(deployment.fullManifest)) {
+                if (device.deploymentId) {
+                    device.deploymentId = ObjectId(device.deploymentId);
+                }
+                if (device.modules && device.modules.constructor === Array) {
+                    for (let module of device.modules) {
+                        if (module.constructor !== Object) {
+                            continue;
+                        }
+                        if (module.id) {
+                            module.id = ObjectId(module.id);
+                        }
+                        if (module.urls && module.urls.constructor === Object) {
+                            if (module.urls.binary) {
+                                module.urls.binary = replacePublicBaseUri(module.urls.binary);
+                            }
+                            if (module.urls.description) {
+                                module.urls.description = replacePublicBaseUri(module.urls.description);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (deploymentData.length > 0) {
+        console.log("Clearing deployments from the database.");
+        await clearCollection(deploymentCollection);
+        console.log(`Adding ${deploymentData.length} deployments to the database.`);
+        await addDataToCollection(deploymentCollection, deploymentData);
+    }
+    else {
+        console.log("No initial deployment data found. Leaving the database as is.");
+    }
+}
+
 async function addInitialData(database) {
     await initDevices(database);
     await initModules(database);
+    await initDeployments(database);
 }
 
 module.exports = {
