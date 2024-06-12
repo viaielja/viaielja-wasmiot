@@ -200,6 +200,11 @@ async function initDeployments(database) {
                             if (module.urls.description) {
                                 module.urls.description = replacePublicBaseUri(module.urls.description);
                             }
+                            if (module.urls.other && module.urls.other.constructor === Object) {
+                                for (const [key, url] of Object.entries(module.urls.other)) {
+                                    module.urls.other[key] = replacePublicBaseUri(url);
+                                }
+                            }
                         }
                     }
                 }
