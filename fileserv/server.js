@@ -12,7 +12,7 @@ const discovery = require("./src/deviceDiscovery");
 const { Orchestrator } = require("./src/orchestrator");
 const utils = require("./utils.js");
 const { initializeCoreServices } = require("./routes/coreServices");
-const { initDevices } = require("./src/initializer.js");
+const { addInitialData } = require("./src/initializer.js");
 
 /**
  * The Express app.
@@ -62,7 +62,7 @@ async function main() {
     await initializeDatabase();
 
     // add initial data to the database
-    await initDevices(database);
+    await addInitialData(database);
 
     try {
         deviceDiscovery = new discovery.DeviceDiscovery(type=DEVICE_TYPE, database);
