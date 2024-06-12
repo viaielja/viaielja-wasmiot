@@ -297,13 +297,18 @@ class DeviceManager {
      */
     async #healthCheckDevice(device) {
         let url = new URL(`http://${device.communication.addresses[0]}:${device.communication.port}/${device.healthCheckPath || DEVICE_HEALTH_ROUTE}`);
-        let res = await fetch(url);
+        try {
+            let res = await fetch(url);
 
-        if (res.status !== 200) {
-            throw `${url.toString()} responded ${res.status} ${res.statusText}`
+            if (res.status !== 200) {
+                throw `${url.toString()} responded ${res.status} ${res.statusText}`
+            }
+
+            return res.json();
         }
-
-        return res.json();
+        catch (error) {
+            console.log(`Health-check failed for device '${device.name}': ${error}`);
+        }
     }
 }
 
