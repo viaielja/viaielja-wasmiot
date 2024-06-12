@@ -20,6 +20,7 @@ const PUBLIC_PORT = process.env.PUBLIC_PORT || "3000";
 const PUBLIC_BASE_URI = `${PUBLIC_HOST}:${PUBLIC_PORT}/`;
 
 const INIT_FOLDER = process.env.WASMIOT_INIT_FOLDER || "/init";
+const CLEAR_LOGS = process.env.WASMIOT_CLEAR_LOGS === "true";
 
 const MODULE_DIR = path.join(__dirname, "files", "wasm");
 const EXECUTION_INPUT_DIR = path.join(__dirname, "files", "exec");
@@ -72,4 +73,5 @@ module.exports = {
     FILE_TYPES,
     WASMIOT_INIT_FUNCTION_NAME,
     INIT_FOLDER,
+    CLEAR_LOGS,
 };

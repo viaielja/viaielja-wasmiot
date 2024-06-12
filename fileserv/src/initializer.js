@@ -4,12 +4,13 @@
 
 const fs = require("fs");
 const { ObjectId,  } = require("mongodb");
-const { INIT_FOLDER, PUBLIC_BASE_URI } = require("../constants.js");
+const { CLEAR_LOGS, INIT_FOLDER, PUBLIC_BASE_URI } = require("../constants.js");
 
 const DEVICE = "device";
 const MODULE = "module";
 const DEPLOYMENT = "deployment";
 const FILES = "files";
+const SUPERVISOR_LOGS = "supervisorLogs";
 
 
 class DataFile {
@@ -240,10 +241,19 @@ async function initDeployments(database) {
     }
 }
 
+async function removeSupervisorLogs(database) {
+    const logCollection = database.collection(SUPERVISOR_LOGS);
+    console.log("Clearing supervisor logs from the database.");
+    await clearCollection(logCollection);
+}
+
 async function addInitialData(database) {
     await initDevices(database);
     await initModules(database);
     await initDeployments(database);
+    if (CLEAR_LOGS) {
+        await removeSupervisorLogs(database);
+    }
 }
 
 module.exports = {
