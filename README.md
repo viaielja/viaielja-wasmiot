@@ -21,9 +21,19 @@ orchestrating logic for WebAssembly-based microservices.
   - Again the version available with `apt` (at the time of writing `docker-compose version 1.29.2`) can be used.
 
 ### Installation
-Clone the project and its submodules and use `docker compose` to build and start the server.
 
-Using Windows 10 you could do the following:
+Clone the project and its submodules, and create environment variable file.
+
+```bash
+git clone --recursive git@github.com:LiquidAI-project/wasmiot-orchestrator.git
+cd wasmiot-orchestrator
+cp .env.example .env
+# edit .env with appropriate values
+```
+
+Use `docker compose` to build and start the server.
+
+With Windows 10, if you have some access issues with the previous, you could do the following:
 ```powershell
 git clone git@github.com:LiquidAI-project/wasmiot-orchestrator.git
 cd .\wasmiot-orchestrator\
