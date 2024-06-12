@@ -20,15 +20,26 @@ class DataFile {
 }
 
 
-async function clearCollection(collection) {
-    // collection.ge
-    let { deletedCount } = await collection.deleteMany();
-    console.log(`Deleted ${deletedCount} items.`);
+async function clearCollection(collection, filter = {}) {
+    // Clear all items from the collection that match the filter.
+    // If the filter is empty, all items are deleted.
+    try {
+        let { deletedCount } = await collection.deleteMany(filter);
+        console.log(`Deleted ${deletedCount} items.`);
+    }
+    catch (error) {
+        console.error(`Failed to clear collection ${collection.collectionName}: ${error}`);
+    }
 }
 
 async function addDataToCollection(collection, data) {
-    let { insertedCount } = await collection.insertMany(data);
-    console.log(`Inserted ${insertedCount} items.`);
+    try {
+        let { insertedCount } = await collection.insertMany(data);
+        console.log(`Inserted ${insertedCount} items.`);
+    }
+    catch (error) {
+        console.error(`Failed to add data to collection ${collection.collectionName}: ${error}`);
+    }
 }
 
 function loadJsonData(folder) {
@@ -127,7 +138,8 @@ function replacePublicBaseUri(url) {
 
 async function initDevices(database) {
     const deviceCollection = database.collection(DEVICE);
-    const deviceData = loadJsonData(`${INIT_FOLDER}/${DEVICE}`);
+    const deviceData = loadJsonData(`${INIT_FOLDER}/${DEVICE}`)
+        .filter(device => device.name !== "orchestrator");
     // set all device heath check time to the current time
     const timestamp = new Date();
     for (let device of deviceData) {
@@ -138,7 +150,7 @@ async function initDevices(database) {
 
     if (deviceData.length > 0) {
         console.log("Clearing devices from the database.");
-        await clearCollection(deviceCollection);
+        await clearCollection(deviceCollection, {name: {$ne: "orchestrator"}});
         console.log(`Adding ${deviceData.length} devices to the database.`);
         await addDataToCollection(deviceCollection, deviceData);
     }
@@ -149,12 +161,14 @@ async function initDevices(database) {
 
 async function initModules(database) {
     const moduleCollection = database.collection(MODULE);
-    let moduleData = loadJsonData(`${INIT_FOLDER}/${MODULE}`);
+    let moduleData = loadJsonData(`${INIT_FOLDER}/${MODULE}`)
+        .filter(module => module.isCoreModule !== true);
+
     const requiredFiles = getRequiredFiles(moduleData);
 
     if (moduleData.length > 0) {
         console.log("Clearing modules from the database.");
-        await clearCollection(moduleCollection);
+        await clearCollection(moduleCollection, {isCoreModule: {$exists: false, $ne: true}});
         console.log(`Adding ${moduleData.length} modules to the database.`);
         await addDataToCollection(moduleCollection, moduleData);
         console.log("Copying required files to the target paths.");
