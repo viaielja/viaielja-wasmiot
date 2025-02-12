@@ -2,7 +2,15 @@ const express = require("express");
 const semver = require("semver");  // For interpreting version ranges
 const router = express.Router();
 
-
+/**
+ * Single-file router that:
+ *  - Defines a DPLL solver internally
+ *  - Exposes one route: POST /solve
+ *  - Accepts a "packages" array (human-readable with semver ranges)
+ *  - Transforms to CNF behind the scenes
+ *  - Solves via DPLL
+ *  - Returns SAT or UNSAT with chosen packages if SAT
+ */
 
 // ===================== DPLL SOLVER CODE START =====================
 
@@ -10,7 +18,9 @@ class Formula {
   constructor(numVariables = 0, numClauses = 0) {
     // -1 => unassigned, 0 => true, 1 => false
     this.literals = new Array(numVariables).fill(-1);
+    // frequency of appearances for each variable
     this.literalFrequency = new Array(numVariables).fill(0);
+    // (# of positive) - (# of negative) appearances
     this.literalPolarity = new Array(numVariables).fill(0);
     // clauses, each an array of integer literals (2n => pos, 2n+1 => neg)
     this.clauses = new Array(numClauses).fill(null).map(() => []);
@@ -26,7 +36,7 @@ class Formula {
   }
 }
 
-// Number signifies status
+// Status enum
 const Cat = {
   satisfied: 0,
   unsatisfied: 1,
@@ -51,6 +61,7 @@ class SATSolverDPLL {
     const cloned = Formula.copy(this.formula);
     const result = this.DPLL(cloned);
     if (result === Cat.normal) {
+      // If normal => never found a satisfying assignment
       this.showResult(this.formula, Cat.unsatisfied);
     }
   }
@@ -64,7 +75,7 @@ class SATSolverDPLL {
       return Cat.normal;
     }
 
-    // Pick var with highest frequency to increase performance
+    // Pick var with highest frequency
     let maxIndex = -1;
     let maxVal = -1;
     for (let i = 0; i < f.literalFrequency.length; i++) {
@@ -124,6 +135,7 @@ class SATSolverDPLL {
           return Cat.unsatisfied;
         }
         if (f.clauses[i].length === 1) {
+          // unit clause
           foundUnit = true;
           const lit = f.clauses[i][0];
           const varIndex = Math.floor(lit / 2);
@@ -195,9 +207,10 @@ class SATSolverDPLL {
   }
 }
 
-
-//parser for dimacs, for testing purposes mainly
+// We'll reuse parseDimacs if we want, but we won't accept direct CNF from user
 function parseDimacs(inputText) {
+  // If you want to see how a CNF string is parsed, keep this, else you can remove
+  // ... Not used directly for user input now ...
   return { formula: null, literalCount: 0, clauseCount: 0 };
 }
 
@@ -292,100 +305,17 @@ function parseSolverOutput(solverOutput, reverseMap) {
   return { status: "SAT", chosen: chosenVars };
 }
 
-//
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// =================== TRANSFORM PACKAGES => CNF ===================
 
 function transformPackagesToCNF(packages, options = { exactlyOneVersion: true }) {
+  // 1) Group by package name => list of versions
   const grouped = {};
   packages.forEach(pkg => {
     if (!grouped[pkg.name]) grouped[pkg.name] = [];
     grouped[pkg.name].push(pkg.version);
   });
 
+  // 2) Assign var IDs
   let nextVarID = 1;
   const varIDMap = new Map();
   const reverseMap = [];
@@ -399,6 +329,7 @@ function transformPackagesToCNF(packages, options = { exactlyOneVersion: true })
     });
   });
 
+  // Helper to produce a literal
   function lit(varKey, neg) {
     const id = varIDMap.get(varKey);
     return neg ? -id : id;
@@ -406,13 +337,15 @@ function transformPackagesToCNF(packages, options = { exactlyOneVersion: true })
 
   const clauses = [];
 
+  // 3) Exactly-one constraints
   for (let pkgName of Object.keys(grouped)) {
     const versions = grouped[pkgName];
+    // "at least one" => (v1 OR v2 OR ...)
     if (options.exactlyOneVersion && versions.length > 0) {
       const clause = versions.map(ver => lit(`${pkgName}@${ver}`, false));
       clauses.push(clause);
     }
-    // this is to enforce "at least one" rule for each pair => (¬v1 OR ¬v2)
+    // "at most one" => for each pair => (¬v1 OR ¬v2)
     for (let i = 0; i < versions.length; i++) {
       for (let j = i + 1; j < versions.length; j++) {
         clauses.push([ lit(`${pkgName}@${versions[i]}`, true),
@@ -421,13 +354,17 @@ function transformPackagesToCNF(packages, options = { exactlyOneVersion: true })
     }
   }
 
+  // 4) Dependencies => if pkg => at least one version of dep
   packages.forEach(pkg => {
     const pkgVar = `${pkg.name}@${pkg.version}`;
     pkg.deps.forEach(dep => {
+      // find all valid versions in grouped
       const possibleVers = (grouped[dep.name] || []).filter(v => semver.satisfies(v, dep.range));
       if (possibleVers.length === 0) {
+        // no valid => can't install pkg => (¬pkgVar)
         clauses.push([ lit(pkgVar, true) ]);
       } else {
+        // (¬pkgVar OR dep@v1 OR dep@v2 ...)
         const clause = [ lit(pkgVar, true) ];
         possibleVers.forEach(v => {
           clause.push(lit(`${dep.name}@${v}`, false));
@@ -507,7 +444,6 @@ router.post("/solve", (req, res) => {
 });
 
 module.exports = {
-    router,           
-    solveSATFromText  
-  };
-  
+  router,           
+  solveSATFromText, 
+};
