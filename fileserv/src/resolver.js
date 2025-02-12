@@ -43,7 +43,7 @@ class Impl {
     }
 }
 
-// Helpers
+// Little helpers
 function free(expr) {
     if (expr instanceof FalseExpr || expr instanceof TrueExpr) {
         return new Set();
@@ -60,6 +60,7 @@ function free(expr) {
     }
 }
 
+//placeholder for any Variable that has not been yet locked into False or True
 function anyVar(expr) {
     const variables = Array.from(free(expr)).sort();
     return variables.length > 0 ? variables[0] : null;
@@ -85,6 +86,7 @@ function replace(expr, name, value) {
     }
 }
 
+// Evaluate an expression into a boolean values from the expression Class
 function evalExpr(expr) {
     if (expr instanceof FalseExpr) {
         return false;
@@ -105,6 +107,8 @@ function evalExpr(expr) {
     }
 }
 
+
+//the main solver function
 function solver(expr, bindings) {
     const freeVar = anyVar(expr);
     if (freeVar === null) {
@@ -128,6 +132,8 @@ function solve(expr) {
 }
 
 
+//TESTING area
+
 
 // Define package versions as variables
 const foo_v1_0 = new Var("foo-1.0");
@@ -143,7 +149,7 @@ const dependencies = new And([
     new Impl(foo_v2_0, bar_v2_0), // foo-2.0 → bar-2.0
 ]);
 
-// Define conflicts (e.g., only one version of each package can be installed)
+// Define conflicts 
 const conflicts = new And([
     new Not(new And([foo_v1_0, foo_v2_0])), // Cannot have both foo-1.0 and foo-2.0
     new Not(new And([bar_v1_0, bar_v2_0])), // Cannot have both bar-1.0 and bar-2.0
@@ -158,12 +164,12 @@ const result = solve(problem);
 // Extract installed packages
 if (result) {
     const installedPackages = Object.keys(result).filter(pkg => result[pkg] === true);
-    console.log("Installed Packages:", installedPackages);
+    console.log("Resolved packages:", installedPackages);
 } else {
     console.log("No solution exists.");
 }
 
-// Ensure module.exports is always available
+// Exports
 module.exports = {
     FalseExpr,
     TrueExpr,

@@ -7,6 +7,7 @@ const device = require("./device");
 const modules = require("./module");
 const deployment = require("./deployment");
 const execution = require("./execution");
+const solver = require("./solverRoutes")
 const { init: initCoreServices } = require("./coreServices");
 const supervisorLogs = require("./logs");
 
@@ -31,6 +32,7 @@ async function init(routeDependencies) {
         device: device.router,
         modules: modules.router,
         deployment: deployment.router,
+        solver,
         execution: execution.router,
         coreServicesRouter,
         logs: supervisorLogs.router
