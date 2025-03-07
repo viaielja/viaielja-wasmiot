@@ -1,31 +1,49 @@
+/**
+ * SAT Solver and Package Dependency Resolution Module
+ * 
+ * This module implements a SAT solver using the DPLL algorithm to solve
+ * CNF formulas. It provides functionality to transform package dependency
+ * data into CNF (DIMACS format), solve the SAT problem, and interpret the results.
+ * The module exposes a REST endpoint at "/solve" to process package dependencies.
+ */
+
 const express = require("express");
-const semver = require("semver");  // For interpreting version ranges
+const semver = require("semver");
 const router = express.Router();
 
 /**
- * Single-file router that:
- *  - Defines a DPLL solver internally
- *  - Exposes one route: POST /solve
- *  - Accepts a "packages" array (human-readable with semver ranges)
- *  - Transforms to CNF behind the scenes
- *  - Solves via DPLL
- *  - Returns SAT or UNSAT with chosen packages if SAT
+ * Represents a Boolean formula in CNF form.
+ * 
+ * @class Formula
  */
-
-// ===================== DPLL SOLVER CODE START =====================
-
 class Formula {
+  /**
+   * Creates a new Formula instance.
+   * 
+   * @constructor
+   * @param {number} [numVariables=0] - The number of variables in the formula.
+   * @param {number} [numClauses=0] - The number of clauses in the formula.
+   * 
+   * Initializes:
+   * - literals: Array representing the assignment of each variable (-1 for unassigned, 0 for true, 1 for false).
+   * - literalFrequency: Array representing the frequency of appearances for each variable.
+   * - literalPolarity: Array representing the difference between positive and negative appearances.
+   * - clauses: Array of clauses, where each clause is an array of integer literals (even number for positive, odd for negative).
+   */
   constructor(numVariables = 0, numClauses = 0) {
-    // -1 => unassigned, 0 => true, 1 => false
     this.literals = new Array(numVariables).fill(-1);
-    // frequency of appearances for each variable
     this.literalFrequency = new Array(numVariables).fill(0);
-    // (# of positive) - (# of negative) appearances
     this.literalPolarity = new Array(numVariables).fill(0);
-    // clauses, each an array of integer literals (2n => pos, 2n+1 => neg)
     this.clauses = new Array(numClauses).fill(null).map(() => []);
   }
 
+  /**
+   * Creates a deep copy of a given Formula instance.
+   * 
+   * @static
+   * @param {Formula} other - The formula instance to copy.
+   * @returns {Formula} A new Formula instance with copied data.
+   */
   static copy(other) {
     const f = new Formula();
     f.literals = other.literals.slice();
@@ -36,7 +54,11 @@ class Formula {
   }
 }
 
-// Status enum
+/**
+ * Enumeration for clause status used in the SAT solver.
+ * 
+ * @constant
+ */
 const Cat = {
   satisfied: 0,
   unsatisfied: 1,
@@ -44,28 +66,57 @@ const Cat = {
   completed: 3
 };
 
+/**
+ * SATSolverDPLL implements the DPLL algorithm for solving SAT problems.
+ * 
+ * @class SATSolverDPLL
+ */
 class SATSolverDPLL {
+  /**
+   * Creates a new instance of SATSolverDPLL.
+   * 
+   * @constructor
+   */
   constructor() {
     this.formula = null;
     this.literalCount = 0;
     this.clauseCount = 0;
   }
 
+  /**
+   * Initializes the SAT solver with a formula, literal count, and clause count.
+   * 
+   * @param {Formula} formula - The CNF formula to solve.
+   * @param {number} literalCount - The number of literals in the formula.
+   * @param {number} clauseCount - The number of clauses in the formula.
+   */
   initialize(formula, literalCount, clauseCount) {
     this.formula = formula;
     this.literalCount = literalCount;
     this.clauseCount = clauseCount;
   }
 
+  /**
+   * Solves the SAT problem using the DPLL algorithm.
+   * Clones the current formula and applies DPLL recursion.
+   * If the final result is normal (i.e., unsatisfied), it displays the unsatisfied result.
+   */
   solve() {
     const cloned = Formula.copy(this.formula);
     const result = this.DPLL(cloned);
     if (result === Cat.normal) {
-      // If normal => never found a satisfying assignment
       this.showResult(this.formula, Cat.unsatisfied);
     }
   }
 
+  /**
+   * Implements the recursive DPLL algorithm.
+   * Applies unit propagation and then selects the variable with the highest frequency.
+   * Tries both possible assignments and recursively continues the search.
+   * 
+   * @param {Formula} f - The formula to solve.
+   * @returns {number} The status after attempting to solve the formula.
+   */
   DPLL(f) {
     const result = this.unitPropagate(f);
     if (result === Cat.satisfied) {
@@ -75,7 +126,6 @@ class SATSolverDPLL {
       return Cat.normal;
     }
 
-    // Pick var with highest frequency
     let maxIndex = -1;
     let maxVal = -1;
     for (let i = 0; i < f.literalFrequency.length; i++) {
@@ -86,19 +136,15 @@ class SATSolverDPLL {
     }
 
     if (maxIndex === -1) {
-      // All variables assigned or no variables
       if (f.clauses.length === 0) {
-        // All clauses satisfied
         this.showResult(f, Cat.satisfied);
         return Cat.completed;
       }
       return Cat.normal;
     }
 
-    // Try two assignments
     for (let attempt = 0; attempt < 2; attempt++) {
       const newF = Formula.copy(f);
-      // If polarity is positive, try val=attempt first
       if (newF.literalPolarity[maxIndex] > 0) {
         newF.literals[maxIndex] = attempt;
       } else {
@@ -111,7 +157,7 @@ class SATSolverDPLL {
         this.showResult(newF, transformResult);
         return Cat.completed;
       } else if (transformResult === Cat.unsatisfied) {
-        continue; // try opposite assignment
+        continue;
       }
 
       const dpllResult = this.DPLL(newF);
@@ -123,6 +169,14 @@ class SATSolverDPLL {
     return Cat.normal;
   }
 
+  /**
+   * Performs unit propagation on the formula.
+   * Finds unit clauses and assigns their corresponding literal.
+   * Applies transformation after each assignment.
+   * 
+   * @param {Formula} f - The formula to propagate.
+   * @returns {number} The status after unit propagation (satisfied, unsatisfied, or normal).
+   */
   unitPropagate(f) {
     if (f.clauses.length === 0) {
       return Cat.satisfied;
@@ -135,7 +189,6 @@ class SATSolverDPLL {
           return Cat.unsatisfied;
         }
         if (f.clauses[i].length === 1) {
-          // unit clause
           foundUnit = true;
           const lit = f.clauses[i][0];
           const varIndex = Math.floor(lit / 2);
@@ -155,6 +208,14 @@ class SATSolverDPLL {
     return Cat.normal;
   }
 
+  /**
+   * Applies transformation to the formula based on a literal assignment.
+   * Removes satisfied clauses and updates clauses by removing the negated literal.
+   * 
+   * @param {Formula} f - The formula to transform.
+   * @param {number} literalToApply - The index of the literal being applied.
+   * @returns {number} The status after transformation (satisfied, unsatisfied, or normal).
+   */
   applyTransform(f, literalToApply) {
     const assignedValue = f.literals[literalToApply];
     for (let i = 0; i < f.clauses.length; i++) {
@@ -163,14 +224,11 @@ class SATSolverDPLL {
         const lit = clause[j];
         const varIndex = Math.floor(lit / 2);
         const varPol = lit % 2;
-
         if (varIndex === literalToApply && varPol === assignedValue) {
-          // clause satisfied => remove
           f.clauses.splice(i, 1);
           i--;
           break;
         } else if (varIndex === literalToApply && varPol !== assignedValue) {
-          // remove literal
           clause.splice(j, 1);
           j--;
           if (clause.length === 0) {
@@ -186,6 +244,13 @@ class SATSolverDPLL {
     return Cat.normal;
   }
 
+  /**
+   * Displays the result of the SAT solving process.
+   * Logs "SAT" with variable assignments if the result is satisfied, or "UNSAT" otherwise.
+   * 
+   * @param {Formula} f - The formula containing the assignment.
+   * @param {number} result - The result status (Cat.satisfied or Cat.unsatisfied).
+   */
   showResult(f, result) {
     if (result === Cat.satisfied) {
       console.log("SAT");
@@ -193,7 +258,6 @@ class SATSolverDPLL {
       for (let i = 0; i < f.literals.length; i++) {
         const val = f.literals[i];
         if (val === -1) {
-          // treat unassigned as true
           assignments.push(`${i + 1}`);
         } else {
           const sign = Math.pow(-1, val) * (i + 1);
@@ -207,14 +271,25 @@ class SATSolverDPLL {
   }
 }
 
-// We'll reuse parseDimacs if we want, but we won't accept direct CNF from user
+/**
+ * Parses a DIMACS formatted input string.
+ * 
+ * Note: This function is not used directly for user input.
+ * 
+ * @param {string} inputText - The DIMACS input string.
+ * @returns {Object} An object containing the formula, literalCount, and clauseCount.
+ */
 function parseDimacs(inputText) {
-  // If you want to see how a CNF string is parsed, keep this, else you can remove
-  // ... Not used directly for user input now ...
   return { formula: null, literalCount: 0, clauseCount: 0 };
 }
 
-// We'll do solve from text, capturing the console output
+/**
+ * Solves the SAT problem given a DIMACS string.
+ * Captures console output during solving and returns it as a string.
+ * 
+ * @param {string} dimacsString - The DIMACS formatted string representing the CNF.
+ * @returns {string} The output produced by the solver.
+ */
 function solveSATFromText(dimacsString) {
   let output = "";
   const oldLog = console.log;
@@ -222,13 +297,10 @@ function solveSATFromText(dimacsString) {
     output += args.join(" ") + "\n";
   };
 
-  // Parse the dimacs
   const lines = dimacsString.split(/\r?\n/);
   let literalCount = 0;
   let clauseCount = 0;
   const clauseData = [];
-
-  // Basic parse for "p cnf"
   let foundHeader = false;
   for (const line of lines) {
     const trimmed = line.trim();
@@ -246,7 +318,6 @@ function solveSATFromText(dimacsString) {
     }
   }
 
-  // Build the formula
   const formula = new Formula(literalCount, clauseCount);
   let idx = 0;
   for (const arr of clauseData) {
@@ -270,7 +341,6 @@ function solveSATFromText(dimacsString) {
     }
   }
 
-  // Solve
   const solver = new SATSolverDPLL();
   solver.initialize(formula, literalCount, clauseCount);
   solver.solve();
@@ -279,25 +349,31 @@ function solveSATFromText(dimacsString) {
   return output.trim();
 }
 
+/**
+ * Interprets the output from the SAT solver.
+ * Extracts variable assignments from the output string.
+ * 
+ * @param {string} solverOutput - The raw output from the solver.
+ * @param {Array} reverseMap - A mapping from variable IDs to package strings.
+ * @returns {Object} An object with status ("SAT" or "UNSAT") and an array of chosen package strings.
+ */
 function parseSolverOutput(solverOutput, reverseMap) {
   if (solverOutput.startsWith("UNSAT")) {
     return { status: "UNSAT", chosen: [] };
   }
 
   const lines = solverOutput.split("\n");
-  // find a line with integers e.g. "1 -2 3 0"
   const assignmentLine = lines.find(line => /\d/.test(line));
   if (!assignmentLine) {
     return { status: "SAT", chosen: [] };
   }
 
-  const parts = assignmentLine.trim().split(/\s+/); // e.g. ["1", "-2", "3", "0"]
+  const parts = assignmentLine.trim().split(/\s+/);
   const chosenVars = [];
   for (let p of parts) {
     const val = parseInt(p, 10);
     if (val === 0) break;
     if (val > 0) {
-      // positive => var is true
       chosenVars.push(reverseMap[val]);
     }
   }
@@ -305,21 +381,27 @@ function parseSolverOutput(solverOutput, reverseMap) {
   return { status: "SAT", chosen: chosenVars };
 }
 
-// =================== TRANSFORM PACKAGES => CNF ===================
-
+/**
+ * Transforms package dependency information into a CNF (DIMACS) representation.
+ * Groups packages by name, assigns variable IDs, and creates clauses for:
+ * - "At least one" version per package (if exactlyOneVersion is true)
+ * - "At most one" version per package
+ * - Dependency relations between packages and their valid versions
+ * 
+ * @param {Array} packages - An array of package objects. Each package should have "name", "version", and "deps" properties.
+ * @param {Object} [options={ exactlyOneVersion: true }] - Options for transformation.
+ * @returns {Object} An object containing the DIMACS string and a reverseMap of variable IDs to package strings.
+ */
 function transformPackagesToCNF(packages, options = { exactlyOneVersion: true }) {
-  // 1) Group by package name => list of versions
   const grouped = {};
   packages.forEach(pkg => {
     if (!grouped[pkg.name]) grouped[pkg.name] = [];
     grouped[pkg.name].push(pkg.version);
   });
 
-  // 2) Assign var IDs
   let nextVarID = 1;
   const varIDMap = new Map();
   const reverseMap = [];
-
   Object.keys(grouped).forEach(pkgName => {
     grouped[pkgName].forEach(ver => {
       const key = `${pkgName}@${ver}`;
@@ -329,23 +411,18 @@ function transformPackagesToCNF(packages, options = { exactlyOneVersion: true })
     });
   });
 
-  // Helper to produce a literal
   function lit(varKey, neg) {
     const id = varIDMap.get(varKey);
     return neg ? -id : id;
   }
 
   const clauses = [];
-
-  // 3) Exactly-one constraints
   for (let pkgName of Object.keys(grouped)) {
     const versions = grouped[pkgName];
-    // "at least one" => (v1 OR v2 OR ...)
     if (options.exactlyOneVersion && versions.length > 0) {
       const clause = versions.map(ver => lit(`${pkgName}@${ver}`, false));
       clauses.push(clause);
     }
-    // "at most one" => for each pair => (¬v1 OR ¬v2)
     for (let i = 0; i < versions.length; i++) {
       for (let j = i + 1; j < versions.length; j++) {
         clauses.push([ lit(`${pkgName}@${versions[i]}`, true),
@@ -354,17 +431,13 @@ function transformPackagesToCNF(packages, options = { exactlyOneVersion: true })
     }
   }
 
-  // 4) Dependencies => if pkg => at least one version of dep
   packages.forEach(pkg => {
     const pkgVar = `${pkg.name}@${pkg.version}`;
     pkg.deps.forEach(dep => {
-      // find all valid versions in grouped
       const possibleVers = (grouped[dep.name] || []).filter(v => semver.satisfies(v, dep.range));
       if (possibleVers.length === 0) {
-        // no valid => can't install pkg => (¬pkgVar)
         clauses.push([ lit(pkgVar, true) ]);
       } else {
-        // (¬pkgVar OR dep@v1 OR dep@v2 ...)
         const clause = [ lit(pkgVar, true) ];
         possibleVers.forEach(v => {
           clause.push(lit(`${dep.name}@${v}`, false));
@@ -374,11 +447,9 @@ function transformPackagesToCNF(packages, options = { exactlyOneVersion: true })
     });
   });
 
-  // 5) Build DIMACS
   const numVariables = varIDMap.size;
   const numClauses = clauses.length;
   let dimacs = `p cnf ${numVariables} ${numClauses}\n`;
-
   clauses.forEach(c => {
     dimacs += c.join(" ") + " 0\n";
   });
@@ -386,19 +457,25 @@ function transformPackagesToCNF(packages, options = { exactlyOneVersion: true })
   return { dimacs, reverseMap };
 }
 
-// ==================== EXPRESS ROUTE /solve ====================
-
 /**
- * We now expect the client to send:
+ * POST /solve
+ * HOX: the actual orchestrator route should be /solver/solve eg. localhost:3000/solver/solve
+ * See app.js for the /solver part
+ * Transforms package dependency data into CNF, solves the SAT problem using the DPLL algorithm,
+ * and returns the installation result in JSON format.
+ * 
+ * Expected request body:
  * {
  *   "packages": [
  *     { "name": "A", "version": "1.0.0", "deps": [{ "name": "B", "range": "^2.0.0" }] },
  *     ...
  *   ],
- *   "exactlyOneVersion": true  // optional
+ *   "exactlyOneVersion": true  // Optional: if false, does not enforce exactly one version.
  * }
- *
- * We transform that to CNF, run the solver, and return which packages are installed if SAT.
+ * 
+ * Response:
+ * - If UNSAT, returns a JSON with status "UNSAT" and the raw solver output.
+ * - If SAT, returns a JSON with status "SAT", an array of chosen packages, and the raw solver output.
  */
 router.post("/solve", (req, res) => {
   try {
@@ -407,23 +484,16 @@ router.post("/solve", (req, res) => {
       return res.status(400).json({ error: "Missing or invalid 'packages' array" });
     }
 
-    // 1) Transform to CNF
     const { dimacs, reverseMap } = transformPackagesToCNF(packages, {
       exactlyOneVersion: (exactlyOneVersion !== false)
     });
 
-    // 2) Solve
     const solverOutput = solveSATFromText(dimacs);
-
-    // 3) Interpret result
     if (solverOutput.startsWith("UNSAT")) {
       return res.json({ status: "UNSAT", chosen: [], rawOutput: solverOutput });
     }
 
     const { status, chosen } = parseSolverOutput(solverOutput, reverseMap);
-    // chosen is an array of "PkgName@Version"
-
-    // convert to objects
     const chosenPackages = chosen.map(str => {
       const [name, version] = str.split("@");
       return { name, version };
@@ -444,6 +514,6 @@ router.post("/solve", (req, res) => {
 });
 
 module.exports = {
-  router,           
-  solveSATFromText, 
+  router,
+  solveSATFromText,
 };

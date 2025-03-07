@@ -32,7 +32,7 @@ async function init(routeDependencies) {
         device: device.router,
         modules: modules.router,
         deployment: deployment.router,
-        solver,
+        solver: solver.router,
         execution: execution.router,
         coreServicesRouter,
         logs: supervisorLogs.router

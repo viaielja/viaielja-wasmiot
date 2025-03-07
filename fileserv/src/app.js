@@ -5,7 +5,8 @@
 const express = require("express");
 
 const { FRONT_END_DIR, SENTRY_DSN, UTILS_PATH } = require("../constants.js");
-const solverRoutes = require("../routes/solverRoutes"); 
+const solverRoutes = require("../routes/solverRoutes");
+ 
 
 
 express.static.mime.define({"application/wasm": ["wasm"]});
@@ -61,7 +62,7 @@ async function setRoutes(routeDependencies) {
     app.use("/execute",       routes.execution);
     app.use("",               routes.coreServicesRouter);
     app.use("/device/logs",   routes.logs);
-    app.use("/api", solverRoutes);
+    app.use("/solver", routes.solver);
 
     // NOTE: This is for testing if for example an image file needs to be available
     // after execution of some deployed work.
