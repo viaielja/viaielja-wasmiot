@@ -1,8 +1,13 @@
-# LiquidAI Wasmiot Orchestrator Project
+# LiquidAI Wasmiot Orchestrator Project with Resolver
 
 ## Description
-This project (under development) is to contain package managing and
+This project is a further development of the Wasmiot (https://github.com/LiquidAI-project/wasmiot-orchestrator) project.
+The original project was created to contain package managing and
 orchestrating logic for WebAssembly-based microservices.
+
+## Additional features demonstrated in this project
+- A CNF SAT-solver based on DPLL for the package manager
+- Test script for testing the SAT-solver
 
 ### Features
 - Package manager
@@ -120,6 +125,7 @@ VSCode like you would locally for debugging JavaScript (using the JavaScript Deb
 With both the devcontainer and database containers up, the server can be started
 from "Run" > "Start Debugging" or pressing F5 on the keyboard.
 
+
 ### Running the orchestrator in a separate environment than the supervisor
 
 This assumes that both the orchestrator and the supervisor are in the same local network and thus can send HTTP requests to each other.
@@ -177,6 +183,48 @@ The following assumes that the orchestrator is available at `http://localhost:30
     ```
 
 When the orchestrator is started the device, module, and deployment manifest will be available. No actual deployments to the supervisors is done, but they can be made without any additional steps.
+
+## Running and testing the package manager resolver
+When the Orchestrator and debugger is running, you can call the orchestrator with an assignment for module dependency resolution:
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{
+    "packages": [
+      {
+        "name": "TakeImage",
+        "version": "1.0.0",
+        "deps": []
+      },
+      {
+        "name": "FlipImage",
+        "version": "1.0.0",
+        "deps": [
+          { "name": "TakeImage", "range": "^1.0.0" }
+        ]
+      },
+      {
+        "name": "NegativeImage",
+        "version": "1.0.0",
+        "deps": [
+          { "name": "FlipImage", "range": "^1.0.0" }
+        ]
+      }
+    ],
+    "required": [
+      "TakeImage",
+      "FlipImage",
+      "NegativeImage"
+    ]
+  }' \
+  http://localhost:3000/solver/solve
+ ```
+
+ See "Adding initial data to the database at startup" on how to initialize data in the database and fetch module data
+
+## Testing the resolver
+For debugging the DPLL resolver with a custom SAT problem file, you can use the test script ./fileserv/routes/testAllCnf.js
+By default the script uses cnftest1, cnftest2 and cnftest3 in the routes/ path as the source folders for the resolver tests. Place your CNF format files in these folders to run the test. This has been tested to work using SATLIB (https://www.cs.ubc.ca/~hoos/SATLIB/benchm.html).
 
 ## Help and known issues
 - __Network `wasm-iot` missing__ :
