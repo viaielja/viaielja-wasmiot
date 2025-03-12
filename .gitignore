@@ -160,3 +160,6 @@ generatedApiClient/
 
 # Typescript built directory.
 built/
+cnftest1/
+cnftest2/
+cnftest3/
